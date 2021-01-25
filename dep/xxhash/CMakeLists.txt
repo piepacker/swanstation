@@ -5,12 +5,12 @@ set(SRCS
 
 add_library(xxhash ${SRCS})
 
-if(${CPU_ARCH} STREQUAL "x86" OR ${CPU_ARCH} STREQUAL "x64")
-  target_sources(xxhash PRIVATE
-    include/xxh_x86dispatch.h
-    src/xxh_x86dispatch.c
-  )
-endif()
+#if(${CPU_ARCH} STREQUAL "x86" OR ${CPU_ARCH} STREQUAL "x64")
+#  target_sources(xxhash PRIVATE
+#    include/xxh_x86dispatch.h
+#    src/xxh_x86dispatch.c
+#  )
+#endif()
 
 target_include_directories(xxhash PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/include")
 target_include_directories(xxhash INTERFACE "${CMAKE_CURRENT_SOURCE_DIR}/include")

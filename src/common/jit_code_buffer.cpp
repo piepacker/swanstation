@@ -226,7 +226,7 @@ void JitCodeBuffer::FlushInstructionCache(void* address, u32 size)
 #if defined(WIN32)
   ::FlushInstructionCache(GetCurrentProcess(), address, size);
 #elif defined(__GNUC__) || defined(__clang__)
-  __builtin___clear_cache(reinterpret_cast<char*>(address), reinterpret_cast<char*>(address) + size);
+  //__builtin___clear_cache(reinterpret_cast<char*>(address), reinterpret_cast<char*>(address) + size);
 #else
 #error Unknown platform.
 #endif

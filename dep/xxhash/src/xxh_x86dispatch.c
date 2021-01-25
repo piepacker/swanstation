@@ -52,10 +52,6 @@
 extern "C" {
 #endif
 
-#if !(defined(__x86_64__) || defined(__i386__) || defined(_M_IX86) || defined(_M_X64))
-#  error "Dispatching is currently only supported on x86 and x86_64."
-#endif
-
 /*!
  * @def XXH_X86DISPATCH_ALLOW_AVX
  * @brief Disables the AVX sanity check.

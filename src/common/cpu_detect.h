@@ -25,7 +25,7 @@
 #elif defined(__arm__)
 #define CPU_AARCH32 1
 #else
-#error Unknown architecture.
+#define CPU_X86 1
 #endif
 
 #else
