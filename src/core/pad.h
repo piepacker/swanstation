@@ -34,7 +34,8 @@ public:
   ALWAYS_INLINE bool IsTransmitting() const { return m_state != State::Idle; }
 
 private:
-  static constexpr u32 NUM_SLOTS = 2;
+  // two slots on PS1 * 4 slots per multitap == 8 max devices.
+  static constexpr u32 NUM_DEVICES = 8;
 
   enum class State : u32
   {
@@ -47,7 +48,8 @@ private:
   {
     None,
     Controller,
-    MemoryCard
+    MemoryCard,
+    Multitap,
   };
 
   union JOY_CTRL
@@ -108,8 +110,11 @@ private:
   void EndTransfer();
   void ResetDeviceTransferState();
 
-  std::array<std::unique_ptr<Controller>, NUM_SLOTS> m_controllers;
-  std::array<std::unique_ptr<MemoryCard>, NUM_SLOTS> m_memory_cards;
+  bool DoStateController(StateWrapper& sw, u32 i);
+  bool DoStateMemcard(StateWrapper& sw, u32 i);
+
+  std::array<std::unique_ptr<Controller>, NUM_DEVICES> m_controllers;
+  std::array<std::unique_ptr<MemoryCard>, NUM_DEVICES> m_memory_cards;
 
   std::unique_ptr<TimingEvent> m_transfer_event;
   State m_state = State::Idle;
