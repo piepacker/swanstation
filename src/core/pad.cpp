@@ -450,6 +450,11 @@ void Pad::BeginTransfer()
   m_transfer_event->SetPeriodAndSchedule(GetTransferTicks());
 }
 
+int multitap_command = 0;
+bool multitap_enabled = true;
+uint8_t multitap_buffer[4];
+int multitap_read;
+
 void Pad::DoTransfer(TickCount ticks_late)
 {
   Log_DebugPrintf("Transferring slot %d", m_JOY_CTRL.SLOT.GetValue());
@@ -469,6 +474,17 @@ void Pad::DoTransfer(TickCount ticks_late)
   {
     case ActiveDevice::None:
     {
+      if (multitap_enabled)
+      {
+        // Multitap takes first four bytes and determines the action accordingly.
+        //    normal pad sequence: 01 42 00 00
+        //    multitap sequence Z: 01 42 01 00   ; read from all controllers
+        //    multitap sequence n: 0x 42 00 00   ; read specific controller 'n'
+        // Most games use the Z type.
+
+        //if (
+      }
+
       if (!controller || (ack = controller->Transfer(data_out, &data_in)) == false)
       {
         if (!memory_card || (ack = memory_card->Transfer(data_out, &data_in)) == false)
