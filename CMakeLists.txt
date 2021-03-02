@@ -77,6 +77,15 @@ if(ANDROID OR BUILD_LIBRETRO_CORE)
 endif()
 
 
+# To build a .bc file
+if (EMSCRIPTEN)
+  set(CMAKE_AR "emcc" CACHE FILEPATH "use emcc as ar" FORCE)
+  set(CMAKE_STATIC_LIBRARY_SUFFIX ".bc")
+  set(CMAKE_C_CREATE_STATIC_LIBRARY "<CMAKE_AR> -o <TARGET> <LINK_FLAGS> <OBJECTS>")
+  set(CMAKE_CXX_CREATE_STATIC_LIBRARY "<CMAKE_AR> -o <TARGET> <LINK_FLAGS> <OBJECTS>")
+endif()
+
+
 # Common include/library directories on Windows.
 if(WIN32)
   set(SDL2_FOUND TRUE)
