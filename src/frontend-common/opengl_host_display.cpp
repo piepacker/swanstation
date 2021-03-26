@@ -4,12 +4,14 @@
 #include "common/log.h"
 #include "common/string_util.h"
 #include "common_host_interface.h"
+#ifndef LIBRETRO
 #include "imgui.h"
 #include "imgui_impl_opengl3.h"
+#endif
 #include "postprocessing_shadergen.h"
 #include <array>
 #include <tuple>
-Log_SetChannel(OpenGLHostDisplay);
+Log_SetChannel(LibretroOpenGLHostDisplay);
 
 namespace FrontendCommon {
 
@@ -471,11 +473,13 @@ bool OpenGLHostDisplay::ChangeRenderWindow(const WindowInfo& new_wi)
   m_window_info.surface_width = m_gl_context->GetSurfaceWidth();
   m_window_info.surface_height = m_gl_context->GetSurfaceHeight();
 
+#ifndef LIBRETRO
   if (ImGui::GetCurrentContext())
   {
     ImGui::GetIO().DisplaySize.x = static_cast<float>(m_window_info.surface_width);
     ImGui::GetIO().DisplaySize.y = static_cast<float>(m_window_info.surface_height);
   }
+#endif
 
   return true;
 }
@@ -489,11 +493,13 @@ void OpenGLHostDisplay::ResizeRenderWindow(s32 new_window_width, s32 new_window_
   m_window_info.surface_width = m_gl_context->GetSurfaceWidth();
   m_window_info.surface_height = m_gl_context->GetSurfaceHeight();
 
+#ifndef LIBRETRO
   if (ImGui::GetCurrentContext())
   {
     ImGui::GetIO().DisplaySize.x = static_cast<float>(m_window_info.surface_width);
     ImGui::GetIO().DisplaySize.y = static_cast<float>(m_window_info.surface_height);
   }
+#endif
 }
 
 bool OpenGLHostDisplay::SupportsFullscreen() const
@@ -519,8 +525,10 @@ HostDisplay::AdapterAndModeList OpenGLHostDisplay::GetAdapterAndModeList()
   {
     for (const GL::Context::FullscreenModeInfo& fmi : m_gl_context->EnumerateFullscreenModes())
     {
+#ifndef LIBRETRO
       aml.fullscreen_modes.push_back(
         CommonHostInterface::GetFullscreenModeString(fmi.width, fmi.height, fmi.refresh_rate));
+#endif
     }
   }
 
@@ -537,6 +545,7 @@ void OpenGLHostDisplay::DestroyRenderSurface()
     Log_ErrorPrintf("Failed to switch to surfaceless");
 }
 
+#ifndef LIBRETRO
 bool OpenGLHostDisplay::CreateImGuiContext()
 {
   ImGui::GetIO().DisplaySize.x = static_cast<float>(m_window_info.surface_width);
@@ -554,6 +563,7 @@ bool OpenGLHostDisplay::UpdateImGuiFontTexture()
   ImGui_ImplOpenGL3_DestroyFontsTexture();
   return ImGui_ImplOpenGL3_CreateFontsTexture();
 }
+#endif
 
 bool OpenGLHostDisplay::CreateResources()
 {
@@ -743,8 +753,10 @@ bool OpenGLHostDisplay::Render()
 {
   if (ShouldSkipDisplayingFrame())
   {
+#ifndef LIBRETRO
     if (ImGui::GetCurrentContext())
       ImGui::Render();
+#endif
 
     return false;
   }
@@ -755,8 +767,10 @@ bool OpenGLHostDisplay::Render()
 
   RenderDisplay();
 
+#ifndef LIBRETRO
   if (ImGui::GetCurrentContext())
     RenderImGui();
+#endif
 
   RenderSoftwareCursor();
 
@@ -804,12 +818,14 @@ bool OpenGLHostDisplay::RenderScreenshot(u32 width, u32 height, std::vector<u32>
   return true;
 }
 
+#ifndef LIBRETRO
 void OpenGLHostDisplay::RenderImGui()
 {
   ImGui::Render();
   ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
   GL::Program::ResetLastProgram();
 }
+#endif
 
 void OpenGLHostDisplay::RenderDisplay()
 {

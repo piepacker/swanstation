@@ -10,8 +10,10 @@
 #include "core/shader_cache_version.h"
 #include "display_ps.hlsl.h"
 #include "display_vs.hlsl.h"
+#ifndef LIBRETRO
 #include "imgui.h"
 #include "imgui_impl_dx11.h"
+#endif
 #include "postprocessing_shadergen.h"
 #include <array>
 #include <dxgi1_5.h>
@@ -352,8 +354,11 @@ bool D3D11HostDisplay::CreateRenderDevice(const WindowInfo& wi, std::string_view
 bool D3D11HostDisplay::InitializeRenderDevice(std::string_view shader_cache_directory, bool debug_device,
                                               bool threaded_presentation)
 {
-  if (m_window_info.type != WindowInfo::Type::Surfaceless && !CreateSwapChain(nullptr))
+  if (m_window_info.type != WindowInfo::Type::Surfaceless && m_window_info.type != WindowInfo::Type::Libretro &&
+      !CreateSwapChain(nullptr))
+  {
     return false;
+  }
 
   if (!CreateResources())
     return false;
@@ -473,11 +478,13 @@ bool D3D11HostDisplay::CreateSwapChainRTV()
   m_window_info.surface_width = backbuffer_desc.Width;
   m_window_info.surface_height = backbuffer_desc.Height;
 
+#ifndef LIBRETRO
   if (ImGui::GetCurrentContext())
   {
     ImGui::GetIO().DisplaySize.x = static_cast<float>(backbuffer_desc.Width);
     ImGui::GetIO().DisplaySize.y = static_cast<float>(backbuffer_desc.Height);
   }
+#endif
 
   return true;
 }
@@ -662,6 +669,7 @@ void D3D11HostDisplay::DestroyResources()
   m_display_rasterizer_state.Reset();
 }
 
+#ifndef LIBRETRO
 bool D3D11HostDisplay::CreateImGuiContext()
 {
   ImGui::GetIO().DisplaySize.x = static_cast<float>(m_window_info.surface_width);
@@ -679,13 +687,16 @@ bool D3D11HostDisplay::UpdateImGuiFontTexture()
   ImGui_ImplDX11_CreateFontsTexture();
   return true;
 }
+#endif
 
 bool D3D11HostDisplay::Render()
 {
   if (ShouldSkipDisplayingFrame())
   {
+#ifndef LIBRETRO
     if (ImGui::GetCurrentContext())
       ImGui::Render();
+#endif
 
     return false;
   }
@@ -696,8 +707,10 @@ bool D3D11HostDisplay::Render()
 
   RenderDisplay();
 
+#ifndef LIBRETRO
   if (ImGui::GetCurrentContext())
     RenderImGui();
+#endif
 
   RenderSoftwareCursor();
 
@@ -762,11 +775,13 @@ bool D3D11HostDisplay::RenderScreenshot(u32 width, u32 height, std::vector<u32>*
   return true;
 }
 
+#ifndef LIBRETRO
 void D3D11HostDisplay::RenderImGui()
 {
   ImGui::Render();
   ImGui_ImplDX11_RenderDrawData(ImGui::GetDrawData());
 }
+#endif
 
 void D3D11HostDisplay::RenderDisplay()
 {

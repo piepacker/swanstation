@@ -98,6 +98,9 @@ struct Entry
   void SetValueForKey(const std::string_view& key, const std::optional<std::string>& value);
 };
 
+
+#ifndef LIBRETRO
+
 class Database
 {
 public:
@@ -112,5 +115,7 @@ public:
 private:
   std::unordered_map<std::string, Entry> m_entries;
 };
+
+#endif
 
 }; // namespace GameSettings
