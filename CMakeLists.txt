@@ -24,6 +24,7 @@ set(CMAKE_OSX_DEPLOYMENT_TARGET "10.14.0" CACHE STRING "")
 if(NOT ANDROID)
   option(BUILD_NOGUI_FRONTEND "Build the NoGUI frontend" ON)
   option(BUILD_QT_FRONTEND "Build the Qt frontend" ON)
+  option(BUILD_LIBRETRO_CORE "Build a libretro core" OFF)
   option(ENABLE_DISCORD_PRESENCE "Build with Discord Rich Presence support" ON)
   option(ENABLE_CHEEVOS "Build with RetroAchievements support" ON)
   option(USE_SDL2 "Link with SDL2 for controller support" ON)
@@ -51,7 +52,8 @@ if(USE_WAYLAND)
   set(USE_EGL ON)
 endif()
 
-if(ANDROID)
+# When we're building for libretro, everything else is invalid because of PIC.
+if(ANDROID OR BUILD_LIBRETRO_CORE)
   if(BUILD_NOGUI_FRONTEND)
     message(WARNING "Building for Android, disabling NoGUI frontend")
     set(BUILD_NOGUI_FRONTEND OFF)
@@ -77,6 +79,11 @@ if(ANDROID)
 
   # Cheevos are always on.
   set(ENABLE_CHEEVOS ON)
+
+  # Force PIC when compiling a libretro core.
+  if(BUILD_LIBRETRO_CORE)
+    set(CMAKE_POSITION_INDEPENDENT_CODE ON)
+  endif()
 endif()
 
 
@@ -232,7 +239,7 @@ endif()
 
 
 # Write binaries to a seperate directory.
-if(WIN32)
+if(WIN32 AND NOT BUILD_LIBRETRO_CORE)
   # For Windows, use the source directory, except for libretro.
   set(CMAKE_RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/bin/${CPU_ARCH}")
 else()
@@ -253,6 +260,6 @@ enable_testing()
 add_subdirectory(dep)
 add_subdirectory(src)
 
-if(ANDROID)
+if(ANDROID AND NOT BUILD_LIBRETRO_CORE)
   add_subdirectory(android/app/src/cpp)
 endif()

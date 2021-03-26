@@ -9,7 +9,7 @@
 #include "postprocessing_shadergen.h"
 #include <array>
 #include <tuple>
-Log_SetChannel(OpenGLHostDisplay);
+Log_SetChannel(LibretroOpenGLHostDisplay);
 
 namespace FrontendCommon {
 
