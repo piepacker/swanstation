@@ -11,8 +11,10 @@
 #include "common/vulkan/util.h"
 #include "common_host_interface.h"
 #include "core/shader_cache_version.h"
+#ifndef LIBRETRO
 #include "imgui.h"
 #include "imgui_impl_vulkan.h"
+#endif
 #include "postprocessing_shadergen.h"
 #include <array>
 Log_SetChannel(VulkanHostDisplay);
@@ -99,11 +101,13 @@ bool VulkanHostDisplay::ChangeRenderWindow(const WindowInfo& new_wi)
   m_window_info.surface_width = m_swap_chain->GetWidth();
   m_window_info.surface_height = m_swap_chain->GetHeight();
 
+#ifndef LIBRETRO
   if (ImGui::GetCurrentContext())
   {
     ImGui::GetIO().DisplaySize.x = static_cast<float>(m_window_info.surface_width);
     ImGui::GetIO().DisplaySize.y = static_cast<float>(m_window_info.surface_height);
   }
+#endif
 
   return true;
 }
@@ -118,11 +122,13 @@ void VulkanHostDisplay::ResizeRenderWindow(s32 new_window_width, s32 new_window_
   m_window_info.surface_width = m_swap_chain->GetWidth();
   m_window_info.surface_height = m_swap_chain->GetHeight();
 
+#ifndef LIBRETRO
   if (ImGui::GetCurrentContext())
   {
     ImGui::GetIO().DisplaySize.x = static_cast<float>(m_window_info.surface_width);
     ImGui::GetIO().DisplaySize.y = static_cast<float>(m_window_info.surface_height);
   }
+#endif
 }
 
 bool VulkanHostDisplay::SupportsFullscreen() const
@@ -526,6 +532,7 @@ void VulkanHostDisplay::DestroyResources()
   Vulkan::Util::SafeDestroySampler(m_linear_sampler);
 }
 
+#ifndef LIBRETRO
 bool VulkanHostDisplay::CreateImGuiContext()
 {
   ImGui::GetIO().DisplaySize.x = static_cast<float>(m_window_info.surface_width);
@@ -558,6 +565,7 @@ bool VulkanHostDisplay::UpdateImGuiFontTexture()
   ImGui_ImplVulkan_DestroyFontUploadObjects();
   return ImGui_ImplVulkan_CreateFontsTexture(g_vulkan_context->GetCurrentCommandBuffer());
 }
+#endif
 
 void VulkanHostDisplay::DestroyRenderDevice()
 {
@@ -587,8 +595,10 @@ bool VulkanHostDisplay::Render()
 {
   if (ShouldSkipDisplayingFrame())
   {
+#ifndef LIBRETRO
     if (ImGui::GetCurrentContext())
       ImGui::Render();
+#endif
 
     return false;
   }
@@ -625,8 +635,10 @@ bool VulkanHostDisplay::Render()
 
   RenderDisplay();
 
+#ifndef LIBRETRO
   if (ImGui::GetCurrentContext())
     RenderImGui();
+#endif
 
   RenderSoftwareCursor();
 
@@ -809,11 +821,13 @@ void VulkanHostDisplay::RenderDisplay(s32 left, s32 top, s32 width, s32 height, 
   vkCmdDraw(cmdbuffer, 3, 1, 0, 0);
 }
 
+#ifndef LIBRETRO
 void VulkanHostDisplay::RenderImGui()
 {
   ImGui::Render();
   ImGui_ImplVulkan_RenderDrawData(ImGui::GetDrawData(), g_vulkan_context->GetCurrentCommandBuffer());
 }
+#endif
 
 void VulkanHostDisplay::RenderSoftwareCursor()
 {
@@ -883,8 +897,10 @@ HostDisplay::AdapterAndModeList VulkanHostDisplay::StaticGetAdapterAndModeList(c
     ret.fullscreen_modes.reserve(fsmodes.size());
     for (const Vulkan::SwapChain::FullscreenModeInfo& fmi : fsmodes)
     {
+#ifndef LIBRETRO
       ret.fullscreen_modes.push_back(
         CommonHostInterface::GetFullscreenModeString(fmi.width, fmi.height, fmi.refresh_rate));
+#endif
     }
   }
 

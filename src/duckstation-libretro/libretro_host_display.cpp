@@ -142,13 +142,19 @@ bool LibretroHostDisplay::SetFullscreen(bool fullscreen, u32 width, u32 height, 
   return false;
 }
 
+HostDisplay::AdapterAndModeList LibretroHostDisplay::GetAdapterAndModeList()
+{
+}
+
 bool LibretroHostDisplay::SetPostProcessingChain(const std::string_view& config)
 {
   return false;
 }
 
-std::unique_ptr<HostDisplayTexture> LibretroHostDisplay::CreateTexture(u32 width, u32 height, const void* data,
-                                                                       u32 data_stride, bool dynamic)
+std::unique_ptr<HostDisplayTexture> LibretroHostDisplay::CreateTexture(u32 width, u32 height, u32 layers, u32 levels,
+                                                                       u32 samples, HostDisplayPixelFormat format,
+                                                                       const void* data, u32 data_stride,
+                                                                       bool dynamic)
 {
   return nullptr;
 }
@@ -229,5 +235,11 @@ bool LibretroHostDisplay::Render()
       ClearDisplayTexture();
   }
 
+  return true;
+}
+
+bool LibretroHostDisplay::RenderScreenshot(u32 width, u32 height, std::vector<u32>* out_pixels, u32* out_stride,
+                                         HostDisplayPixelFormat* out_format)
+{
   return true;
 }

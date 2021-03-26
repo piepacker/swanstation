@@ -101,7 +101,8 @@ bool LibretroHostInterface::Initialize()
     return false;
 
   InitInterfaces();
-  LoadSettings();
+  LibretroSettingsInterface si;
+  LoadSettings(si);
   FixIncompatibleSettings(true);
   UpdateLogging();
 
@@ -136,7 +137,7 @@ void LibretroHostInterface::GetGameInfo(const char* path, CDImage* image, std::s
 {
   // Just use the filename for now... we don't have the game list. Unless we can pull this from the frontend somehow?
   *title = System::GetTitleForPath(path);
-  *code = System::GetGameCodeForImage(image);
+  *code = System::GetGameCodeForImage(image, true);
 }
 
 static const char* GetSaveDirectory()
@@ -928,9 +929,8 @@ std::unique_ptr<ByteStream> LibretroHostInterface::OpenPackageFile(const char* p
   return {};
 }
 
-void LibretroHostInterface::LoadSettings()
+void LibretroHostInterface::LoadSettings(SettingsInterface& si)
 {
-  LibretroSettingsInterface si;
   HostInterface::LoadSettings(si);
 
   // turn percentage into fraction for overclock
@@ -950,10 +950,15 @@ void LibretroHostInterface::LoadSettings()
     g_settings.memory_card_paths[i] = GetSharedMemoryCardPath(i);
 }
 
+std::vector<std::string> LibretroHostInterface::GetSettingStringList(const char* section, const char* key)
+{
+}
+
 void LibretroHostInterface::UpdateSettings()
 {
   Settings old_settings(std::move(g_settings));
-  LoadSettings();
+  LibretroSettingsInterface si;
+  LoadSettings(si);
   ApplyGameSettings();
   FixIncompatibleSettings(false);
 
@@ -1000,7 +1005,8 @@ void LibretroHostInterface::CheckForSettingsChanges(const Settings& old_settings
     UpdateLogging();
 }
 
-void LibretroHostInterface::OnRunningGameChanged()
+void LibretroHostInterface::OnRunningGameChanged(const std::string& path, CDImage* image, const std::string& game_code,
+                                                 const std::string& game_title)
 {
   Log_InfoPrintf("Running game changed: %s (%s)", System::GetRunningCode().c_str(), System::GetRunningTitle().c_str());
   if (UpdateGameSettings())
@@ -1462,7 +1468,7 @@ bool LibretroHostInterface::DiskControlAddImageIndex()
     return false;
   }
 
-  Log_DevPrintf("DiskControlAddImageIndex() -> %zu", System::GetMediaPlaylistCount());
+  Log_DevPrintf("DiskControlAddImageIndex() -> %u", System::GetMediaPlaylistCount());
   System::AddMediaPathToPlaylist({});
   return true;
 }

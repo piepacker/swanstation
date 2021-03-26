@@ -29,6 +29,7 @@ public:
   bool SupportsFullscreen() const override;
   bool IsFullscreen() override;
   bool SetFullscreen(bool fullscreen, u32 width, u32 height, float refresh_rate) override;
+  AdapterAndModeList GetAdapterAndModeList() override;
   void DestroyRenderSurface() override;
 
   bool SetPostProcessingChain(const std::string_view& config) override;
@@ -36,8 +37,9 @@ public:
   bool CreateResources() override;
   void DestroyResources() override;
 
-  std::unique_ptr<HostDisplayTexture> CreateTexture(u32 width, u32 height, const void* data, u32 data_stride,
-                                                    bool dynamic) override;
+  std::unique_ptr<HostDisplayTexture> CreateTexture(u32 width, u32 height, u32 layers, u32 levels, u32 samples,
+                                                    HostDisplayPixelFormat format, const void* data, u32 data_stride,
+                                                    bool dynamic = false) override;
   void UpdateTexture(HostDisplayTexture* texture, u32 x, u32 y, u32 width, u32 height, const void* data,
                      u32 data_stride) override;
   bool DownloadTexture(const void* texture_handle, HostDisplayPixelFormat texture_format, u32 x, u32 y, u32 width,
@@ -46,6 +48,8 @@ public:
   void SetVSync(bool enabled) override;
 
   bool Render() override;
+  bool RenderScreenshot(u32 width, u32 height, std::vector<u32>* out_pixels, u32* out_stride,
+                        HostDisplayPixelFormat* out_format) override;
 
   bool SupportsDisplayPixelFormat(HostDisplayPixelFormat format) const override;
 
