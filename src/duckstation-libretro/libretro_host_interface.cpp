@@ -490,7 +490,7 @@ void LibretroHostInterface::OnSystemDestroyed()
   m_using_hardware_renderer = false;
 }
 
-static std::array<retro_core_option_definition, 52> s_option_definitions = {{
+static std::array<retro_core_option_definition, 53> s_option_definitions = {{
   {"duckstation_Console.Region",
    "Console Region",
    "Determines which region/hardware to emulate. Auto-Detect will use the region of the disc inserted.",
@@ -760,6 +760,14 @@ static std::array<retro_core_option_definition, 52> s_option_definitions = {{
    "will be used for all discs. If unchecked, a separate card will be used for each disc.",
    {{"true", "Enabled"}, {"false", "Disabled"}},
    "true"},
+  {"duckstation_ControllerPorts.MultitapMode",
+   "Multitap Mode",
+   "Sets the mode for the multitap",
+   {{"Disabled", "Disabled"},
+    {"Port1Only", "Enable on Port 1 Only"},
+    {"Port2Only", "Enable on Port 2 Only"},
+    {"BothPorts", "Enable on Ports 1 and 2"}},
+   "Disabled"},
   {"duckstation_Controller1.Type",
    "Controller 1 Type",
    "Sets the type of controller for Slot 1.",
