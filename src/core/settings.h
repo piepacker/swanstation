@@ -1,5 +1,6 @@
 #pragma once
 #include "common/log.h"
+#include "common/string.h"
 #include "types.h"
 #include <array>
 #include <optional>
@@ -11,6 +12,7 @@ class SettingsInterface
 public:
   virtual ~SettingsInterface();
 
+  virtual bool Save() = 0;
   virtual void Clear() = 0;
 
   virtual int GetIntValue(const char* section, const char* key, int default_value = 0) = 0;
@@ -81,16 +83,24 @@ struct Settings
 
   float emulation_speed = 1.0f;
   float fast_forward_speed = 0.0f;
+  float turbo_speed = 0.0f;
+  bool sync_to_host_refresh_rate = true;
   bool increase_timer_resolution = true;
   bool start_paused = false;
   bool start_fullscreen = false;
   bool pause_on_focus_loss = false;
+  bool pause_on_menu = true;
   bool save_state_on_exit = true;
   bool confim_power_off = true;
   bool load_devices_from_save_states = false;
   bool apply_game_settings = true;
   bool auto_load_cheats = false;
   bool disable_all_enhancements = false;
+
+  bool rewind_enable = false;
+  float rewind_save_frequency = 10.0f;
+  u32 rewind_save_slots = 10;
+  u32 runahead_frames = 0;
 
   GPURenderer gpu_renderer = GPURenderer::Software;
   std::string gpu_adapter;
@@ -125,12 +135,14 @@ struct Settings
   bool gpu_24bit_chroma_smoothing = false;
   bool display_linear_filtering = true;
   bool display_integer_scaling = false;
+  bool display_stretch = false;
   bool display_post_processing = false;
   bool display_show_osd_messages = false;
   bool display_show_fps = false;
   bool display_show_vps = false;
   bool display_show_speed = false;
   bool display_show_resolution = false;
+  bool display_all_frames = false;
   bool video_sync_enabled = true;
   float display_max_fps = 0.0f;
   float gpu_pgxp_tolerance = -1.0f;
@@ -146,6 +158,7 @@ struct Settings
   s32 audio_output_volume = 100;
   s32 audio_fast_forward_volume = 100;
   u32 audio_buffer_size = 2048;
+  bool audio_resampling = false;
   bool audio_output_muted = false;
   bool audio_sync_enabled = true;
   bool audio_dump_on_boot = true;
@@ -205,6 +218,10 @@ struct Settings
   std::array<std::string, NUM_CONTROLLER_AND_CARD_PORTS> memory_card_paths{};
   bool memory_card_use_playlist_title = true;
 
+  MultitapMode multitap_mode = MultitapMode::Disabled;
+
+  std::array<TinyString, NUM_CONTROLLER_AND_CARD_PORTS> GeneratePortLabels() const;
+
   LOGLEVEL log_level = LOGLEVEL_INFO;
   std::string log_filter;
   bool log_to_console = false;
@@ -215,6 +232,7 @@ struct Settings
   ALWAYS_INLINE bool IsUsingCodeCache() const { return (cpu_execution_mode != CPUExecutionMode::Interpreter); }
   ALWAYS_INLINE bool IsUsingRecompiler() const { return (cpu_execution_mode == CPUExecutionMode::Recompiler); }
   ALWAYS_INLINE bool IsUsingSoftwareRenderer() const { return (gpu_renderer == GPURenderer::Software); }
+  ALWAYS_INLINE bool IsRunaheadEnabled() const { return (runahead_frames > 0); }
 
   ALWAYS_INLINE PGXPMode GetPGXPMode()
   {
@@ -222,6 +240,7 @@ struct Settings
   }
 
   ALWAYS_INLINE bool UsingPGXPDepthBuffer() const { return gpu_pgxp_enable && gpu_pgxp_depth_buffer; }
+  ALWAYS_INLINE bool UsingPGXPCPUMode() const { return gpu_pgxp_enable && gpu_pgxp_cpu; }
   ALWAYS_INLINE float GetPGXPDepthClearThreshold() const { return gpu_pgxp_depth_clear_threshold * 4096.0f; }
   ALWAYS_INLINE void SetPGXPDepthClearThreshold(float value) { gpu_pgxp_depth_clear_threshold = value / 4096.0f; }
 
@@ -310,6 +329,10 @@ struct Settings
   static const char* GetMemoryCardTypeName(MemoryCardType type);
   static const char* GetMemoryCardTypeDisplayName(MemoryCardType type);
 
+  static std::optional<MultitapMode> ParseMultitapModeName(const char* str);
+  static const char* GetMultitapModeName(MultitapMode mode);
+  static const char* GetMultitapModeDisplayName(MultitapMode mode);
+
   // Default to D3D11 on Windows as it's more performant and at this point, less buggy.
 #ifdef WIN32
   static constexpr GPURenderer DEFAULT_GPU_RENDERER = GPURenderer::HardwareD3D11;
@@ -345,7 +368,16 @@ struct Settings
   static constexpr ControllerType DEFAULT_CONTROLLER_2_TYPE = ControllerType::None;
   static constexpr MemoryCardType DEFAULT_MEMORY_CARD_1_TYPE = MemoryCardType::PerGameTitle;
   static constexpr MemoryCardType DEFAULT_MEMORY_CARD_2_TYPE = MemoryCardType::None;
+  static constexpr MultitapMode DEFAULT_MULTITAP_MODE = MultitapMode::Disabled;
+
   static constexpr LOGLEVEL DEFAULT_LOG_LEVEL = LOGLEVEL_INFO;
+
+  // Enable console logging by default on Linux platforms.
+#if defined(__linux__) && !defined(__ANDROID__)
+  static constexpr bool DEFAULT_LOG_TO_CONSOLE = true;
+#else
+  static constexpr bool DEFAULT_LOG_TO_CONSOLE = false;
+#endif
 };
 
 extern Settings g_settings;

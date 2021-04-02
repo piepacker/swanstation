@@ -15,6 +15,7 @@
 class StateWrapper;
 
 class HostDisplay;
+class HostDisplayTexture;
 
 class TimingEvent;
 class Timers;
@@ -75,8 +76,8 @@ public:
   virtual bool IsHardwareRenderer() const = 0;
 
   virtual bool Initialize(HostDisplay* host_display);
-  virtual void Reset();
-  virtual bool DoState(StateWrapper& sw, bool update_display);
+  virtual void Reset(bool clear_vram);
+  virtual bool DoState(StateWrapper& sw, HostDisplayTexture** save_to_texture, bool update_display);
 
   // Graphics API state reset/restore - call when drawing the UI etc.
   virtual void ResetGraphicsAPIState();
@@ -160,6 +161,9 @@ public:
   // Returns the video clock frequency.
   TickCount GetCRTCFrequency() const;
 
+  // Dumps raw VRAM to a file.
+  bool DumpVRAMToFile(const char* filename);
+
 protected:
   TickCount CRTCTicksToSystemTicks(TickCount crtc_ticks, TickCount fractional_ticks) const;
   TickCount SystemTicksToCRTCTicks(TickCount sysclk_ticks, TickCount* fractional_ticks) const;
@@ -170,33 +174,6 @@ protected:
     return std::max<TickCount>((gpu_ticks + 1) >> 1, 1);
   }
   ALWAYS_INLINE static constexpr TickCount SystemTicksToGPUTicks(TickCount sysclk_ticks) { return sysclk_ticks << 1; }
-
-  // Helper/format conversion functions.
-  static constexpr u32 RGBA5551ToRGBA8888(u16 color)
-  {
-    u8 r = Truncate8(color & 31);
-    u8 g = Truncate8((color >> 5) & 31);
-    u8 b = Truncate8((color >> 10) & 31);
-    u8 a = Truncate8((color >> 15) & 1);
-
-    // 00012345 -> 1234545
-    b = (b << 3) | (b & 0b111);
-    g = (g << 3) | (g & 0b111);
-    r = (r << 3) | (r & 0b111);
-    a = a ? 255 : 0;
-
-    return ZeroExtend32(r) | (ZeroExtend32(g) << 8) | (ZeroExtend32(b) << 16) | (ZeroExtend32(a) << 24);
-  }
-
-  static constexpr u16 RGBA8888ToRGBA5551(u32 color)
-  {
-    const u16 r = Truncate16((color >> 3) & 0x1Fu);
-    const u16 g = Truncate16((color >> 11) & 0x1Fu);
-    const u16 b = Truncate16((color >> 19) & 0x1Fu);
-    const u16 a = Truncate16((color >> 31) & 0x01u);
-
-    return r | (g << 5) | (b << 10) | (a << 15);
-  }
 
   static constexpr std::tuple<u8, u8> UnpackTexcoord(u16 texcoord)
   {

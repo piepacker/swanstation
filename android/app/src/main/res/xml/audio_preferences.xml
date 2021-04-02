@@ -27,7 +27,7 @@
         app:iconSpaceReserved="false"
         app:showSeekBarValue="true" />
     <SeekBarPreference
-        app:key="Audio/OutputVolume"
+        app:key="Audio/FastForwardVolume"
         app:title="@string/settings_fast_forward_volume"
         app:summary="@string/settings_summary_fast_forward_volume"
         app:defaultValue="100"
@@ -46,29 +46,6 @@
         app:title="@string/settings_mute_cd_audio"
         app:defaultValue="false"
         app:summary="@string/settings_summary_mute_cd_audio"
-        app:iconSpaceReserved="false" />
-    <ListPreference
-        app:key="Audio/Backend"
-        app:title="@string/settings_audio_backend"
-        app:entries="@array/settings_audio_backend_entries"
-        app:entryValues="@array/settings_audio_backend_values"
-        app:defaultValue="OpenSLES"
-        app:useSimpleSummaryProvider="true"
-        app:iconSpaceReserved="false" />
-    <ListPreference
-        app:key="Audio/BufferSize"
-        app:title="@string/settings_audio_buffer_size"
-        app:entries="@array/settings_audio_buffer_size_entries"
-        app:entryValues="@array/settings_audio_buffer_size_values"
-        app:defaultValue="2048"
-        app:summary="@string/settings_summary_audio_buffer_size"
-        app:useSimpleSummaryProvider="true"
-        app:iconSpaceReserved="false" />
-    <SwitchPreferenceCompat
-        app:key="Audio/Sync"
-        app:title="@string/settings_audio_sync"
-        app:defaultValue="true"
-        app:summary="@string/settings_summary_audio_sync"
         app:iconSpaceReserved="false" />
 
 </PreferenceScreen>

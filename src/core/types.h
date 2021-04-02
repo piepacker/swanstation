@@ -98,6 +98,7 @@ enum class DisplayAspectRatio : u8
   R16_9,
   R16_10,
   R19_9,
+  R20_9,
   R21_9,
   R32_9,
   R8_7,
@@ -142,9 +143,19 @@ enum class MemoryCardType
   Count
 };
 
+enum class MultitapMode
+{
+  Disabled,
+  Port1Only,
+  Port2Only,
+  BothPorts,
+  Count
+};
+
 enum : u32
 {
-  NUM_CONTROLLER_AND_CARD_PORTS = 2
+  NUM_CONTROLLER_AND_CARD_PORTS = 8,
+  NUM_MULTITAPS = 2
 };
 
 enum class CPUFastmemMode

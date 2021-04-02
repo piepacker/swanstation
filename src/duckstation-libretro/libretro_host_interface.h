@@ -11,7 +11,7 @@ namespace GameSettings
 struct Entry;
 }
 
-class LibretroHostInterface : public HostInterface
+class LibretroHostInterface final : public HostInterface
 {
 public:
   LibretroHostInterface();
@@ -32,6 +32,7 @@ public:
   std::string GetGameMemoryCardPath(const char* game_code, u32 slot) const override;
   std::string GetShaderCacheBasePath() const override;
   std::string GetStringSettingValue(const char* section, const char* key, const char* default_value = "") override;
+  std::vector<std::string> GetSettingStringList(const char* section, const char* key) override;
   std::string GetBIOSDirectory() override;
   std::unique_ptr<ByteStream> OpenPackageFile(const char* path, u32 flags) override;
 
@@ -57,7 +58,8 @@ protected:
   std::unique_ptr<AudioStream> CreateAudioStream(AudioBackend backend) override;
   void OnSystemDestroyed() override;
   void CheckForSettingsChanges(const Settings& old_settings) override;
-  void OnRunningGameChanged() override;
+  void OnRunningGameChanged(const std::string& path, CDImage* image, const std::string& game_code,
+                            const std::string& game_title) override;
 
 private:
   bool SetCoreOptions();
@@ -67,7 +69,7 @@ private:
   void InitDiskControlInterface();
   void InitRumbleInterface();
 
-  void LoadSettings() override;
+  void LoadSettings(SettingsInterface& si) override;
   void UpdateSettings();
   void UpdateControllers();
   void UpdateControllersDigitalController(u32 index);

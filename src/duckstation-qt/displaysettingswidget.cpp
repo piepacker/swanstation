@@ -32,10 +32,15 @@ DisplaySettingsWidget::DisplaySettingsWidget(QtHostInterface* host_interface, QW
                                                &Settings::ParseDownsampleModeName, &Settings::GetDownsampleModeName,
                                                Settings::DEFAULT_GPU_DOWNSAMPLE_MODE);
   SettingWidgetBinder::BindWidgetToBoolSetting(m_host_interface, m_ui.displayLinearFiltering, "Display",
-                                               "LinearFiltering");
+                                               "LinearFiltering", true);
   SettingWidgetBinder::BindWidgetToBoolSetting(m_host_interface, m_ui.displayIntegerScaling, "Display",
-                                               "IntegerScaling");
+                                               "IntegerScaling", false);
+  SettingWidgetBinder::BindWidgetToBoolSetting(m_host_interface, m_ui.displayStretch, "Display", "Stretch", false);
+  SettingWidgetBinder::BindWidgetToBoolSetting(m_host_interface, m_ui.internalResolutionScreenshots, "Display",
+                                               "InternalResolutionScreenshots", false);
   SettingWidgetBinder::BindWidgetToBoolSetting(m_host_interface, m_ui.vsync, "Display", "VSync");
+  SettingWidgetBinder::BindWidgetToBoolSetting(m_host_interface, m_ui.displayAllFrames, "Display", "DisplayAllFrames",
+                                               false);
   SettingWidgetBinder::BindWidgetToBoolSetting(m_host_interface, m_ui.gpuThread, "GPU", "UseThread", true);
   SettingWidgetBinder::BindWidgetToBoolSetting(m_host_interface, m_ui.threadedPresentation, "GPU",
                                                "ThreadedPresentation", true);
@@ -53,7 +58,10 @@ DisplaySettingsWidget::DisplaySettingsWidget(QtHostInterface* host_interface, QW
           &DisplaySettingsWidget::onGPUAdapterIndexChanged);
   connect(m_ui.fullscreenMode, QOverload<int>::of(&QComboBox::currentIndexChanged), this,
           &DisplaySettingsWidget::onGPUFullscreenModeIndexChanged);
+  connect(m_ui.displayIntegerScaling, &QCheckBox::stateChanged, this,
+          &DisplaySettingsWidget::onIntegerFilteringChanged);
   populateGPUAdaptersAndResolutions();
+  onIntegerFilteringChanged();
 
   dialog->registerWidgetHelp(
     m_ui.renderer, tr("Renderer"),
@@ -66,6 +74,8 @@ DisplaySettingsWidget::DisplaySettingsWidget(QtHostInterface* host_interface, QW
     tr("If your system contains multiple GPUs or adapters, you can select which GPU you wish to use for the hardware "
        "renderers. <br>This option is only supported in Direct3D and Vulkan. OpenGL will always use the default "
        "device."));
+  dialog->registerWidgetHelp(m_ui.fullscreenMode, tr("Fullscreen Mode"), tr("Borderless Fullscreen"),
+                             tr("Chooses the fullscreen resolution and frequency."));
   dialog->registerWidgetHelp(
     m_ui.displayAspectRatio, tr("Aspect Ratio"),
     qApp->translate("DisplayAspectRatio", Settings::GetDisplayAspectRatioName(Settings::DEFAULT_DISPLAY_ASPECT_RATIO)),
@@ -92,10 +102,20 @@ DisplaySettingsWidget::DisplaySettingsWidget(QtHostInterface* host_interface, QW
     m_ui.displayIntegerScaling, tr("Integer Upscaling"), tr("Unchecked"),
     tr("Adds padding to the display area to ensure that the ratio between pixels on the host to "
        "pixels in the console is an integer number. <br>May result in a sharper image in some 2D games."));
+  dialog->registerWidgetHelp(m_ui.displayStretch, tr("Stretch To Fill"), tr("Unchecked"),
+                             tr("Fills the window with the active display area, regardless of the aspect ratio."));
+  dialog->registerWidgetHelp(m_ui.internalResolutionScreenshots, tr("Internal Resolution Screenshots"), tr("Unchecked"),
+                             tr("Saves screenshots at internal render resolution and without postprocessing. If this "
+                                "option is disabled, the screenshots will be taken at the window's resolution. "
+                                "Internal resolution screenshots can be very large at high rendering scales."));
   dialog->registerWidgetHelp(
     m_ui.vsync, tr("VSync"), tr("Checked"),
     tr("Enable this option to match DuckStation's refresh rate with your current monitor or screen. "
        "VSync is automatically disabled when it is not possible (e.g. running at non-100% speed)."));
+  dialog->registerWidgetHelp(m_ui.displayAllFrames, tr("Optimal Frame Pacing"), tr("Unchecked"),
+                             tr("Enable this option will ensure every frame the console renders is displayed to the "
+                                "screen, for optimal frame pacing. If you are having difficulties maintaining full "
+                                "speed, or are getting audio glitches, try disabling this option."));
   dialog->registerWidgetHelp(m_ui.threadedPresentation, tr("Threaded Presentation"), tr("Checked"),
                              tr("Presents frames on a background thread when fast forwarding or vsync is disabled. "
                                 "This can measurably improve performance in the Vulkan renderer."));
@@ -111,14 +131,16 @@ DisplaySettingsWidget::DisplaySettingsWidget(QtHostInterface* host_interface, QW
                              tr("Shows the number of frames (or v-syncs) displayed per second by the system in the "
                                 "top-right corner of the display."));
   dialog->registerWidgetHelp(
-    m_ui.showSpeed, tr("Show Speed"), tr("Unchecked"),
+    m_ui.showSpeed, tr("Show Emulation Speed"), tr("Unchecked"),
     tr("Shows the current emulation speed of the system in the top-right corner of the display as a percentage."));
+  dialog->registerWidgetHelp(m_ui.showResolution, tr("Show Resolution"), tr("Unchecked"),
+                             tr("Shows the resolution of the game in the top-right corner of the display."));
 
 #ifdef _WIN32
   {
     QCheckBox* cb = new QCheckBox(tr("Use Blit Swap Chain"), m_ui.basicGroupBox);
     SettingWidgetBinder::BindWidgetToBoolSetting(m_host_interface, cb, "Display", "UseBlitSwapChain", false);
-    m_ui.basicCheckboxGridLayout->addWidget(cb, 1, 1, 1, 1);
+    m_ui.basicCheckboxGridLayout->addWidget(cb, 2, 0, 1, 1);
     dialog->registerWidgetHelp(cb, tr("Use Blit Swap Chain"), tr("Unchecked"),
                                tr("Uses a blit presentation model instead of flipping when using the Direct3D 11 "
                                   "renderer. This usually results in slower performance, but may be required for some "
@@ -158,24 +180,19 @@ void DisplaySettingsWidget::setupAdditionalUi()
 
 void DisplaySettingsWidget::populateGPUAdaptersAndResolutions()
 {
-  std::vector<std::string> adapter_names;
-  std::vector<std::string> fullscreen_modes;
+  HostDisplay::AdapterAndModeList aml;
   bool thread_supported = false;
   bool threaded_presentation_supported = false;
   switch (static_cast<GPURenderer>(m_ui.renderer->currentIndex()))
   {
 #ifdef WIN32
     case GPURenderer::HardwareD3D11:
-    {
-      FrontendCommon::D3D11HostDisplay::AdapterInfo adapter_info = FrontendCommon::D3D11HostDisplay::GetAdapterInfo();
-      adapter_names = std::move(adapter_info.adapter_names);
-      fullscreen_modes = std::move(adapter_info.fullscreen_modes);
-    }
-    break;
+      aml = FrontendCommon::D3D11HostDisplay::StaticGetAdapterAndModeList();
+      break;
 #endif
 
     case GPURenderer::HardwareVulkan:
-      adapter_names = FrontendCommon::VulkanHostDisplay::EnumerateAdapterNames();
+      aml = FrontendCommon::VulkanHostDisplay::StaticGetAdapterAndModeList(nullptr);
       threaded_presentation_supported = true;
       break;
 
@@ -196,7 +213,7 @@ void DisplaySettingsWidget::populateGPUAdaptersAndResolutions()
     m_ui.adapter->addItem(tr("(Default)"));
 
     // add the other adapters
-    for (const std::string& adapter_name : adapter_names)
+    for (const std::string& adapter_name : aml.adapter_names)
     {
       m_ui.adapter->addItem(QString::fromStdString(adapter_name));
 
@@ -205,7 +222,7 @@ void DisplaySettingsWidget::populateGPUAdaptersAndResolutions()
     }
 
     // disable it if we don't have a choice
-    m_ui.adapter->setEnabled(!adapter_names.empty());
+    m_ui.adapter->setEnabled(!aml.adapter_names.empty());
   }
 
   {
@@ -216,7 +233,7 @@ void DisplaySettingsWidget::populateGPUAdaptersAndResolutions()
     m_ui.fullscreenMode->addItem(tr("Borderless Fullscreen"));
     m_ui.fullscreenMode->setCurrentIndex(0);
 
-    for (const std::string& mode_name : fullscreen_modes)
+    for (const std::string& mode_name : aml.fullscreen_modes)
     {
       m_ui.fullscreenMode->addItem(QString::fromStdString(mode_name));
 
@@ -225,7 +242,7 @@ void DisplaySettingsWidget::populateGPUAdaptersAndResolutions()
     }
 
     // disable it if we don't have a choice
-    m_ui.fullscreenMode->setEnabled(!fullscreen_modes.empty());
+    m_ui.fullscreenMode->setEnabled(!aml.fullscreen_modes.empty());
   }
 
   m_ui.gpuThread->setEnabled(thread_supported);
@@ -255,4 +272,10 @@ void DisplaySettingsWidget::onGPUFullscreenModeIndexChanged()
 
   m_host_interface->SetStringSettingValue("GPU", "FullscreenMode",
                                           m_ui.fullscreenMode->currentText().toUtf8().constData());
+}
+
+void DisplaySettingsWidget::onIntegerFilteringChanged()
+{
+  m_ui.displayLinearFiltering->setEnabled(!m_ui.displayIntegerScaling->isChecked());
+  m_ui.displayStretch->setEnabled(!m_ui.displayIntegerScaling->isChecked());
 }

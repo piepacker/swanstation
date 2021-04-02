@@ -4,6 +4,7 @@
 #include "log.h"
 #include "string_util.h"
 #include <algorithm>
+#include <cstdlib>
 #include <cstring>
 
 #ifdef __APPLE__
@@ -12,6 +13,10 @@
 #include <sys/param.h>
 #else
 #include <malloc.h>
+#endif
+
+#ifdef __FreeBSD__
+#include <sys/sysctl.h>
 #endif
 
 #if defined(WIN32)
@@ -168,7 +173,7 @@ void CanonicalizePath(std::string& path, bool OSPath /*= true*/)
 static inline bool FileSystemCharacterIsSane(char c, bool StripSlashes)
 {
   if (!(c >= 'a' && c <= 'z') && !(c >= 'A' && c <= 'Z') && !(c >= '0' && c <= '9') && c != ' ' && c != ' ' &&
-      c != '_' && c != '-')
+      c != '_' && c != '-' && c != '.')
   {
     if (!StripSlashes && (c == '/' || c == '\\'))
       return true;
@@ -238,6 +243,16 @@ void SanitizeFileName(String& Destination, bool StripSlashes /* = true */)
   return SanitizeFileName(Destination, Destination, StripSlashes);
 }
 
+void SanitizeFileName(std::string& Destination, bool StripSlashes /* = true*/)
+{
+  const std::size_t len = Destination.length();
+  for (std::size_t i = 0; i < len; i++)
+  {
+    if (!FileSystemCharacterIsSane(Destination[i], StripSlashes))
+      Destination[i] = '_';
+  }
+}
+
 bool IsAbsolutePath(const std::string_view& path)
 {
 #ifdef WIN32
@@ -248,7 +263,16 @@ bool IsAbsolutePath(const std::string_view& path)
 #endif
 }
 
-std::string ReplaceExtension(std::string_view path, std::string_view new_extension)
+std::string StripExtension(const std::string_view& path)
+{
+  std::string_view::size_type pos = path.rfind('.');
+  if (pos == std::string::npos)
+    return std::string(path);
+
+  return std::string(path, 0, pos);
+}
+
+std::string ReplaceExtension(const std::string_view& path, const std::string_view& new_extension)
 {
   std::string_view::size_type pos = path.rfind('.');
   if (pos == std::string::npos)
@@ -259,32 +283,67 @@ std::string ReplaceExtension(std::string_view path, std::string_view new_extensi
   return ret;
 }
 
-std::string GetPathDirectory(const char* path)
+std::string_view GetPathDirectory(const std::string_view& path)
 {
-#ifdef WIN32
-  const char* forwardslash_ptr = std::strrchr(path, '/');
-  const char* backslash_ptr = std::strrchr(path, '\\');
-  const char* slash_ptr;
-  if (forwardslash_ptr && backslash_ptr)
-    slash_ptr = std::max(forwardslash_ptr, backslash_ptr);
-  else if (backslash_ptr)
-    slash_ptr = backslash_ptr;
-  else if (forwardslash_ptr)
-    slash_ptr = forwardslash_ptr;
-  else
-    return {};
+#ifdef _WIN32
+  std::string::size_type pos = path.find_last_of("/\\");
 #else
-  const char* slash_ptr = std::strrchr(path, '/');
-  if (!slash_ptr)
+  std::string::size_type pos = path.find_last_of("/");
+#endif
+  if (pos == std::string_view::npos)
     return {};
+
+  return path.substr(0, pos);
+}
+
+std::string_view GetFileNameFromPath(const std::string_view& path)
+{
+#ifdef _WIN32
+  std::string::size_type pos = path.find_last_of("/\\");
+#else
+  std::string::size_type pos = path.find_last_of("/");
+#endif
+  if (pos == std::string_view::npos)
+    return path;
+
+  return path.substr(pos + 1);
+}
+
+std::string_view GetFileTitleFromPath(const std::string_view& path)
+{
+  std::string_view filename(GetFileNameFromPath(path));
+  std::string::size_type pos = filename.rfind('.');
+  if (pos == std::string_view::npos)
+    return filename;
+
+  return filename.substr(0, pos);
+}
+
+std::vector<std::string> GetRootDirectoryList()
+{
+  std::vector<std::string> results;
+
+#ifdef WIN32
+  char buf[256];
+  if (GetLogicalDriveStringsA(sizeof(buf), buf) != 0)
+  {
+    const char* ptr = buf;
+    while (*ptr != '\0')
+    {
+      const std::size_t len = std::strlen(ptr);
+      results.emplace_back(ptr, len);
+      ptr += len + 1u;
+    }
+  }
+#else
+  const char* home_path = std::getenv("HOME");
+  if (home_path)
+    results.push_back(home_path);
+
+  results.push_back("/");
 #endif
 
-  if (slash_ptr == path)
-    return {};
-
-  std::string str;
-  str.append(path, slash_ptr - path);
-  return str;
+  return results;
 }
 
 void BuildPathRelativeToFile(char* Destination, u32 cbDestination, const char* CurrentFileName, const char* NewFileName,
@@ -447,14 +506,19 @@ std::optional<std::vector<u8>> ReadBinaryFile(const char* filename)
   if (!fp)
     return std::nullopt;
 
-  std::fseek(fp.get(), 0, SEEK_END);
-  long size = std::ftell(fp.get());
-  std::fseek(fp.get(), 0, SEEK_SET);
+  return ReadBinaryFile(fp.get());
+}
+
+std::optional<std::vector<u8>> ReadBinaryFile(std::FILE* fp)
+{
+  std::fseek(fp, 0, SEEK_END);
+  long size = std::ftell(fp);
+  std::fseek(fp, 0, SEEK_SET);
   if (size < 0)
     return std::nullopt;
 
   std::vector<u8> res(static_cast<size_t>(size));
-  if (size > 0 && std::fread(res.data(), 1u, static_cast<size_t>(size), fp.get()) != static_cast<size_t>(size))
+  if (size > 0 && std::fread(res.data(), 1u, static_cast<size_t>(size), fp) != static_cast<size_t>(size))
     return std::nullopt;
 
   return res;
@@ -466,15 +530,20 @@ std::optional<std::string> ReadFileToString(const char* filename)
   if (!fp)
     return std::nullopt;
 
-  std::fseek(fp.get(), 0, SEEK_END);
-  long size = std::ftell(fp.get());
-  std::fseek(fp.get(), 0, SEEK_SET);
+  return ReadFileToString(fp.get());
+}
+
+std::optional<std::string> ReadFileToString(std::FILE* fp)
+{
+  std::fseek(fp, 0, SEEK_END);
+  long size = std::ftell(fp);
+  std::fseek(fp, 0, SEEK_SET);
   if (size < 0)
     return std::nullopt;
 
   std::string res;
   res.resize(static_cast<size_t>(size));
-  if (size > 0 && std::fread(res.data(), 1u, static_cast<size_t>(size), fp.get()) != static_cast<size_t>(size))
+  if (size > 0 && std::fread(res.data(), 1u, static_cast<size_t>(size), fp) != static_cast<size_t>(size))
     return std::nullopt;
 
   return res;
@@ -535,6 +604,39 @@ bool WriteStreamToString(const std::string_view& sv, ByteStream* stream)
     return false;
 
   return stream->Write2(sv.data(), static_cast<u32>(sv.size()));
+}
+
+std::vector<u8> ReadBinaryStream(ByteStream* stream, bool seek_to_start /*= true*/)
+{
+  u64 pos = stream->GetPosition();
+  u64 size = stream->GetSize();
+  if (pos > 0 && seek_to_start)
+  {
+    if (!stream->SeekAbsolute(0))
+      return {};
+
+    pos = 0;
+  }
+
+  Assert(size >= pos);
+  size -= pos;
+  if (size == 0 || size > std::numeric_limits<u32>::max())
+    return {};
+
+  std::vector<u8> ret;
+  ret.resize(static_cast<size_t>(size));
+  if (!stream->Read2(ret.data(), static_cast<u32>(size)))
+    return {};
+
+  return ret;
+}
+
+bool WriteBinaryToSTream(ByteStream* stream, const void* data, size_t data_length)
+{
+  if (data_length > std::numeric_limits<u32>::max())
+    return false;
+
+  return stream->Write2(data, static_cast<u32>(data_length));
 }
 
 void BuildOSPath(char* Destination, u32 cbDestination, const char* Path)
@@ -961,6 +1063,33 @@ bool FileSystem::StatFile(const char* path, FILESYSTEM_STAT_DATA* pStatData)
   return true;
 }
 
+bool FileSystem::StatFile(std::FILE* fp, FILESYSTEM_STAT_DATA* pStatData)
+{
+  const int fd = _fileno(fp);
+  if (fd < 0)
+    return false;
+
+  struct _stat64 st;
+  if (_fstati64(fd, &st) != 0)
+    return false;
+
+  // parse attributes
+  pStatData->Attributes = 0;
+  if ((st.st_mode & _S_IFMT) == _S_IFDIR)
+    pStatData->Attributes |= FILESYSTEM_FILE_ATTRIBUTE_DIRECTORY;
+
+  // parse times
+  pStatData->ModificationTime.SetUnixTimestamp((Timestamp::UnixTimestampValue)st.st_mtime);
+
+  // parse size
+  if ((st.st_mode & _S_IFMT) == _S_IFREG)
+    pStatData->Size = static_cast<u64>(st.st_size);
+  else
+    pStatData->Size = 0;
+
+  return true;
+}
+
 bool FileSystem::FileExists(const char* path)
 {
   // has a path
@@ -1291,7 +1420,7 @@ static u32 RecursiveFindFiles(const char* OriginPath, const char* ParentPath, co
     FILESYSTEM_FIND_DATA outData;
     outData.Attributes = 0;
 
-#if defined(__HAIKU__) || defined(__APPLE__)
+#if defined(__HAIKU__) || defined(__APPLE__) || defined(__FreeBSD__)
     struct stat sDir;
     if (stat(full_path, &sDir) < 0)
       continue;
@@ -1389,12 +1518,46 @@ bool StatFile(const char* Path, FILESYSTEM_STAT_DATA* pStatData)
     return false;
 
     // stat file
-#if defined(__HAIKU__) || defined(__APPLE__)
+#if defined(__HAIKU__) || defined(__APPLE__) || defined(__FreeBSD__)
   struct stat sysStatData;
   if (stat(Path, &sysStatData) < 0)
 #else
   struct stat64 sysStatData;
   if (stat64(Path, &sysStatData) < 0)
+#endif
+    return false;
+
+  // parse attributes
+  pStatData->Attributes = 0;
+  if (S_ISDIR(sysStatData.st_mode))
+    pStatData->Attributes |= FILESYSTEM_FILE_ATTRIBUTE_DIRECTORY;
+
+  // parse times
+  pStatData->ModificationTime.SetUnixTimestamp((Timestamp::UnixTimestampValue)sysStatData.st_mtime);
+
+  // parse size
+  if (S_ISREG(sysStatData.st_mode))
+    pStatData->Size = static_cast<u64>(sysStatData.st_size);
+  else
+    pStatData->Size = 0;
+
+  // ok
+  return true;
+}
+
+bool StatFile(std::FILE* fp, FILESYSTEM_STAT_DATA* pStatData)
+{
+  int fd = fileno(fp);
+  if (fd < 0)
+    return false;
+
+    // stat file
+#if defined(__HAIKU__) || defined(__APPLE__) || defined(__FreeBSD__)
+  struct stat sysStatData;
+  if (fstat(fd, &sysStatData) < 0)
+#else
+  struct stat64 sysStatData;
+  if (fstat64(fd, &sysStatData) < 0)
 #endif
     return false;
 
@@ -1423,7 +1586,7 @@ bool FileExists(const char* Path)
     return false;
 
     // stat file
-#if defined(__HAIKU__) || defined(__APPLE__)
+#if defined(__HAIKU__) || defined(__APPLE__) || defined(__FreeBSD__)
   struct stat sysStatData;
   if (stat(Path, &sysStatData) < 0)
 #else
@@ -1445,7 +1608,7 @@ bool DirectoryExists(const char* Path)
     return false;
 
     // stat file
-#if defined(__HAIKU__) || defined(__APPLE__)
+#if defined(__HAIKU__) || defined(__APPLE__) || defined(__FreeBSD__)
   struct stat sysStatData;
   if (stat(Path, &sysStatData) < 0)
 #else
@@ -1602,6 +1765,16 @@ std::string GetProgramPath()
     buffer = static_cast<char*>(std::realloc(buffer, curSize + 1));
   }
 
+#elif defined(__FreeBSD__)
+  int mib[4] = {CTL_KERN, KERN_PROC, KERN_PROC_PATHNAME, -1};
+  char buffer[PATH_MAX];
+  size_t cb = sizeof(buffer) - 1;
+  int res = sysctl(mib, countof(mib), buffer, &cb, nullptr, 0);
+  if (res != 0)
+    return {};
+
+  buffer[cb] = '\0';
+  return buffer;
 #else
   return {};
 #endif

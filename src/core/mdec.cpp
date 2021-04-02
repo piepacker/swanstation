@@ -18,8 +18,9 @@ MDEC::~MDEC() = default;
 
 void MDEC::Initialize()
 {
-  m_block_copy_out_event =
-    TimingEvents::CreateTimingEvent("MDEC Block Copy Out", 1, 1, std::bind(&MDEC::CopyOutBlock, this), false);
+  m_block_copy_out_event = TimingEvents::CreateTimingEvent(
+    "MDEC Block Copy Out", 1, 1,
+    [](void* param, TickCount ticks, TickCount ticks_late) { static_cast<MDEC*>(param)->CopyOutBlock(); }, this, false);
   m_total_blocks_decoded = 0;
   Reset();
 }
@@ -725,7 +726,7 @@ void MDEC::DrawDebugStateWindow()
   const float framebuffer_scale = ImGui::GetIO().DisplayFramebufferScale.x;
 
   ImGui::SetNextWindowSize(ImVec2(300.0f * framebuffer_scale, 350.0f * framebuffer_scale), ImGuiCond_FirstUseEver);
-  if (!ImGui::Begin("MDEC State", &g_settings.debugging.show_mdec_state))
+  if (!ImGui::Begin("MDEC State", nullptr))
   {
     ImGui::End();
     return;

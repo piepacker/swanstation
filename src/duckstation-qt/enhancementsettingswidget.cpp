@@ -12,24 +12,30 @@ EnhancementSettingsWidget::EnhancementSettingsWidget(QtHostInterface* host_inter
   m_ui.setupUi(this);
   setupAdditionalUi();
 
-  SettingWidgetBinder::BindWidgetToIntSetting(m_host_interface, m_ui.resolutionScale, "GPU", "ResolutionScale");
-  SettingWidgetBinder::BindWidgetToBoolSetting(m_host_interface, m_ui.trueColor, "GPU", "TrueColor");
-  SettingWidgetBinder::BindWidgetToBoolSetting(m_host_interface, m_ui.scaledDithering, "GPU", "ScaledDithering");
-  SettingWidgetBinder::BindWidgetToBoolSetting(m_host_interface, m_ui.disableInterlacing, "GPU", "DisableInterlacing");
-  SettingWidgetBinder::BindWidgetToBoolSetting(m_host_interface, m_ui.forceNTSCTimings, "GPU", "ForceNTSCTimings");
-  SettingWidgetBinder::BindWidgetToBoolSetting(m_host_interface, m_ui.force43For24Bit, "Display", "Force4_3For24Bit");
+  SettingWidgetBinder::BindWidgetToIntSetting(m_host_interface, m_ui.resolutionScale, "GPU", "ResolutionScale", 1);
+  SettingWidgetBinder::BindWidgetToBoolSetting(m_host_interface, m_ui.trueColor, "GPU", "TrueColor", false);
+  SettingWidgetBinder::BindWidgetToBoolSetting(m_host_interface, m_ui.scaledDithering, "GPU", "ScaledDithering", false);
+  SettingWidgetBinder::BindWidgetToBoolSetting(m_host_interface, m_ui.disableInterlacing, "GPU", "DisableInterlacing",
+                                               true);
+  SettingWidgetBinder::BindWidgetToBoolSetting(m_host_interface, m_ui.forceNTSCTimings, "GPU", "ForceNTSCTimings",
+                                               false);
+  SettingWidgetBinder::BindWidgetToBoolSetting(m_host_interface, m_ui.force43For24Bit, "Display", "Force4_3For24Bit",
+                                               false);
   SettingWidgetBinder::BindWidgetToBoolSetting(m_host_interface, m_ui.chromaSmoothingFor24Bit, "GPU",
-                                               "ChromaSmoothing24Bit");
+                                               "ChromaSmoothing24Bit", false);
   SettingWidgetBinder::BindWidgetToEnumSetting(m_host_interface, m_ui.textureFiltering, "GPU", "TextureFilter",
                                                &Settings::ParseTextureFilterName, &Settings::GetTextureFilterName,
                                                Settings::DEFAULT_GPU_TEXTURE_FILTER);
-  SettingWidgetBinder::BindWidgetToBoolSetting(m_host_interface, m_ui.widescreenHack, "GPU", "WidescreenHack");
+  SettingWidgetBinder::BindWidgetToBoolSetting(m_host_interface, m_ui.widescreenHack, "GPU", "WidescreenHack", false);
 
   SettingWidgetBinder::BindWidgetToBoolSetting(m_host_interface, m_ui.pgxpEnable, "GPU", "PGXPEnable", false);
   SettingWidgetBinder::BindWidgetToBoolSetting(m_host_interface, m_ui.pgxpCulling, "GPU", "PGXPCulling", true);
   SettingWidgetBinder::BindWidgetToBoolSetting(m_host_interface, m_ui.pgxpTextureCorrection, "GPU",
                                                "PGXPTextureCorrection", true);
   SettingWidgetBinder::BindWidgetToBoolSetting(m_host_interface, m_ui.pgxpDepthBuffer, "GPU", "PGXPDepthBuffer", false);
+  SettingWidgetBinder::BindWidgetToBoolSetting(m_host_interface, m_ui.pgxpPreserveProjPrecision, "GPU",
+                                               "PGXPPreserveProjFP", false);
+  SettingWidgetBinder::BindWidgetToBoolSetting(m_host_interface, m_ui.pgxpCPU, "GPU", "PGXPCPU", false);
 
   connect(m_ui.resolutionScale, QOverload<int>::of(&QComboBox::currentIndexChanged), this,
           &EnhancementSettingsWidget::updateScaledDitheringEnabled);
@@ -103,9 +109,15 @@ EnhancementSettingsWidget::EnhancementSettingsWidget(QtHostInterface* host_inter
                              tr("Uses perspective-correct interpolation for texture coordinates and colors, "
                                 "straightening out warped textures. Requires geometry correction enabled."));
   dialog->registerWidgetHelp(
-    m_ui.pgxpDepthBuffer, tr("Depth Buffer"), tr("Unchecked"),
+    m_ui.pgxpDepthBuffer, tr("Depth Buffer (Low Compatibility)"), tr("Unchecked"),
     tr("Attempts to reduce polygon Z-fighting by testing pixels against the depth values from PGXP. Low compatibility, "
        "but can work well in some games. Other games may need a threshold adjustment."));
+  dialog->registerWidgetHelp(
+    m_ui.pgxpPreserveProjPrecision, tr("Preserve Projection Precision"), tr("Unchecked"),
+    tr("Adds additional precision to PGXP data post-projection. May improve visuals in some games."));
+  dialog->registerWidgetHelp(m_ui.pgxpCPU, tr("CPU Mode (Very Slow)"), tr("Unchecked"),
+                             tr("Uses PGXP for all instructions, not just memory operations. Required for PGXP to "
+                                "correct wobble in some games, but has a very high performance cost."));
 }
 
 EnhancementSettingsWidget::~EnhancementSettingsWidget() = default;
@@ -143,6 +155,8 @@ void EnhancementSettingsWidget::updatePGXPSettingsEnabled()
   m_ui.pgxpCulling->setEnabled(enabled);
   m_ui.pgxpTextureCorrection->setEnabled(enabled);
   m_ui.pgxpDepthBuffer->setEnabled(enabled);
+  m_ui.pgxpPreserveProjPrecision->setEnabled(enabled);
+  m_ui.pgxpCPU->setEnabled(enabled);
 }
 
 void EnhancementSettingsWidget::msaaModeChanged(int index)

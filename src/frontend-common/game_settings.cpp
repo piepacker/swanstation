@@ -107,7 +107,8 @@ bool Entry::LoadFromStream(ByteStream* stream)
   constexpr u32 num_bytes = (static_cast<u32>(Trait::Count) + 7) / 8;
   std::array<u8, num_bytes> bits;
 
-  if (!stream->Read2(bits.data(), num_bytes) || !ReadOptionalFromStream(stream, &cpu_overclock_numerator) ||
+  if (!stream->Read2(bits.data(), num_bytes) || !ReadOptionalFromStream(stream, &runahead_frames) ||
+      !ReadOptionalFromStream(stream, &cpu_overclock_numerator) ||
       !ReadOptionalFromStream(stream, &cpu_overclock_denominator) ||
       !ReadOptionalFromStream(stream, &cpu_overclock_enable) || !ReadOptionalFromStream(stream, &cdrom_read_speedup) ||
       !ReadOptionalFromStream(stream, &display_active_start_offset) ||
@@ -128,7 +129,8 @@ bool Entry::LoadFromStream(ByteStream* stream)
       !ReadOptionalFromStream(stream, &gpu_scaled_dithering) ||
       !ReadOptionalFromStream(stream, &gpu_force_ntsc_timings) ||
       !ReadOptionalFromStream(stream, &gpu_texture_filter) || !ReadOptionalFromStream(stream, &gpu_widescreen_hack) ||
-      !ReadOptionalFromStream(stream, &gpu_pgxp) || !ReadOptionalFromStream(stream, &gpu_pgxp_depth_buffer) ||
+      !ReadOptionalFromStream(stream, &gpu_pgxp) || !ReadOptionalFromStream(stream, &gpu_pgxp_projection_precision) ||
+      !ReadOptionalFromStream(stream, &gpu_pgxp_depth_buffer) || !ReadOptionalFromStream(stream, &multitap_mode) ||
       !ReadOptionalFromStream(stream, &controller_1_type) || !ReadOptionalFromStream(stream, &controller_2_type) ||
       !ReadOptionalFromStream(stream, &memory_card_1_type) || !ReadOptionalFromStream(stream, &memory_card_2_type) ||
       !ReadStringFromStream(stream, &memory_card_1_shared_path) ||
@@ -158,7 +160,8 @@ bool Entry::SaveToStream(ByteStream* stream) const
       bits[i / 8] |= (1u << (i % 8));
   }
 
-  return stream->Write2(bits.data(), num_bytes) && WriteOptionalToStream(stream, cpu_overclock_numerator) &&
+  return stream->Write2(bits.data(), num_bytes) && WriteOptionalToStream(stream, runahead_frames) &&
+         WriteOptionalToStream(stream, cpu_overclock_numerator) &&
          WriteOptionalToStream(stream, cpu_overclock_denominator) &&
          WriteOptionalToStream(stream, cpu_overclock_enable) && WriteOptionalToStream(stream, cdrom_read_speedup) &&
          WriteOptionalToStream(stream, display_active_start_offset) &&
@@ -176,7 +179,8 @@ bool Entry::SaveToStream(ByteStream* stream) const
          WriteOptionalToStream(stream, gpu_per_sample_shading) && WriteOptionalToStream(stream, gpu_true_color) &&
          WriteOptionalToStream(stream, gpu_scaled_dithering) && WriteOptionalToStream(stream, gpu_force_ntsc_timings) &&
          WriteOptionalToStream(stream, gpu_texture_filter) && WriteOptionalToStream(stream, gpu_widescreen_hack) &&
-         WriteOptionalToStream(stream, gpu_pgxp) && WriteOptionalToStream(stream, gpu_pgxp_depth_buffer) &&
+         WriteOptionalToStream(stream, gpu_pgxp) && WriteOptionalToStream(stream, gpu_pgxp_projection_precision) &&
+         WriteOptionalToStream(stream, gpu_pgxp_depth_buffer) && WriteOptionalToStream(stream, multitap_mode) &&
          WriteOptionalToStream(stream, controller_1_type) && WriteOptionalToStream(stream, controller_2_type) &&
          WriteOptionalToStream(stream, memory_card_1_type) && WriteOptionalToStream(stream, memory_card_2_type) &&
          WriteStringToStream(stream, memory_card_1_shared_path) &&
@@ -193,7 +197,11 @@ static void ParseIniSection(Entry* entry, const char* section, const CSimpleIniA
       entry->AddTrait(static_cast<Trait>(trait));
   }
 
-  const char* cvalue = ini.GetValue(section, "CPUOverclockNumerator", nullptr);
+  const char* cvalue = ini.GetValue(section, "RunaheadFrameCount", nullptr);
+  if (cvalue)
+    entry->runahead_frames = StringUtil::FromChars<u32>(cvalue);
+
+  cvalue = ini.GetValue(section, "CPUOverclockNumerator", nullptr);
   if (cvalue)
     entry->cpu_overclock_numerator = StringUtil::FromChars<u32>(cvalue);
   cvalue = ini.GetValue(section, "CPUOverclockDenominator", nullptr);
@@ -272,7 +280,7 @@ static void ParseIniSection(Entry* entry, const char* section, const CSimpleIniA
   cvalue = ini.GetValue(section, "GPUScaledDithering", nullptr);
   if (cvalue)
     entry->gpu_scaled_dithering = StringUtil::FromChars<bool>(cvalue);
-  cvalue = ini.GetValue(section, "GPUBilinearTextureFiltering", nullptr);
+  cvalue = ini.GetValue(section, "GPUTextureFilter", nullptr);
   if (cvalue)
     entry->gpu_texture_filter = Settings::ParseTextureFilterName(cvalue);
   cvalue = ini.GetValue(section, "GPUForceNTSCTimings", nullptr);
@@ -284,10 +292,16 @@ static void ParseIniSection(Entry* entry, const char* section, const CSimpleIniA
   cvalue = ini.GetValue(section, "GPUPGXP", nullptr);
   if (cvalue)
     entry->gpu_pgxp = StringUtil::FromChars<bool>(cvalue);
+  cvalue = ini.GetValue(section, "GPUPGXPPreserveProjFP", nullptr);
+  if (cvalue)
+    entry->gpu_pgxp_projection_precision = StringUtil::FromChars<bool>(cvalue);
   cvalue = ini.GetValue(section, "GPUPGXPDepthBuffer", nullptr);
   if (cvalue)
     entry->gpu_pgxp_depth_buffer = StringUtil::FromChars<bool>(cvalue);
 
+  cvalue = ini.GetValue(section, "MultitapMode", nullptr);
+  if (cvalue)
+    entry->multitap_mode = Settings::ParseMultitapModeName(cvalue);
   cvalue = ini.GetValue(section, "Controller1Type", nullptr);
   if (cvalue)
     entry->controller_1_type = Settings::ParseControllerTypeName(cvalue);
@@ -319,6 +333,9 @@ static void StoreIniSection(const Entry& entry, const char* section, CSimpleIniA
     if (entry.HasTrait(static_cast<Trait>(trait)))
       ini.SetBoolValue(section, s_trait_names[trait].first, true);
   }
+
+  if (entry.runahead_frames.has_value())
+    ini.SetLongValue(section, "RunaheadFrameCount", static_cast<long>(entry.runahead_frames.value()));
 
   if (entry.cpu_overclock_numerator.has_value())
     ini.SetLongValue(section, "CPUOverclockNumerator", static_cast<long>(entry.cpu_overclock_numerator.value()));
@@ -387,14 +404,13 @@ static void StoreIniSection(const Entry& entry, const char* section, CSimpleIniA
     ini.SetValue(section, "GPUWidescreenHack", entry.gpu_widescreen_hack.value() ? "true" : "false");
   if (entry.gpu_pgxp.has_value())
     ini.SetValue(section, "GPUPGXP", entry.gpu_pgxp.value() ? "true" : "false");
+  if (entry.gpu_pgxp_projection_precision.has_value())
+    ini.SetValue(section, "GPUPGXPPreserveProjFP", entry.gpu_pgxp_projection_precision.value() ? "true" : "false");
   if (entry.gpu_pgxp_depth_buffer.has_value())
     ini.SetValue(section, "GPUPGXPDepthBuffer", entry.gpu_pgxp_depth_buffer.value() ? "true" : "false");
 
-  if (entry.controller_1_type.has_value())
-    ini.SetValue(section, "Controller1Type", Settings::GetControllerTypeName(entry.controller_1_type.value()));
-  if (entry.controller_2_type.has_value())
-    ini.SetValue(section, "Controller2Type", Settings::GetControllerTypeName(entry.controller_2_type.value()));
-
+  if (entry.multitap_mode.has_value())
+    ini.SetValue(section, "MultitapMode", Settings::GetMultitapModeName(entry.multitap_mode.value()));
   if (entry.controller_1_type.has_value())
     ini.SetValue(section, "Controller1Type", Settings::GetControllerTypeName(entry.controller_1_type.value()));
   if (entry.controller_2_type.has_value())
@@ -411,9 +427,54 @@ static void StoreIniSection(const Entry& entry, const char* section, CSimpleIniA
     ini.SetValue(section, "InputProfileName", entry.input_profile_name.c_str());
 }
 
+u32 Entry::GetUserSettingsCount() const
+{
+  u32 count = 0;
+
+  count += BoolToUInt32(runahead_frames.has_value());
+  count += BoolToUInt32(cpu_overclock_numerator.has_value());
+  count += BoolToUInt32(cpu_overclock_denominator.has_value());
+  count += BoolToUInt32(cpu_overclock_enable.has_value());
+  count += BoolToUInt32(cdrom_read_speedup.has_value());
+  count += BoolToUInt32(display_crop_mode.has_value());
+  count += BoolToUInt32(display_aspect_ratio.has_value());
+  count += BoolToUInt32(gpu_downsample_mode.has_value());
+  count += BoolToUInt32(display_linear_upscaling.has_value());
+  count += BoolToUInt32(display_integer_upscaling.has_value());
+  count += BoolToUInt32(display_force_4_3_for_24bit.has_value());
+  count += BoolToUInt32(gpu_resolution_scale.has_value());
+  count += BoolToUInt32(gpu_multisamples.has_value());
+  count += BoolToUInt32(gpu_per_sample_shading.has_value());
+  count += BoolToUInt32(gpu_true_color.has_value());
+  count += BoolToUInt32(gpu_scaled_dithering.has_value());
+  count += BoolToUInt32(gpu_force_ntsc_timings.has_value());
+  count += BoolToUInt32(gpu_texture_filter.has_value());
+  count += BoolToUInt32(gpu_widescreen_hack.has_value());
+  count += BoolToUInt32(gpu_pgxp.has_value());
+  count += BoolToUInt32(gpu_pgxp_projection_precision.has_value());
+  count += BoolToUInt32(gpu_pgxp_depth_buffer.has_value());
+  count += BoolToUInt32(multitap_mode.has_value());
+  count += BoolToUInt32(controller_1_type.has_value());
+  count += BoolToUInt32(controller_2_type.has_value());
+  count += BoolToUInt32(memory_card_1_type.has_value());
+  count += BoolToUInt32(memory_card_2_type.has_value());
+  count += BoolToUInt32(!memory_card_1_shared_path.empty());
+  count += BoolToUInt32(!memory_card_2_shared_path.empty());
+  count += BoolToUInt32(!input_profile_name.empty());
+
+  return count;
+}
+
 static std::optional<std::string> GetEntryValueForKey(const Entry& entry, const std::string_view& key)
 {
-  if (key == "CPUOverclock")
+  if (key == "RunaheadFrameCount")
+  {
+    if (!entry.runahead_frames.has_value())
+      return std::nullopt;
+
+    return std::to_string(entry.runahead_frames.value());
+  }
+  else if (key == "CPUOverclock")
   {
     if (!entry.cpu_overclock_enable.has_value())
       return std::nullopt;
@@ -454,21 +515,21 @@ static std::optional<std::string> GetEntryValueForKey(const Entry& entry, const 
     if (!entry.display_linear_upscaling.has_value())
       return std::nullopt;
     else
-      return entry.display_linear_upscaling ? "true" : "false";
+      return entry.display_linear_upscaling.value() ? "true" : "false";
   }
   else if (key == "DisplayIntegerUpscaling")
   {
     if (!entry.display_integer_upscaling.has_value())
       return std::nullopt;
     else
-      return entry.display_integer_upscaling ? "true" : "false";
+      return entry.display_integer_upscaling.value() ? "true" : "false";
   }
   else if (key == "DisplayForce4_3For24Bit")
   {
     if (!entry.display_force_4_3_for_24bit.has_value())
       return std::nullopt;
     else
-      return entry.display_force_4_3_for_24bit ? "true" : "false";
+      return entry.display_force_4_3_for_24bit.value() ? "true" : "false";
   }
   else if (key == "GPUResolutionScale")
   {
@@ -486,7 +547,7 @@ static std::optional<std::string> GetEntryValueForKey(const Entry& entry, const 
     else
     {
       return StringUtil::StdStringFromFormat("%u%s", entry.gpu_multisamples.value(),
-                                             entry.gpu_multisamples.value_or(false) ? "-ssaa" : "");
+                                             entry.gpu_per_sample_shading.value_or(false) ? "-ssaa" : "");
     }
   }
   else if (key == "GPUTrueColor")
@@ -494,49 +555,63 @@ static std::optional<std::string> GetEntryValueForKey(const Entry& entry, const 
     if (!entry.gpu_true_color.has_value())
       return std::nullopt;
     else
-      return entry.gpu_true_color ? "true" : "false";
+      return entry.gpu_true_color.value() ? "true" : "false";
   }
   else if (key == "GPUScaledDithering")
   {
     if (!entry.gpu_scaled_dithering.has_value())
       return std::nullopt;
     else
-      return entry.gpu_scaled_dithering ? "true" : "false";
+      return entry.gpu_scaled_dithering.value() ? "true" : "false";
   }
   else if (key == "GPUTextureFilter")
   {
     if (!entry.gpu_texture_filter.has_value())
       return std::nullopt;
     else
-      return entry.gpu_texture_filter ? "true" : "false";
+      return Settings::GetTextureFilterName(entry.gpu_texture_filter.value());
   }
   else if (key == "GPUForceNTSCTimings")
   {
     if (!entry.gpu_force_ntsc_timings.has_value())
       return std::nullopt;
     else
-      return entry.gpu_force_ntsc_timings ? "true" : "false";
+      return entry.gpu_force_ntsc_timings.value() ? "true" : "false";
   }
   else if (key == "GPUWidescreenHack")
   {
     if (!entry.gpu_widescreen_hack.has_value())
       return std::nullopt;
     else
-      return entry.gpu_widescreen_hack ? "true" : "false";
+      return entry.gpu_widescreen_hack.value() ? "true" : "false";
   }
   else if (key == "GPUPGXP")
   {
     if (!entry.gpu_pgxp.has_value())
       return std::nullopt;
     else
-      return entry.gpu_pgxp ? "true" : "false";
+      return entry.gpu_pgxp.value() ? "true" : "false";
+  }
+  else if (key == "GPUPGXPPreserveProjFP")
+  {
+    if (!entry.gpu_pgxp_projection_precision.has_value())
+      return std::nullopt;
+    else
+      return entry.gpu_pgxp_projection_precision.value() ? "true" : "false";
   }
   else if (key == "GPUPGXPDepthBuffer")
   {
     if (!entry.gpu_pgxp_depth_buffer.has_value())
       return std::nullopt;
     else
-      return entry.gpu_pgxp_depth_buffer ? "true" : "false";
+      return entry.gpu_pgxp_depth_buffer.value() ? "true" : "false";
+  }
+  else if (key == "MultitapMode")
+  {
+    if (!entry.multitap_mode.has_value())
+      return std::nullopt;
+    else
+      return Settings::GetMultitapModeName(entry.multitap_mode.value());
   }
   else if (key == "Controller1Type")
   {
@@ -596,7 +671,14 @@ static std::optional<std::string> GetEntryValueForKey(const Entry& entry, const 
 
 static void SetEntryValueForKey(Entry& entry, const std::string_view& key, const std::optional<std::string>& value)
 {
-  if (key == "CPUOverclock")
+  if (key == "RunaheadFrameCount")
+  {
+    if (!value.has_value())
+      entry.runahead_frames.reset();
+    else
+      entry.runahead_frames = StringUtil::FromChars<u32>(value.value());
+  }
+  else if (key == "CPUOverclock")
   {
     if (!value.has_value())
     {
@@ -647,21 +729,21 @@ static void SetEntryValueForKey(Entry& entry, const std::string_view& key, const
     if (!value.has_value())
       entry.display_linear_upscaling.reset();
     else
-      entry.display_linear_upscaling = StringUtil::FromChars<bool>(value.value());
+      entry.display_linear_upscaling = StringUtil::FromChars<bool>(value.value()).value_or(false);
   }
   else if (key == "DisplayIntegerUpscaling")
   {
     if (!value.has_value())
       entry.display_integer_upscaling.reset();
     else
-      entry.display_integer_upscaling = StringUtil::FromChars<bool>(value.value());
+      entry.display_integer_upscaling = StringUtil::FromChars<bool>(value.value()).value_or(false);
   }
   else if (key == "DisplayForce4_3For24Bit")
   {
     if (!value.has_value())
       entry.display_force_4_3_for_24bit.reset();
     else
-      entry.display_force_4_3_for_24bit = StringUtil::FromChars<bool>(value.value());
+      entry.display_force_4_3_for_24bit = StringUtil::FromChars<bool>(value.value()).value_or(false);
   }
   else if (key == "GPUResolutionScale")
   {
@@ -697,14 +779,14 @@ static void SetEntryValueForKey(Entry& entry, const std::string_view& key, const
     if (!value.has_value())
       entry.gpu_true_color.reset();
     else
-      entry.gpu_true_color = StringUtil::FromChars<bool>(value.value());
+      entry.gpu_true_color = StringUtil::FromChars<bool>(value.value()).value_or(false);
   }
   else if (key == "GPUScaledDithering")
   {
     if (!value.has_value())
       entry.gpu_scaled_dithering.reset();
     else
-      entry.gpu_scaled_dithering = StringUtil::FromChars<bool>(value.value());
+      entry.gpu_scaled_dithering = StringUtil::FromChars<bool>(value.value()).value_or(false);
   }
   else if (key == "GPUTextureFilter")
   {
@@ -718,28 +800,42 @@ static void SetEntryValueForKey(Entry& entry, const std::string_view& key, const
     if (!value.has_value())
       entry.gpu_force_ntsc_timings.reset();
     else
-      entry.gpu_force_ntsc_timings = StringUtil::FromChars<bool>(value.value());
+      entry.gpu_force_ntsc_timings = StringUtil::FromChars<bool>(value.value()).value_or(false);
   }
   else if (key == "GPUWidescreenHack")
   {
     if (!value.has_value())
       entry.gpu_widescreen_hack.reset();
     else
-      entry.gpu_widescreen_hack = StringUtil::FromChars<bool>(value.value());
+      entry.gpu_widescreen_hack = StringUtil::FromChars<bool>(value.value()).value_or(false);
   }
   else if (key == "GPUPGXP")
   {
     if (!value.has_value())
       entry.gpu_pgxp.reset();
     else
-      entry.gpu_pgxp = StringUtil::FromChars<bool>(value.value());
+      entry.gpu_pgxp = StringUtil::FromChars<bool>(value.value()).value_or(false);
+  }
+  else if (key == "GPUPGXPPreserveProjFP")
+  {
+    if (!value.has_value())
+      entry.gpu_pgxp_projection_precision.reset();
+    else
+      entry.gpu_pgxp_projection_precision = StringUtil::FromChars<bool>(value.value()).value_or(false);
   }
   else if (key == "GPUPGXPDepthBuffer")
   {
     if (!value.has_value())
       entry.gpu_pgxp_depth_buffer.reset();
     else
-      entry.gpu_pgxp_depth_buffer = StringUtil::FromChars<bool>(value.value());
+      entry.gpu_pgxp_depth_buffer = StringUtil::FromChars<bool>(value.value()).value_or(false);
+  }
+  else if (key == "MultitapMode")
+  {
+    if (!value.has_value())
+      entry.multitap_mode.reset();
+    else
+      entry.multitap_mode = Settings::ParseMultitapModeName(value->c_str());
   }
   else if (key == "Controller1Type")
   {
@@ -903,6 +999,8 @@ void Entry::ApplySettings(bool display_osd_messages) const
 {
   constexpr float osd_duration = 10.0f;
 
+  if (runahead_frames.has_value())
+    g_settings.runahead_frames = runahead_frames.value();
   if (cpu_overclock_numerator.has_value())
     g_settings.cpu_overclock_numerator = cpu_overclock_numerator.value();
   if (cpu_overclock_denominator.has_value())
@@ -966,9 +1064,13 @@ void Entry::ApplySettings(bool display_osd_messages) const
     g_settings.gpu_widescreen_hack = gpu_widescreen_hack.value();
   if (gpu_pgxp.has_value())
     g_settings.gpu_pgxp_enable = gpu_pgxp.value();
+  if (gpu_pgxp_projection_precision.has_value())
+    g_settings.gpu_pgxp_preserve_proj_fp = gpu_pgxp_projection_precision.value();
   if (gpu_pgxp_depth_buffer.has_value())
     g_settings.gpu_pgxp_depth_buffer = gpu_pgxp_depth_buffer.value();
 
+  if (multitap_mode.has_value())
+    g_settings.multitap_mode = multitap_mode.value();
   if (controller_1_type.has_value())
     g_settings.controller_types[0] = controller_1_type.value();
   if (controller_2_type.has_value())
@@ -1145,34 +1247,13 @@ void Entry::ApplySettings(bool display_osd_messages) const
   }
 
   if (HasTrait(Trait::DisableAnalogModeForcing))
-  {
     g_settings.controller_disable_analog_mode_forcing = true;
-  }
 
   if (HasTrait(Trait::ForceRecompilerMemoryExceptions))
-  {
-    if (display_osd_messages && g_settings.cpu_execution_mode == CPUExecutionMode::Recompiler &&
-        !g_settings.cpu_recompiler_memory_exceptions)
-    {
-      g_host_interface->AddOSDMessage(
-        g_host_interface->TranslateStdString("OSDMessage", "Recompiler memory exceptions forced by game settings."),
-        osd_duration);
-    }
-
     g_settings.cpu_recompiler_memory_exceptions = true;
-  }
 
   if (HasTrait(Trait::ForceRecompilerICache))
-  {
-    if (display_osd_messages && g_settings.cpu_execution_mode != CPUExecutionMode::Interpreter &&
-        !g_settings.cpu_recompiler_icache)
-    {
-      g_host_interface->AddOSDMessage(
-        g_host_interface->TranslateStdString("OSDMessage", "Recompiler ICache forced by game settings."), osd_duration);
-    }
-
     g_settings.cpu_recompiler_icache = true;
-  }
 }
 
 } // namespace GameSettings

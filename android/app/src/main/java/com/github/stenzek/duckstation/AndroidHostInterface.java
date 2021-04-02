@@ -4,6 +4,7 @@ import android.content.Context;
 import android.content.SharedPreferences;
 import android.content.res.AssetManager;
 import android.os.Environment;
+import android.os.Process;
 import android.util.Log;
 import android.view.Surface;
 import android.widget.Toast;
@@ -19,12 +20,6 @@ public class AndroidHostInterface {
 
     private long mNativePointer;
     private Context mContext;
-
-    static public native String getScmVersion();
-
-    static public native String getFullScmVersion();
-
-    static public native AndroidHostInterface create(Context context, String userDirectory);
 
     public AndroidHostInterface(Context context) {
         this.mContext = context;
@@ -46,15 +41,27 @@ public class AndroidHostInterface {
         }
     }
 
+    public void setContext(Context context) {
+        mContext = context;
+    }
+
+    static public native String getScmVersion();
+
+    static public native String getFullScmVersion();
+
+    static public native boolean setThreadAffinity(int[] cpus);
+
+    static public native AndroidHostInterface create(Context context, String userDirectory);
+
     public native boolean isEmulationThreadRunning();
 
-    public native boolean startEmulationThread(EmulationActivity emulationActivity, Surface surface, String filename, boolean resumeState, String state_filename);
+    public native boolean runEmulationThread(EmulationActivity emulationActivity, String filename, boolean resumeState, String state_filename);
 
     public native boolean isEmulationThreadPaused();
 
     public native void pauseEmulationThread(boolean paused);
 
-    public native void stopEmulationThread();
+    public native void stopEmulationThreadLoop();
 
     public native boolean hasSurface();
 
@@ -75,9 +82,15 @@ public class AndroidHostInterface {
 
     public static native String[] getControllerAxisNames(String controllerType);
 
+    public static native int getControllerVibrationMotorCount(String controllerType);
+
     public native void handleControllerButtonEvent(int controllerIndex, int buttonIndex, boolean pressed);
 
     public native void handleControllerAxisEvent(int controllerIndex, int axisIndex, float value);
+
+    public native boolean hasControllerButtonBinding(int controllerIndex, int buttonIndex);
+
+    public native void toggleControllerAnalogMode();
 
     public native String[] getInputProfileNames();
 
@@ -106,6 +119,7 @@ public class AndroidHostInterface {
     public native void saveResumeState(boolean waitForCompletion);
 
     public native void applySettings();
+    public native void updateInputMap();
 
     public native void setDisplayAlignment(int alignment);
 
@@ -131,21 +145,40 @@ public class AndroidHostInterface {
 
     public native boolean setMediaPlaylistIndex(int index);
 
+    public native boolean setMediaFilename(String filename);
+
+    public native SaveStateInfo[] getSaveStateInfo(boolean includeEmpty);
+
+    public native void setFullscreenUINotificationVerticalPosition(float position, float direction);
+
+    public native boolean isCheevosActive();
+    public native boolean isCheevosChallengeModeActive();
+    public native Achievement[] getCheevoList();
+    public native int getCheevoCount();
+    public native int getUnlockedCheevoCount();
+    public native int getCheevoPointsForGame();
+    public native int getCheevoMaximumPointsForGame();
+    public native String getCheevoGameTitle();
+    public native String getCheevoGameIconPath();
+    public native boolean cheevosLogin(String username, String password);
+    public native void cheevosLogout();
+
     static {
         System.loadLibrary("duckstation-native");
     }
 
     static private AndroidHostInterface mInstance;
+    static private String mUserDirectory;
 
     static public boolean createInstance(Context context) {
         // Set user path.
-        String externalStorageDirectory = Environment.getExternalStorageDirectory().getAbsolutePath();
-        if (externalStorageDirectory.isEmpty())
-            externalStorageDirectory = "/sdcard";
+        mUserDirectory = Environment.getExternalStorageDirectory().getAbsolutePath();
+        if (mUserDirectory.isEmpty())
+            mUserDirectory = "/sdcard";
 
-        externalStorageDirectory += "/duckstation";
-        Log.i("AndroidHostInterface", "User directory: " + externalStorageDirectory);
-        mInstance = create(context, externalStorageDirectory);
+        mUserDirectory += "/duckstation";
+        Log.i("AndroidHostInterface", "User directory: " + mUserDirectory);
+        mInstance = create(context, mUserDirectory);
         return mInstance != null;
     }
 
@@ -156,6 +189,8 @@ public class AndroidHostInterface {
     static public AndroidHostInterface getInstance() {
         return mInstance;
     }
+
+    static public String getUserDirectory() { return mUserDirectory; }
 
     static public boolean hasInstanceAndEmulationThreadIsRunning() {
         return hasInstance() && getInstance().isEmulationThreadRunning();

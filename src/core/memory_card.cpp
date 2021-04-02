@@ -13,8 +13,10 @@ MemoryCard::MemoryCard()
 {
   m_FLAG.no_write_yet = true;
 
-  m_save_event = TimingEvents::CreateTimingEvent("Memory Card Host Flush", GetSaveDelayInTicks(), GetSaveDelayInTicks(),
-                                                 std::bind(&MemoryCard::SaveIfChanged, this, true), false);
+  m_save_event = TimingEvents::CreateTimingEvent(
+    "Memory Card Host Flush", GetSaveDelayInTicks(), GetSaveDelayInTicks(),
+    [](void* param, TickCount ticks, TickCount ticks_late) { static_cast<MemoryCard*>(param)->SaveIfChanged(true); },
+    this, false);
 }
 
 MemoryCard::~MemoryCard()
@@ -256,12 +258,10 @@ std::unique_ptr<MemoryCard> MemoryCard::Open(std::string_view filename)
   mc->m_filename = filename;
   if (!mc->LoadFromFile())
   {
-    SmallString message;
-    message.AppendString("Memory card at '");
-    message.AppendString(filename.data(), static_cast<u32>(filename.length()));
-    message.AppendString("' could not be read, formatting.");
-    Log_ErrorPrint(message);
-    g_host_interface->AddOSDMessage(message.GetCharArray(), 5.0f);
+    Log_InfoPrintf("Memory card at '%s' could not be read, formatting.", mc->m_filename.c_str());
+    g_host_interface->AddFormattedOSDMessage(
+      5.0f, g_host_interface->TranslateString("OSDMessage", "Memory card at '%s' could not be read, formatting."),
+      mc->m_filename.c_str());
     mc->Format();
   }
 

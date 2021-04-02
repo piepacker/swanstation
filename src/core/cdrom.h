@@ -49,7 +49,13 @@ public:
   ALWAYS_INLINE std::tuple<s16, s16> GetAudioFrame()
   {
     const u32 frame = m_audio_fifo.IsEmpty() ? 0u : m_audio_fifo.Pop();
-    return std::tuple<s16, s16>(static_cast<s16>(frame), static_cast<s16>(frame >> 16));
+    const s16 left = static_cast<s16>(Truncate16(frame));
+    const s16 right = static_cast<s16>(Truncate16(frame >> 16));
+    const s16 left_out = SaturateVolume(ApplyVolume(left, m_cd_audio_volume_matrix[0][0]) +
+                                        ApplyVolume(right, m_cd_audio_volume_matrix[1][0]));
+    const s16 right_out = SaturateVolume(ApplyVolume(left, m_cd_audio_volume_matrix[0][1]) +
+                                         ApplyVolume(right, m_cd_audio_volume_matrix[1][1]));
+    return std::tuple<s16, s16>(left_out, right_out);
   }
 
 private:
@@ -68,7 +74,7 @@ private:
     DATA_FIFO_SIZE = RAW_SECTOR_OUTPUT_SIZE,
     NUM_SECTOR_BUFFERS = 8,
     AUDIO_FIFO_SIZE = 44100 * 2,
-    AUDIO_FIFO_LOW_WATERMARK = 5,
+    AUDIO_FIFO_LOW_WATERMARK = 10,
 
     BASE_RESET_TICKS = 400000,
 
@@ -230,6 +236,15 @@ private:
   {
     m_audio_fifo.Push(ZeroExtend32(static_cast<u16>(left)) | (ZeroExtend32(static_cast<u16>(right)) << 16));
   }
+  ALWAYS_INLINE static constexpr s32 ApplyVolume(s16 sample, u8 volume)
+  {
+    return s32(sample) * static_cast<s32>(ZeroExtend32(volume)) >> 7;
+  }
+
+  ALWAYS_INLINE static constexpr s16 SaturateVolume(s32 volume)
+  {
+    return static_cast<s16>((volume < -0x8000) ? -0x8000 : ((volume > 0x7FFF) ? 0x7FFF : volume));
+  }
 
   void SetInterrupt(Interrupt interrupt);
   void SetAsyncInterrupt(Interrupt interrupt);
@@ -240,6 +255,7 @@ private:
   void SendAsyncErrorResponse(u8 stat_bits = STAT_ERROR, u8 reason = 0x80);
   void UpdateStatusRegister();
   void UpdateInterruptRequest();
+  bool HasPendingDiscEvent() const;
 
   TickCount GetAckDelayForCommand(Command command);
   TickCount GetTicksForRead();
@@ -271,6 +287,8 @@ private:
   void StopReadingWithDataEnd();
   void BeginSeeking(bool logical, bool read_after_seek, bool play_after_seek);
   void UpdatePositionWhileSeeking();
+  void ResetPhysicalPosition();
+  void UpdatePhysicalPosition();
   void ResetCurrentXAFile();
   void ResetAudioDecoder();
   void LoadDataFIFO();
@@ -299,6 +317,8 @@ private:
   CDImage::LBA m_current_lba{};
   CDImage::LBA m_seek_start_lba{};
   CDImage::LBA m_seek_end_lba{};
+  CDImage::LBA m_physical_lba{};
+  u32 m_physical_lba_update_tick = 0;
   bool m_setloc_pending = false;
   bool m_read_after_seek = false;
   bool m_play_after_seek = false;

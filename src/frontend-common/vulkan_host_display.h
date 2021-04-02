@@ -43,12 +43,14 @@ public:
   virtual bool SupportsFullscreen() const override;
   virtual bool IsFullscreen() override;
   virtual bool SetFullscreen(bool fullscreen, u32 width, u32 height, float refresh_rate) override;
+  virtual AdapterAndModeList GetAdapterAndModeList() override;
   virtual void DestroyRenderSurface() override;
 
   virtual bool SetPostProcessingChain(const std::string_view& config) override;
 
-  std::unique_ptr<HostDisplayTexture> CreateTexture(u32 width, u32 height, const void* initial_data,
-                                                    u32 initial_data_stride, bool dynamic) override;
+  std::unique_ptr<HostDisplayTexture> CreateTexture(u32 width, u32 height, u32 layers, u32 levels, u32 samples,
+                                                    HostDisplayPixelFormat format, const void* data, u32 data_stride,
+                                                    bool dynamic = false) override;
   void UpdateTexture(HostDisplayTexture* texture, u32 x, u32 y, u32 width, u32 height, const void* texture_data,
                      u32 texture_data_stride) override;
   bool DownloadTexture(const void* texture_handle, HostDisplayPixelFormat texture_format, u32 x, u32 y, u32 width,
@@ -62,8 +64,10 @@ public:
   virtual void SetVSync(bool enabled) override;
 
   virtual bool Render() override;
+  virtual bool RenderScreenshot(u32 width, u32 height, std::vector<u32>* out_pixels, u32* out_stride,
+                                HostDisplayPixelFormat* out_format) override;
 
-  static std::vector<std::string> EnumerateAdapterNames();
+  static AdapterAndModeList StaticGetAdapterAndModeList(const WindowInfo* wi);
 
 protected:
   struct PushConstants
@@ -87,9 +91,10 @@ protected:
   };
 
   bool CheckPostProcessingRenderTargets(u32 target_width, u32 target_height);
-  void ApplyPostProcessingChain(s32 final_left, s32 final_top, s32 final_width, s32 final_height, void* texture_handle,
-                                u32 texture_width, s32 texture_height, s32 texture_view_x, s32 texture_view_y,
-                                s32 texture_view_width, s32 texture_view_height);
+  void ApplyPostProcessingChain(VkFramebuffer target_fb, s32 final_left, s32 final_top, s32 final_width,
+                                s32 final_height, void* texture_handle, u32 texture_width, s32 texture_height,
+                                s32 texture_view_x, s32 texture_view_y, s32 texture_view_width, s32 texture_view_height,
+                                u32 target_width, u32 target_height);
 
   // Can be overridden by frontends.
   virtual VkRenderPass GetRenderPassForDisplay() const;
@@ -97,10 +102,13 @@ protected:
   virtual bool CreateResources() override;
   virtual void DestroyResources() override;
 
-  virtual bool CreateImGuiContext();
-  virtual void DestroyImGuiContext();
+#ifndef LIBRETRO
+  virtual bool CreateImGuiContext() override;
+  virtual void DestroyImGuiContext() override;
+  virtual bool UpdateImGuiFontTexture() override;
+#endif
 
-  void BeginSwapChainRenderPass(VkFramebuffer framebuffer);
+  void BeginSwapChainRenderPass(VkFramebuffer framebuffer, u32 width, u32 height);
   void RenderDisplay();
   void RenderImGui();
   void RenderSoftwareCursor();

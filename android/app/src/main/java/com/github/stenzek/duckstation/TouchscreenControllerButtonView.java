@@ -12,13 +12,23 @@ import android.view.View;
  * TODO: document your custom view class.
  */
 public final class TouchscreenControllerButtonView extends View {
+    public enum Hotkey
+    {
+        NONE,
+        FAST_FORWARD,
+        ANALOG_TOGGLE
+    }
+
     private Drawable mUnpressedDrawable;
     private Drawable mPressedDrawable;
     private boolean mPressed = false;
     private boolean mHapticFeedback = false;
     private int mControllerIndex = -1;
     private int mButtonCode = -1;
+    private Hotkey mHotkey = Hotkey.NONE;
     private String mConfigName;
+    private boolean mDefaultVisibility = true;
+    private boolean mIsGlidable = true;
 
     public TouchscreenControllerButtonView(Context context) {
         super(context);
@@ -95,13 +105,22 @@ public final class TouchscreenControllerButtonView extends View {
         mButtonCode = code;
     }
 
-    public void setConfigName(String name) {
-        mConfigName = name;
+    public void setHotkey(Hotkey hotkey) {
+        mHotkey = hotkey;
     }
 
     public String getConfigName() {
         return mConfigName;
     }
+    public void setConfigName(String name) {
+        mConfigName = name;
+    }
+
+    public boolean getIsGlidable() { return mIsGlidable; }
+    public void setIsGlidable(boolean isGlidable) { mIsGlidable = isGlidable; }
+
+    public boolean getDefaultVisibility() { return mDefaultVisibility; }
+    public void setDefaultVisibility(boolean visibility) { mDefaultVisibility = visibility; }
 
     public void setHapticFeedback(boolean enabled) {
         mHapticFeedback = enabled;
@@ -110,6 +129,23 @@ public final class TouchscreenControllerButtonView extends View {
     private void updateControllerState() {
         if (mButtonCode >= 0)
             AndroidHostInterface.getInstance().setControllerButtonState(mControllerIndex, mButtonCode, mPressed);
+
+        switch (mHotkey)
+        {
+            case FAST_FORWARD:
+                AndroidHostInterface.getInstance().setFastForwardEnabled(mPressed);
+                break;
+
+            case ANALOG_TOGGLE: {
+                if (mPressed)
+                    AndroidHostInterface.getInstance().toggleControllerAnalogMode();
+            }
+            break;
+
+            case NONE:
+            default:
+                break;
+        }
     }
 
     public Drawable getPressedDrawable() {

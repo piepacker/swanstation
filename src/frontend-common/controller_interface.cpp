@@ -22,6 +22,22 @@ void ControllerInterface::Shutdown()
   m_host_interface = nullptr;
 }
 
+std::optional<int> ControllerInterface::GetControllerIndex(const std::string_view& device)
+{
+  if (!StringUtil::StartsWith(device, "Controller"))
+    return std::nullopt;
+
+  const std::optional<int> controller_index = StringUtil::FromChars<int>(device.substr(10));
+  if (!controller_index || *controller_index < 0)
+  {
+    Log_WarningPrintf("Invalid controller index in button binding '%*s'", static_cast<int>(device.length()),
+                      device.data());
+    return std::nullopt;
+  }
+
+  return controller_index;
+}
+
 void ControllerInterface::SetHook(Hook::Callback callback)
 {
   std::unique_lock<std::mutex> lock(m_event_intercept_mutex);
@@ -34,6 +50,12 @@ void ControllerInterface::ClearHook()
   std::unique_lock<std::mutex> lock(m_event_intercept_mutex);
   if (m_event_intercept_callback)
     m_event_intercept_callback = {};
+}
+
+bool ControllerInterface::HasHook()
+{
+  std::unique_lock<std::mutex> lock(m_event_intercept_mutex);
+  return (bool)m_event_intercept_callback;
 }
 
 bool ControllerInterface::DoEventHook(Hook::Type type, int controller_index, int button_or_axis_number,
@@ -95,6 +117,9 @@ static constexpr std::array<const char*, static_cast<u32>(ControllerInterface::B
   // Deliberately not translated as it's not exposed to users.
   "Android",
 #endif
+#ifdef WITH_EVDEV
+  TRANSLATABLE("ControllerInterface", "Evdev"),
+#endif
 }};
 
 std::optional<ControllerInterface::Backend> ControllerInterface::ParseBackendName(const char* name)
@@ -132,6 +157,9 @@ ControllerInterface::Backend ControllerInterface::GetDefaultBackend()
 #include "dinput_controller_interface.h"
 #include "xinput_controller_interface.h"
 #endif
+#ifdef WITH_EVDEV
+#include "evdev_controller_interface.h"
+#endif
 
 std::unique_ptr<ControllerInterface> ControllerInterface::Create(Backend type)
 {
@@ -144,6 +172,10 @@ std::unique_ptr<ControllerInterface> ControllerInterface::Create(Backend type)
     return std::make_unique<XInputControllerInterface>();
   if (type == Backend::DInput)
     return std::make_unique<DInputControllerInterface>();
+#endif
+#ifdef WITH_EVDEV
+  if (type == Backend::Evdev)
+    return std::make_unique<EvdevControllerInterface>();
 #endif
 
   return {};

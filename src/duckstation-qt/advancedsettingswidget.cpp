@@ -9,7 +9,6 @@ static void addBooleanTweakOption(QtHostInterface* host_interface, QTableWidget*
                                   std::string section, std::string key, bool default_value)
 {
   const int row = table->rowCount();
-  const bool current_value = host_interface->GetBoolSettingValue(section.c_str(), key.c_str(), default_value);
 
   table->insertRow(row);
 
@@ -35,7 +34,6 @@ static void addIntRangeTweakOption(QtHostInterface* host_interface, QTableWidget
                                    int default_value)
 {
   const int row = table->rowCount();
-  const bool current_value = host_interface->GetBoolSettingValue(section.c_str(), key.c_str(), default_value);
 
   table->insertRow(row);
 
@@ -152,9 +150,6 @@ AdvancedSettingsWidget::AdvancedSettingsWidget(QtHostInterface* host_interface, 
 
   addBooleanTweakOption(m_host_interface, m_ui.tweakOptionTable, tr("PGXP Vertex Cache"), "GPU", "PGXPVertexCache",
                         false);
-  addBooleanTweakOption(m_host_interface, m_ui.tweakOptionTable, tr("PGXP CPU Mode"), "GPU", "PGXPCPU", false);
-  addBooleanTweakOption(m_host_interface, m_ui.tweakOptionTable, tr("PGXP Preserve Projection Precision"), "GPU",
-                        "PGXPPreserveProjFP", false);
   addFloatRangeTweakOption(m_host_interface, m_ui.tweakOptionTable, tr("PGXP Geometry Tolerance"), "GPU",
                            "PGXPTolerance", -1.0f, 10.0f, 0.5f, -1.0f);
   addFloatRangeTweakOption(m_host_interface, m_ui.tweakOptionTable, tr("PGXP Depth Clear Threshold"), "GPU",
@@ -180,7 +175,7 @@ AdvancedSettingsWidget::AdvancedSettingsWidget(QtHostInterface* host_interface, 
   addIntRangeTweakOption(m_host_interface, m_ui.tweakOptionTable, tr("Minimum Dumped VRAM Write Width"),
                          "TextureReplacements", "DumpVRAMWriteWidthThreshold", 1, VRAM_WIDTH,
                          Settings::DEFAULT_VRAM_WRITE_DUMP_WIDTH_THRESHOLD);
-  addIntRangeTweakOption(m_host_interface, m_ui.tweakOptionTable, tr("Minimum Dumped VRAM Write Width"),
+  addIntRangeTweakOption(m_host_interface, m_ui.tweakOptionTable, tr("Minimum Dumped VRAM Write Height"),
                          "TextureReplacements", "DumpVRAMWriteHeightThreshold", 1, VRAM_HEIGHT,
                          Settings::DEFAULT_VRAM_WRITE_DUMP_HEIGHT_THRESHOLD);
 
@@ -197,6 +192,19 @@ AdvancedSettingsWidget::AdvancedSettingsWidget(QtHostInterface* host_interface, 
 
   addBooleanTweakOption(m_host_interface, m_ui.tweakOptionTable, tr("Increase Timer Resolution"), "Main",
                         "IncreaseTimerResolution", true);
+
+  dialog->registerWidgetHelp(m_ui.logLevel, tr("Log Level"), tr("Information"),
+                             tr("Sets the verbosity of messages logged. Higher levels will log more messages."));
+  dialog->registerWidgetHelp(m_ui.logToConsole, tr("Log To System Console"), tr("User Preference"),
+                             tr("Logs messages to the console window."));
+  dialog->registerWidgetHelp(m_ui.logToDebug, tr("Log To Debug Console"), tr("User Preference"),
+                             tr("Logs messages to the debug console where supported."));
+  dialog->registerWidgetHelp(m_ui.logToWindow, tr("Log To Window"), tr("User Preference"),
+                             tr("Logs messages to the window."));
+  dialog->registerWidgetHelp(m_ui.logToFile, tr("Log To File"), tr("User Preference"),
+                             tr("Logs messages to duckstation.log in the user directory."));
+  dialog->registerWidgetHelp(m_ui.showDebugMenu, tr("Show Debug Menu"), tr("Unchecked"),
+                             tr("Shows a debug menu bar with additional statistics and quick settings."));
 }
 
 AdvancedSettingsWidget::~AdvancedSettingsWidget() = default;
@@ -206,23 +214,21 @@ void AdvancedSettingsWidget::onResetToDefaultClicked()
   setBooleanTweakOption(m_ui.tweakOptionTable, 0, false);
   setIntRangeTweakOption(m_ui.tweakOptionTable, 1, 0);
   setBooleanTweakOption(m_ui.tweakOptionTable, 2, false);
-  setBooleanTweakOption(m_ui.tweakOptionTable, 3, false);
-  setBooleanTweakOption(m_ui.tweakOptionTable, 4, false);
-  setFloatRangeTweakOption(m_ui.tweakOptionTable, 5, -1.0f);
-  setFloatRangeTweakOption(m_ui.tweakOptionTable, 6, Settings::DEFAULT_GPU_PGXP_DEPTH_THRESHOLD);
+  setFloatRangeTweakOption(m_ui.tweakOptionTable, 3, -1.0f);
+  setFloatRangeTweakOption(m_ui.tweakOptionTable, 4, Settings::DEFAULT_GPU_PGXP_DEPTH_THRESHOLD);
+  setBooleanTweakOption(m_ui.tweakOptionTable, 5, false);
+  setChoiceTweakOption(m_ui.tweakOptionTable, 6, Settings::DEFAULT_CPU_FASTMEM_MODE);
   setBooleanTweakOption(m_ui.tweakOptionTable, 7, false);
-  setChoiceTweakOption(m_ui.tweakOptionTable, 8, Settings::DEFAULT_CPU_FASTMEM_MODE);
+  setBooleanTweakOption(m_ui.tweakOptionTable, 8, false);
   setBooleanTweakOption(m_ui.tweakOptionTable, 9, false);
   setBooleanTweakOption(m_ui.tweakOptionTable, 10, false);
   setBooleanTweakOption(m_ui.tweakOptionTable, 11, false);
-  setBooleanTweakOption(m_ui.tweakOptionTable, 12, false);
-  setBooleanTweakOption(m_ui.tweakOptionTable, 13, false);
-  setIntRangeTweakOption(m_ui.tweakOptionTable, 14, Settings::DEFAULT_VRAM_WRITE_DUMP_WIDTH_THRESHOLD);
-  setIntRangeTweakOption(m_ui.tweakOptionTable, 15, Settings::DEFAULT_VRAM_WRITE_DUMP_HEIGHT_THRESHOLD);
-  setIntRangeTweakOption(m_ui.tweakOptionTable, 16, static_cast<int>(Settings::DEFAULT_DMA_MAX_SLICE_TICKS));
-  setIntRangeTweakOption(m_ui.tweakOptionTable, 17, static_cast<int>(Settings::DEFAULT_DMA_HALT_TICKS));
-  setIntRangeTweakOption(m_ui.tweakOptionTable, 18, static_cast<int>(Settings::DEFAULT_GPU_FIFO_SIZE));
-  setIntRangeTweakOption(m_ui.tweakOptionTable, 19, static_cast<int>(Settings::DEFAULT_GPU_MAX_RUN_AHEAD));
-  setBooleanTweakOption(m_ui.tweakOptionTable, 20, false);
-  setBooleanTweakOption(m_ui.tweakOptionTable, 21, true);
+  setIntRangeTweakOption(m_ui.tweakOptionTable, 12, Settings::DEFAULT_VRAM_WRITE_DUMP_WIDTH_THRESHOLD);
+  setIntRangeTweakOption(m_ui.tweakOptionTable, 13, Settings::DEFAULT_VRAM_WRITE_DUMP_HEIGHT_THRESHOLD);
+  setIntRangeTweakOption(m_ui.tweakOptionTable, 14, static_cast<int>(Settings::DEFAULT_DMA_MAX_SLICE_TICKS));
+  setIntRangeTweakOption(m_ui.tweakOptionTable, 15, static_cast<int>(Settings::DEFAULT_DMA_HALT_TICKS));
+  setIntRangeTweakOption(m_ui.tweakOptionTable, 16, static_cast<int>(Settings::DEFAULT_GPU_FIFO_SIZE));
+  setIntRangeTweakOption(m_ui.tweakOptionTable, 17, static_cast<int>(Settings::DEFAULT_GPU_MAX_RUN_AHEAD));
+  setBooleanTweakOption(m_ui.tweakOptionTable, 18, false);
+  setBooleanTweakOption(m_ui.tweakOptionTable, 19, true);
 }

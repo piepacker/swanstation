@@ -16,7 +16,8 @@ public:
   ~GPU_HW_Vulkan() override;
 
   bool Initialize(HostDisplay* host_display) override;
-  void Reset() override;
+  void Reset(bool clear_vram) override;
+  bool DoState(StateWrapper& sw, HostDisplayTexture** host_texture, bool update_display) override;
 
   void ResetGraphicsAPIState() override;
   void RestoreGraphicsAPIState() override;
@@ -48,9 +49,11 @@ private:
   void DestroyResources();
 
   ALWAYS_INLINE bool InRenderPass() const { return (m_current_render_pass != VK_NULL_HANDLE); }
-  void BeginRenderPass(VkRenderPass render_pass, VkFramebuffer framebuffer, u32 x, u32 y, u32 width, u32 height);
+  void BeginRenderPass(VkRenderPass render_pass, VkFramebuffer framebuffer, u32 x, u32 y, u32 width, u32 height,
+                       const VkClearValue* clear_value = nullptr);
   void BeginVRAMRenderPass();
   void EndRenderPass();
+  void ExecuteCommandBuffer(bool wait_for_completion, bool restore_state);
 
   bool CreatePipelineLayouts();
   bool CreateSamplers();

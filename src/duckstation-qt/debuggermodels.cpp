@@ -1,5 +1,4 @@
 #include "debuggermodels.h"
-#include "common/log.h"
 #include "core/cpu_core.h"
 #include "core/cpu_core_private.h"
 #include "core/cpu_disasm.h"
@@ -7,7 +6,6 @@
 #include <QtGui/QIcon>
 #include <QtGui/QPalette>
 #include <QtWidgets/QApplication>
-Log_SetChannel(DebuggerModels);
 
 static constexpr int NUM_COLUMNS = 5;
 static constexpr int STACK_RANGE = 128;
@@ -77,7 +75,7 @@ QVariant DebuggerCodeModel::data(const QModelIndex& index, int role /*= Qt::Disp
         // Bytes
         u32 instruction_bits;
         if (!CPU::SafeReadInstruction(address, &instruction_bits))
-          return QStringLiteral("<invalid>");
+          return tr("<invalid>");
 
         return QString::asprintf("%08X", instruction_bits);
       }
@@ -87,9 +85,8 @@ QVariant DebuggerCodeModel::data(const QModelIndex& index, int role /*= Qt::Disp
         // Instruction
         u32 instruction_bits;
         if (!CPU::SafeReadInstruction(address, &instruction_bits))
-          return QStringLiteral("<invalid>");
+          return tr("<invalid>");
 
-        Log_DevPrintf("Disassemble %08X", address);
         SmallString str;
         CPU::DisassembleInstruction(&str, address, instruction_bits);
         return QString::fromUtf8(str.GetCharArray(), static_cast<int>(str.GetLength()));
@@ -103,7 +100,7 @@ QVariant DebuggerCodeModel::data(const QModelIndex& index, int role /*= Qt::Disp
 
         u32 instruction_bits;
         if (!CPU::SafeReadInstruction(address, &instruction_bits))
-          return QStringLiteral("<invalid>");
+          return tr("<invalid>");
 
         TinyString str;
         CPU::DisassembleInstructionComment(&str, address, instruction_bits, &CPU::g_state.regs);
@@ -168,11 +165,20 @@ QVariant DebuggerCodeModel::headerData(int section, Qt::Orientation orientation,
   if (role != Qt::DisplayRole)
     return QVariant();
 
-  static const char* header_names[] = {"", "Address", "Bytes", "Instruction", "Comment"};
-  if (section < 0 || section >= countof(header_names))
-    return QVariant();
-
-  return header_names[section];
+  switch (section)
+  {
+    case 1:
+      return tr("Address");
+    case 2:
+      return tr("Bytes");
+    case 3:
+      return tr("Instruction");
+    case 4:
+      return tr("Comment");
+    case 0:
+    default:
+      return QVariant();
+  }
 }
 
 bool DebuggerCodeModel::updateRegion(VirtualMemoryAddress address)
@@ -340,11 +346,15 @@ QVariant DebuggerRegistersModel::headerData(int section, Qt::Orientation orienta
   if (role != Qt::DisplayRole)
     return QVariant();
 
-  static const char* header_names[] = {"Register", "Value"};
-  if (section < 0 || section >= countof(header_names))
-    return QVariant();
-
-  return header_names[section];
+  switch (section)
+  {
+    case 0:
+      return tr("Register");
+    case 1:
+      return tr("Value");
+    default:
+      return QVariant();
+  }
 }
 
 void DebuggerRegistersModel::invalidateView()
@@ -390,7 +400,7 @@ QVariant DebuggerStackModel::data(const QModelIndex& index, int role /*= Qt::Dis
 
   u32 value;
   if (!CPU::SafeReadMemoryWord(address, &value))
-    return QStringLiteral("<invalid>");
+    return tr("<invalid>");
 
   return QString::asprintf("0x%08X", ZeroExtend32(value));
 }
@@ -403,11 +413,15 @@ QVariant DebuggerStackModel::headerData(int section, Qt::Orientation orientation
   if (role != Qt::DisplayRole)
     return QVariant();
 
-  static const char* header_names[] = {"Address", "Value"};
-  if (section < 0 || section >= countof(header_names))
-    return QVariant();
-
-  return header_names[section];
+  switch (section)
+  {
+    case 0:
+      return tr("Address");
+    case 1:
+      return tr("Value");
+    default:
+      return QVariant();
+  }
 }
 
 void DebuggerStackModel::invalidateView()

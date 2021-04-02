@@ -57,12 +57,16 @@ public:
   void SetAxisState(Axis axis, u8 value);
   void SetButtonState(Button button, bool pressed);
 
+  u32 GetButtonStateBits() const override;
+  std::optional<u32> GetAnalogInputBytes() const override;
+
   void LoadSettings(const char* section) override;
 
 private:
   enum class TransferState : u8
   {
     Idle,
+    Ready,
     IDMSB,
     ButtonsLSB,
     ButtonsMSB,
@@ -72,7 +76,7 @@ private:
     AnalogL
   };
 
-  std::array<u8, static_cast<u8>(Axis::Count)> m_axis_state {};
+  std::array<u8, static_cast<u8>(Axis::Count)> m_axis_state{};
 
   // buttons are active low; bits 0-2, 8-10, 14-15 are not used and are always high
   u16 m_button_state = UINT16_C(0xFFFF);

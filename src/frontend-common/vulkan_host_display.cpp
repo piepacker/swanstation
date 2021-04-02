@@ -9,12 +9,14 @@
 #include "common/vulkan/stream_buffer.h"
 #include "common/vulkan/swap_chain.h"
 #include "common/vulkan/util.h"
-#include "postprocessing_shadergen.h"
-#include <array>
-#ifdef WITH_IMGUI
+#include "common_host_interface.h"
+#include "core/shader_cache_version.h"
+#ifndef LIBRETRO
 #include "imgui.h"
 #include "imgui_impl_vulkan.h"
 #endif
+#include "postprocessing_shadergen.h"
+#include <array>
 Log_SetChannel(VulkanHostDisplay);
 
 namespace FrontendCommon {
@@ -22,8 +24,9 @@ namespace FrontendCommon {
 class VulkanHostDisplayTexture : public HostDisplayTexture
 {
 public:
-  VulkanHostDisplayTexture(Vulkan::Texture texture, Vulkan::StagingTexture staging_texture)
-    : m_texture(std::move(texture)), m_staging_texture(std::move(staging_texture))
+  VulkanHostDisplayTexture(Vulkan::Texture texture, Vulkan::StagingTexture staging_texture,
+                           HostDisplayPixelFormat format)
+    : m_texture(std::move(texture)), m_staging_texture(std::move(staging_texture)), m_format(format)
   {
   }
   ~VulkanHostDisplayTexture() override = default;
@@ -31,64 +34,19 @@ public:
   void* GetHandle() const override { return const_cast<Vulkan::Texture*>(&m_texture); }
   u32 GetWidth() const override { return m_texture.GetWidth(); }
   u32 GetHeight() const override { return m_texture.GetHeight(); }
+  u32 GetLayers() const override { return m_texture.GetLayers(); }
+  u32 GetLevels() const override { return m_texture.GetLevels(); }
+  u32 GetSamples() const override { return m_texture.GetSamples(); }
+  HostDisplayPixelFormat GetFormat() const override { return m_format; }
 
   const Vulkan::Texture& GetTexture() const { return m_texture; }
   Vulkan::Texture& GetTexture() { return m_texture; }
   Vulkan::StagingTexture& GetStagingTexture() { return m_staging_texture; }
 
-  static std::unique_ptr<VulkanHostDisplayTexture> Create(u32 width, u32 height, const void* data, u32 data_stride,
-                                                          bool dynamic)
-  {
-    static constexpr VkFormat format = VK_FORMAT_R8G8B8A8_UNORM;
-    static constexpr VkImageUsageFlags usage =
-      VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT;
-
-    Vulkan::Texture texture;
-    if (!texture.Create(width, height, 1, 1, format, VK_SAMPLE_COUNT_1_BIT, VK_IMAGE_VIEW_TYPE_2D,
-                        VK_IMAGE_TILING_OPTIMAL, usage))
-    {
-      return {};
-    }
-
-    Vulkan::StagingTexture staging_texture;
-    if (data || dynamic)
-    {
-      if (!staging_texture.Create(dynamic ? Vulkan::StagingBuffer::Type::Mutable : Vulkan::StagingBuffer::Type::Upload,
-                                  format, width, height))
-      {
-        return {};
-      }
-    }
-
-    texture.TransitionToLayout(g_vulkan_context->GetCurrentCommandBuffer(), VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
-
-    if (data)
-    {
-      staging_texture.WriteTexels(0, 0, width, height, data, data_stride);
-      staging_texture.CopyToTexture(g_vulkan_context->GetCurrentCommandBuffer(), 0, 0, texture, 0, 0, 0, 0, width,
-                                    height);
-    }
-    else
-    {
-      // clear it instead so we don't read uninitialized data (and keep the validation layer happy!)
-      static constexpr VkClearColorValue ccv = {};
-      static constexpr VkImageSubresourceRange isr = {VK_IMAGE_ASPECT_COLOR_BIT, 0u, 1u, 0u, 1u};
-      vkCmdClearColorImage(g_vulkan_context->GetCurrentCommandBuffer(), texture.GetImage(), texture.GetLayout(), &ccv,
-                           1u, &isr);
-    }
-
-    texture.TransitionToLayout(g_vulkan_context->GetCurrentCommandBuffer(), VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
-
-    // don't need to keep the staging texture around if we're not dynamic
-    if (!dynamic)
-      staging_texture.Destroy(true);
-
-    return std::make_unique<VulkanHostDisplayTexture>(std::move(texture), std::move(staging_texture));
-  }
-
 private:
   Vulkan::Texture m_texture;
   Vulkan::StagingTexture m_staging_texture;
+  HostDisplayPixelFormat m_format;
 };
 
 VulkanHostDisplay::VulkanHostDisplay() = default;
@@ -124,7 +82,8 @@ bool VulkanHostDisplay::ChangeRenderWindow(const WindowInfo& new_wi)
   }
 
   WindowInfo wi_copy(new_wi);
-  VkSurfaceKHR surface = Vulkan::SwapChain::CreateVulkanSurface(g_vulkan_context->GetVulkanInstance(), wi_copy);
+  VkSurfaceKHR surface = Vulkan::SwapChain::CreateVulkanSurface(g_vulkan_context->GetVulkanInstance(),
+                                                                g_vulkan_context->GetPhysicalDevice(), wi_copy);
   if (surface == VK_NULL_HANDLE)
   {
     Log_ErrorPrintf("Failed to create new surface for swap chain");
@@ -142,7 +101,7 @@ bool VulkanHostDisplay::ChangeRenderWindow(const WindowInfo& new_wi)
   m_window_info.surface_width = m_swap_chain->GetWidth();
   m_window_info.surface_height = m_swap_chain->GetHeight();
 
-#ifdef WITH_IMGUI
+#ifndef LIBRETRO
   if (ImGui::GetCurrentContext())
   {
     ImGui::GetIO().DisplaySize.x = static_cast<float>(m_window_info.surface_width);
@@ -163,7 +122,7 @@ void VulkanHostDisplay::ResizeRenderWindow(s32 new_window_width, s32 new_window_
   m_window_info.surface_width = m_swap_chain->GetWidth();
   m_window_info.surface_height = m_swap_chain->GetHeight();
 
-#ifdef WITH_IMGUI
+#ifndef LIBRETRO
   if (ImGui::GetCurrentContext())
   {
     ImGui::GetIO().DisplaySize.x = static_cast<float>(m_window_info.surface_width);
@@ -187,6 +146,11 @@ bool VulkanHostDisplay::SetFullscreen(bool fullscreen, u32 width, u32 height, fl
   return false;
 }
 
+HostDisplay::AdapterAndModeList VulkanHostDisplay::GetAdapterAndModeList()
+{
+  return StaticGetAdapterAndModeList(m_window_info.type != WindowInfo::Type::Surfaceless ? &m_window_info : nullptr);
+}
+
 void VulkanHostDisplay::DestroyRenderSurface()
 {
   m_window_info = {};
@@ -194,10 +158,64 @@ void VulkanHostDisplay::DestroyRenderSurface()
   m_swap_chain.reset();
 }
 
-std::unique_ptr<HostDisplayTexture> VulkanHostDisplay::CreateTexture(u32 width, u32 height, const void* data,
-                                                                     u32 data_stride, bool dynamic)
+static constexpr std::array<VkFormat, static_cast<u32>(HostDisplayPixelFormat::Count)> s_display_pixel_format_mapping =
+  {{VK_FORMAT_UNDEFINED, VK_FORMAT_R8G8B8A8_UNORM, VK_FORMAT_B8G8R8A8_UNORM, VK_FORMAT_R5G6B5_UNORM_PACK16,
+    VK_FORMAT_A1R5G5B5_UNORM_PACK16}};
+
+std::unique_ptr<HostDisplayTexture> VulkanHostDisplay::CreateTexture(u32 width, u32 height, u32 layers, u32 levels,
+                                                                     u32 samples, HostDisplayPixelFormat format,
+                                                                     const void* data, u32 data_stride,
+                                                                     bool dynamic /* = false */)
 {
-  return VulkanHostDisplayTexture::Create(width, height, data, data_stride, dynamic);
+  const VkFormat vk_format = s_display_pixel_format_mapping[static_cast<u32>(format)];
+  if (vk_format == VK_FORMAT_UNDEFINED)
+    return {};
+
+  static constexpr VkImageUsageFlags usage =
+    VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT;
+
+  Vulkan::Texture texture;
+  if (!texture.Create(width, height, levels, layers, vk_format, static_cast<VkSampleCountFlagBits>(samples),
+                      (layers > 1) ? VK_IMAGE_VIEW_TYPE_2D_ARRAY : VK_IMAGE_VIEW_TYPE_2D, VK_IMAGE_TILING_OPTIMAL,
+                      usage))
+  {
+    return {};
+  }
+
+  Vulkan::StagingTexture staging_texture;
+  if (data || dynamic)
+  {
+    if (!staging_texture.Create(dynamic ? Vulkan::StagingBuffer::Type::Mutable : Vulkan::StagingBuffer::Type::Upload,
+                                vk_format, width, height))
+    {
+      return {};
+    }
+  }
+
+  texture.TransitionToLayout(g_vulkan_context->GetCurrentCommandBuffer(), VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
+
+  if (data)
+  {
+    staging_texture.WriteTexels(0, 0, width, height, data, data_stride);
+    staging_texture.CopyToTexture(g_vulkan_context->GetCurrentCommandBuffer(), 0, 0, texture, 0, 0, 0, 0, width,
+                                  height);
+  }
+  else
+  {
+    // clear it instead so we don't read uninitialized data (and keep the validation layer happy!)
+    static constexpr VkClearColorValue ccv = {};
+    static constexpr VkImageSubresourceRange isr = {VK_IMAGE_ASPECT_COLOR_BIT, 0u, 1u, 0u, 1u};
+    vkCmdClearColorImage(g_vulkan_context->GetCurrentCommandBuffer(), texture.GetImage(), texture.GetLayout(), &ccv, 1u,
+                         &isr);
+  }
+
+  texture.TransitionToLayout(g_vulkan_context->GetCurrentCommandBuffer(), VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+
+  // don't need to keep the staging texture around if we're not dynamic
+  if (!dynamic)
+    staging_texture.Destroy(true);
+
+  return std::make_unique<VulkanHostDisplayTexture>(std::move(texture), std::move(staging_texture), format);
 }
 
 void VulkanHostDisplay::UpdateTexture(HostDisplayTexture* texture, u32 x, u32 y, u32 width, u32 height,
@@ -244,10 +262,6 @@ bool VulkanHostDisplay::DownloadTexture(const void* texture_handle, HostDisplayP
   m_readback_staging_texture.ReadTexels(0, 0, width, height, out_data, out_data_stride);
   return true;
 }
-
-static constexpr std::array<VkFormat, static_cast<u32>(HostDisplayPixelFormat::Count)> s_display_pixel_format_mapping =
-  {{VK_FORMAT_UNDEFINED, VK_FORMAT_R8G8B8A8_UNORM, VK_FORMAT_B8G8R8A8_UNORM, VK_FORMAT_R5G6B5_UNORM_PACK16,
-    VK_FORMAT_A1R5G5B5_UNORM_PACK16}};
 
 bool VulkanHostDisplay::SupportsDisplayPixelFormat(HostDisplayPixelFormat format) const
 {
@@ -331,15 +345,10 @@ bool VulkanHostDisplay::CreateRenderDevice(const WindowInfo& wi, std::string_vie
 bool VulkanHostDisplay::InitializeRenderDevice(std::string_view shader_cache_directory, bool debug_device,
                                                bool threaded_presentation)
 {
-  Vulkan::ShaderCache::Create(shader_cache_directory, debug_device);
+  Vulkan::ShaderCache::Create(shader_cache_directory, SHADER_CACHE_VERSION, debug_device);
 
   if (!CreateResources())
     return false;
-
-#ifdef WITH_IMGUI
-  if (ImGui::GetCurrentContext() && !CreateImGuiContext())
-    return false;
-#endif
 
   return true;
 }
@@ -523,12 +532,40 @@ void VulkanHostDisplay::DestroyResources()
   Vulkan::Util::SafeDestroySampler(m_linear_sampler);
 }
 
+#ifndef LIBRETRO
+bool VulkanHostDisplay::CreateImGuiContext()
+{
+  ImGui::GetIO().DisplaySize.x = static_cast<float>(m_window_info.surface_width);
+  ImGui::GetIO().DisplaySize.y = static_cast<float>(m_window_info.surface_height);
+
+  ImGui_ImplVulkan_InitInfo vii = {};
+  vii.Instance = g_vulkan_context->GetVulkanInstance();
+  vii.PhysicalDevice = g_vulkan_context->GetPhysicalDevice();
+  vii.Device = g_vulkan_context->GetDevice();
+  vii.QueueFamily = g_vulkan_context->GetGraphicsQueueFamilyIndex();
+  vii.Queue = g_vulkan_context->GetGraphicsQueue();
+  vii.PipelineCache = g_vulkan_shader_cache->GetPipelineCache();
+  vii.MinImageCount = m_swap_chain->GetImageCount();
+  vii.ImageCount = m_swap_chain->GetImageCount();
+  vii.MSAASamples = VK_SAMPLE_COUNT_1_BIT;
+
+  return ImGui_ImplVulkan_Init(&vii, m_swap_chain->GetClearRenderPass());
+}
+
 void VulkanHostDisplay::DestroyImGuiContext()
 {
-#ifdef WITH_IMGUI
+  g_vulkan_context->WaitForGPUIdle();
   ImGui_ImplVulkan_Shutdown();
-#endif
 }
+
+bool VulkanHostDisplay::UpdateImGuiFontTexture()
+{
+  // Just in case we were drawing something.
+  g_vulkan_context->ExecuteCommandBuffer(true);
+  ImGui_ImplVulkan_DestroyFontUploadObjects();
+  return ImGui_ImplVulkan_CreateFontsTexture(g_vulkan_context->GetCurrentCommandBuffer());
+}
+#endif
 
 void VulkanHostDisplay::DestroyRenderDevice()
 {
@@ -536,11 +573,6 @@ void VulkanHostDisplay::DestroyRenderDevice()
     return;
 
   g_vulkan_context->WaitForGPUIdle();
-
-#ifdef WITH_IMGUI
-  if (ImGui::GetCurrentContext())
-    DestroyImGuiContext();
-#endif
 
   DestroyResources();
 
@@ -559,49 +591,20 @@ bool VulkanHostDisplay::DoneRenderContextCurrent()
   return true;
 }
 
-bool VulkanHostDisplay::CreateImGuiContext()
-{
-#ifdef WITH_IMGUI
-  ImGui::GetIO().DisplaySize.x = static_cast<float>(m_window_info.surface_width);
-  ImGui::GetIO().DisplaySize.y = static_cast<float>(m_window_info.surface_height);
-
-  ImGui_ImplVulkan_InitInfo vii = {};
-  vii.Instance = g_vulkan_context->GetVulkanInstance();
-  vii.PhysicalDevice = g_vulkan_context->GetPhysicalDevice();
-  vii.Device = g_vulkan_context->GetDevice();
-  vii.QueueFamily = g_vulkan_context->GetGraphicsQueueFamilyIndex();
-  vii.Queue = g_vulkan_context->GetGraphicsQueue();
-  vii.PipelineCache = g_vulkan_shader_cache->GetPipelineCache();
-  vii.MinImageCount = m_swap_chain->GetImageCount();
-  vii.ImageCount = m_swap_chain->GetImageCount();
-  vii.MSAASamples = VK_SAMPLE_COUNT_1_BIT;
-
-  if (!ImGui_ImplVulkan_Init(&vii, m_swap_chain->GetClearRenderPass()) ||
-      !ImGui_ImplVulkan_CreateFontsTexture(g_vulkan_context->GetCurrentCommandBuffer()))
-  {
-    return false;
-  }
-
-  ImGui_ImplVulkan_NewFrame();
-#endif
-
-  return true;
-}
-
 bool VulkanHostDisplay::Render()
 {
   if (ShouldSkipDisplayingFrame())
   {
-#ifdef WITH_IMGUI
+#ifndef LIBRETRO
     if (ImGui::GetCurrentContext())
-    {
       ImGui::Render();
-      ImGui_ImplVulkan_NewFrame();
-    }
 #endif
 
     return false;
   }
+
+  // Previous frame needs to be presented before we can acquire the swap chain.
+  g_vulkan_context->WaitForPresentComplete();
 
   VkResult res = m_swap_chain->AcquireNextImage();
   if (res != VK_SUCCESS)
@@ -632,7 +635,7 @@ bool VulkanHostDisplay::Render()
 
   RenderDisplay();
 
-#ifdef WITH_IMGUI
+#ifndef LIBRETRO
   if (ImGui::GetCurrentContext())
     RenderImGui();
 #endif
@@ -648,22 +651,110 @@ bool VulkanHostDisplay::Render()
                                         m_swap_chain->GetCurrentImageIndex(), !m_swap_chain->IsVSyncEnabled());
   g_vulkan_context->MoveToNextCommandBuffer();
 
-#ifdef WITH_IMGUI
-  if (ImGui::GetCurrentContext())
-    ImGui_ImplVulkan_NewFrame();
-#endif
-
   return true;
 }
 
-void VulkanHostDisplay::BeginSwapChainRenderPass(VkFramebuffer framebuffer)
+bool VulkanHostDisplay::RenderScreenshot(u32 width, u32 height, std::vector<u32>* out_pixels, u32* out_stride,
+                                         HostDisplayPixelFormat* out_format)
+{
+  // in theory we could do this without a swap chain, but postprocessing assumes it for now...
+  if (!m_swap_chain)
+    return false;
+
+  const VkFormat format = m_swap_chain ? m_swap_chain->GetTextureFormat() : VK_FORMAT_R8G8B8A8_UNORM;
+  switch (format)
+  {
+    case VK_FORMAT_R8G8B8A8_UNORM:
+    case VK_FORMAT_R8G8B8A8_SRGB:
+      *out_format = HostDisplayPixelFormat::RGBA8;
+      *out_stride = sizeof(u32) * width;
+      out_pixels->resize(width * height);
+      break;
+
+    case VK_FORMAT_B8G8R8A8_UNORM:
+    case VK_FORMAT_B8G8R8A8_SRGB:
+      *out_format = HostDisplayPixelFormat::BGRA8;
+      *out_stride = sizeof(u32) * width;
+      out_pixels->resize(width * height);
+      break;
+
+    case VK_FORMAT_A1R5G5B5_UNORM_PACK16:
+      *out_format = HostDisplayPixelFormat::RGBA5551;
+      *out_stride = sizeof(u16) * width;
+      out_pixels->resize(((width * height) + 1) / 2);
+      break;
+
+    case VK_FORMAT_R5G6B5_UNORM_PACK16:
+      *out_format = HostDisplayPixelFormat::RGB565;
+      *out_stride = sizeof(u16) * width;
+      out_pixels->resize(((width * height) + 1) / 2);
+      break;
+
+    default:
+      Log_ErrorPrintf("Unhandled swap chain pixel format %u", static_cast<unsigned>(format));
+      break;
+  }
+
+  Vulkan::Texture tex;
+  Vulkan::StagingTexture staging_tex;
+  if (!tex.Create(width, height, 1, 1, format, VK_SAMPLE_COUNT_1_BIT, VK_IMAGE_VIEW_TYPE_2D, VK_IMAGE_TILING_OPTIMAL,
+                  VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT) ||
+      !staging_tex.Create(Vulkan::StagingBuffer::Type::Readback, format, width, height))
+  {
+    return false;
+  }
+
+  const VkRenderPass rp =
+    m_swap_chain ?
+      m_swap_chain->GetClearRenderPass() :
+      g_vulkan_context->GetRenderPass(format, VK_FORMAT_UNDEFINED, VK_SAMPLE_COUNT_1_BIT, VK_ATTACHMENT_LOAD_OP_CLEAR);
+  if (!rp)
+    return false;
+
+  const VkFramebuffer fb = tex.CreateFramebuffer(rp);
+  if (!fb)
+    return false;
+
+  tex.TransitionToLayout(g_vulkan_context->GetCurrentCommandBuffer(), VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
+
+  const auto [left, top, draw_width, draw_height] =
+    CalculateDrawRect(GetWindowWidth(), GetWindowHeight(), m_display_top_margin);
+
+  if (!m_post_processing_chain.IsEmpty())
+  {
+    ApplyPostProcessingChain(fb, left, top, draw_width, draw_height, m_display_texture_handle, m_display_texture_width,
+                             m_display_texture_height, m_display_texture_view_x, m_display_texture_view_y,
+                             m_display_texture_view_width, m_display_texture_view_height, width, height);
+  }
+  else
+  {
+    BeginSwapChainRenderPass(fb, width, height);
+    RenderDisplay(left, top, draw_width, draw_height, m_display_texture_handle, m_display_texture_width,
+                  m_display_texture_height, m_display_texture_view_x, m_display_texture_view_y,
+                  m_display_texture_view_width, m_display_texture_view_height, m_display_linear_filtering);
+  }
+
+  vkCmdEndRenderPass(g_vulkan_context->GetCurrentCommandBuffer());
+  tex.TransitionToLayout(g_vulkan_context->GetCurrentCommandBuffer(), VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL);
+  staging_tex.CopyFromTexture(tex, 0, 0, 0, 0, 0, 0, width, height);
+  staging_tex.ReadTexels(0, 0, width, height, out_pixels->data(), *out_stride);
+
+  // destroying these immediately should be safe since nothing's going to access them, and it's not part of the command
+  // stream
+  vkDestroyFramebuffer(g_vulkan_context->GetDevice(), fb, nullptr);
+  staging_tex.Destroy(false);
+  tex.Destroy(false);
+  return true;
+}
+
+void VulkanHostDisplay::BeginSwapChainRenderPass(VkFramebuffer framebuffer, u32 width, u32 height)
 {
   const VkClearValue clear_value = {{{0.0f, 0.0f, 0.0f, 1.0f}}};
   const VkRenderPassBeginInfo rp = {VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO,
                                     nullptr,
                                     m_swap_chain->GetClearRenderPass(),
                                     framebuffer,
-                                    {{0, 0}, {m_swap_chain->GetWidth(), m_swap_chain->GetHeight()}},
+                                    {{0, 0}, {width, height}},
                                     1u,
                                     &clear_value};
   vkCmdBeginRenderPass(g_vulkan_context->GetCurrentCommandBuffer(), &rp, VK_SUBPASS_CONTENTS_INLINE);
@@ -673,7 +764,8 @@ void VulkanHostDisplay::RenderDisplay()
 {
   if (!HasDisplayTexture())
   {
-    BeginSwapChainRenderPass(m_swap_chain->GetCurrentFramebuffer());
+    BeginSwapChainRenderPass(m_swap_chain->GetCurrentFramebuffer(), m_swap_chain->GetWidth(),
+                             m_swap_chain->GetHeight());
     return;
   }
 
@@ -681,13 +773,14 @@ void VulkanHostDisplay::RenderDisplay()
 
   if (!m_post_processing_chain.IsEmpty())
   {
-    ApplyPostProcessingChain(left, top, width, height, m_display_texture_handle, m_display_texture_width,
-                             m_display_texture_height, m_display_texture_view_x, m_display_texture_view_y,
-                             m_display_texture_view_width, m_display_texture_view_height);
+    ApplyPostProcessingChain(m_swap_chain->GetCurrentFramebuffer(), left, top, width, height, m_display_texture_handle,
+                             m_display_texture_width, m_display_texture_height, m_display_texture_view_x,
+                             m_display_texture_view_y, m_display_texture_view_width, m_display_texture_view_height,
+                             m_swap_chain->GetWidth(), m_swap_chain->GetHeight());
     return;
   }
 
-  BeginSwapChainRenderPass(m_swap_chain->GetCurrentFramebuffer());
+  BeginSwapChainRenderPass(m_swap_chain->GetCurrentFramebuffer(), m_swap_chain->GetWidth(), m_swap_chain->GetHeight());
   RenderDisplay(left, top, width, height, m_display_texture_handle, m_display_texture_width, m_display_texture_height,
                 m_display_texture_view_x, m_display_texture_view_y, m_display_texture_view_width,
                 m_display_texture_view_height, m_display_linear_filtering);
@@ -728,13 +821,13 @@ void VulkanHostDisplay::RenderDisplay(s32 left, s32 top, s32 width, s32 height, 
   vkCmdDraw(cmdbuffer, 3, 1, 0, 0);
 }
 
+#ifndef LIBRETRO
 void VulkanHostDisplay::RenderImGui()
 {
-#ifdef WITH_IMGUI
   ImGui::Render();
   ImGui_ImplVulkan_RenderDrawData(ImGui::GetDrawData(), g_vulkan_context->GetCurrentCommandBuffer());
-#endif
 }
+#endif
 
 void VulkanHostDisplay::RenderSoftwareCursor()
 {
@@ -771,26 +864,47 @@ void VulkanHostDisplay::RenderSoftwareCursor(s32 left, s32 top, s32 width, s32 h
   vkCmdDraw(cmdbuffer, 3, 1, 0, 0);
 }
 
-std::vector<std::string> VulkanHostDisplay::EnumerateAdapterNames()
+HostDisplay::AdapterAndModeList VulkanHostDisplay::StaticGetAdapterAndModeList(const WindowInfo* wi)
 {
-  if (g_vulkan_context)
-    return Vulkan::Context::EnumerateGPUNames(g_vulkan_context->GetVulkanInstance());
+  AdapterAndModeList ret;
+  std::vector<Vulkan::SwapChain::FullscreenModeInfo> fsmodes;
 
-  if (Vulkan::LoadVulkanLibrary())
+  if (g_vulkan_context)
+  {
+    ret.adapter_names = Vulkan::Context::EnumerateGPUNames(g_vulkan_context->GetVulkanInstance());
+    if (wi)
+    {
+      fsmodes = Vulkan::SwapChain::GetSurfaceFullscreenModes(g_vulkan_context->GetVulkanInstance(),
+                                                             g_vulkan_context->GetPhysicalDevice(), *wi);
+    }
+  }
+  else if (Vulkan::LoadVulkanLibrary())
   {
     Common::ScopeGuard lib_guard([]() { Vulkan::UnloadVulkanLibrary(); });
 
-    VkInstance instance = Vulkan::Context::CreateVulkanInstance(false, false, false);
+    VkInstance instance = Vulkan::Context::CreateVulkanInstance(nullptr, false, false);
     if (instance != VK_NULL_HANDLE)
     {
       Common::ScopeGuard instance_guard([&instance]() { vkDestroyInstance(instance, nullptr); });
 
       if (Vulkan::LoadVulkanInstanceFunctions(instance))
-        return Vulkan::Context::EnumerateGPUNames(instance);
+        ret.adapter_names = Vulkan::Context::EnumerateGPUNames(instance);
     }
   }
 
-  return {};
+  if (!fsmodes.empty())
+  {
+    ret.fullscreen_modes.reserve(fsmodes.size());
+    for (const Vulkan::SwapChain::FullscreenModeInfo& fmi : fsmodes)
+    {
+#ifndef LIBRETRO
+      ret.fullscreen_modes.push_back(
+        CommonHostInterface::GetFullscreenModeString(fmi.width, fmi.height, fmi.refresh_rate));
+#endif
+    }
+  }
+
+  return ret;
 }
 
 VulkanHostDisplay::PostProcessingStage::PostProcessingStage(PostProcessingStage&& move)
@@ -945,14 +1059,15 @@ bool VulkanHostDisplay::CheckPostProcessingRenderTargets(u32 target_width, u32 t
   return true;
 }
 
-void VulkanHostDisplay::ApplyPostProcessingChain(s32 final_left, s32 final_top, s32 final_width, s32 final_height,
-                                                 void* texture_handle, u32 texture_width, s32 texture_height,
-                                                 s32 texture_view_x, s32 texture_view_y, s32 texture_view_width,
-                                                 s32 texture_view_height)
+void VulkanHostDisplay::ApplyPostProcessingChain(VkFramebuffer target_fb, s32 final_left, s32 final_top,
+                                                 s32 final_width, s32 final_height, void* texture_handle,
+                                                 u32 texture_width, s32 texture_height, s32 texture_view_x,
+                                                 s32 texture_view_y, s32 texture_view_width, s32 texture_view_height,
+                                                 u32 target_width, u32 target_height)
 {
-  if (!CheckPostProcessingRenderTargets(m_swap_chain->GetWidth(), m_swap_chain->GetHeight()))
+  if (!CheckPostProcessingRenderTargets(target_width, target_height))
   {
-    BeginSwapChainRenderPass(m_swap_chain->GetCurrentFramebuffer());
+    BeginSwapChainRenderPass(target_fb, target_width, target_height);
     RenderDisplay(final_left, final_top, final_width, final_height, texture_handle, texture_width, texture_height,
                   texture_view_x, texture_view_y, texture_view_width, texture_view_height, m_display_linear_filtering);
     return;
@@ -961,7 +1076,7 @@ void VulkanHostDisplay::ApplyPostProcessingChain(s32 final_left, s32 final_top, 
   // downsample/upsample - use same viewport for remainder
   VkCommandBuffer cmdbuffer = g_vulkan_context->GetCurrentCommandBuffer();
   m_post_processing_input_texture.TransitionToLayout(cmdbuffer, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
-  BeginSwapChainRenderPass(m_post_processing_input_framebuffer);
+  BeginSwapChainRenderPass(m_post_processing_input_framebuffer, target_width, target_height);
   RenderDisplay(final_left, final_top, final_width, final_height, texture_handle, texture_width, texture_height,
                 texture_view_x, texture_view_y, texture_view_width, texture_view_height, m_display_linear_filtering);
   vkCmdEndRenderPass(cmdbuffer);
@@ -982,11 +1097,11 @@ void VulkanHostDisplay::ApplyPostProcessingChain(s32 final_left, s32 final_top, 
     if (i != final_stage)
     {
       pps.output_texture.TransitionToLayout(cmdbuffer, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
-      BeginSwapChainRenderPass(pps.output_framebuffer);
+      BeginSwapChainRenderPass(pps.output_framebuffer, target_width, target_height);
     }
     else
     {
-      BeginSwapChainRenderPass(m_swap_chain->GetCurrentFramebuffer());
+      BeginSwapChainRenderPass(target_fb, target_width, target_height);
     }
 
     const bool use_push_constants = m_post_processing_chain.GetShaderStage(i).UsePushConstants();

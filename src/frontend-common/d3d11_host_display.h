@@ -46,12 +46,14 @@ public:
   virtual bool SupportsFullscreen() const override;
   virtual bool IsFullscreen() override;
   virtual bool SetFullscreen(bool fullscreen, u32 width, u32 height, float refresh_rate) override;
+  virtual AdapterAndModeList GetAdapterAndModeList() override;
   virtual void DestroyRenderSurface() override;
 
   virtual bool SetPostProcessingChain(const std::string_view& config) override;
 
-  std::unique_ptr<HostDisplayTexture> CreateTexture(u32 width, u32 height, const void* initial_data,
-                                                    u32 initial_data_stride, bool dynamic) override;
+  std::unique_ptr<HostDisplayTexture> CreateTexture(u32 width, u32 height, u32 layers, u32 levels, u32 samples,
+                                                    HostDisplayPixelFormat format, const void* data, u32 data_stride,
+                                                    bool dynamic = false) override;
   void UpdateTexture(HostDisplayTexture* texture, u32 x, u32 y, u32 width, u32 height, const void* texture_data,
                      u32 texture_data_stride) override;
   bool DownloadTexture(const void* texture_handle, HostDisplayPixelFormat texture_format, u32 x, u32 y, u32 width,
@@ -61,27 +63,27 @@ public:
                              u32* out_pitch) override;
   void EndSetDisplayPixels() override;
 
+  bool GetHostRefreshRate(float* refresh_rate) override;
+
   virtual void SetVSync(bool enabled) override;
 
   virtual bool Render() override;
+  virtual bool RenderScreenshot(u32 width, u32 height, std::vector<u32>* out_pixels, u32* out_stride,
+                                HostDisplayPixelFormat* out_format) override;
 
-  struct AdapterInfo
-  {
-    std::vector<std::string> adapter_names;
-    std::vector<std::string> fullscreen_modes;
-  };
-  static AdapterInfo GetAdapterInfo();
+  static AdapterAndModeList StaticGetAdapterAndModeList();
 
 protected:
   static constexpr u32 DISPLAY_UNIFORM_BUFFER_SIZE = 16;
 
-  static AdapterInfo GetAdapterInfo(IDXGIFactory* dxgi_factory);
+  static AdapterAndModeList GetAdapterAndModeList(IDXGIFactory* dxgi_factory);
 
   virtual bool CreateResources() override;
   virtual void DestroyResources() override;
 
-  virtual bool CreateImGuiContext();
-  virtual void DestroyImGuiContext();
+  virtual bool CreateImGuiContext() override;
+  virtual void DestroyImGuiContext() override;
+  virtual bool UpdateImGuiFontTexture() override;
 
   bool CreateSwapChain(const DXGI_MODE_DESC* fullscreen_mode);
   bool CreateSwapChainRTV();
@@ -107,7 +109,7 @@ protected:
   void ApplyPostProcessingChain(ID3D11RenderTargetView* final_target, s32 final_left, s32 final_top, s32 final_width,
                                 s32 final_height, void* texture_handle, u32 texture_width, s32 texture_height,
                                 s32 texture_view_x, s32 texture_view_y, s32 texture_view_width,
-                                s32 texture_view_height);
+                                s32 texture_view_height, u32 target_width, u32 target_height);
 
   ComPtr<ID3D11Device> m_device;
   ComPtr<ID3D11DeviceContext> m_context;

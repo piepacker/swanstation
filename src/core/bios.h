@@ -10,7 +10,8 @@ enum : u32
 {
   BIOS_BASE = 0x1FC00000,
   BIOS_SIZE = 0x80000,
-  BIOS_SIZE_PS2 = 0x400000
+  BIOS_SIZE_PS2 = 0x400000,
+  BIOS_SIZE_PS3 = 0x3E66F0
 };
 
 using Image = std::vector<u8>;
@@ -68,4 +69,5 @@ bool PatchBIOSFastBoot(u8* image, u32 image_size, const Hash& hash);
 bool PatchBIOSForEXE(u8* image, u32 image_size, u32 r_pc, u32 r_gp, u32 r_sp, u32 r_fp);
 
 bool IsValidPSExeHeader(const PSEXEHeader& header, u32 file_size);
+DiscRegion GetPSExeDiscRegion(const PSEXEHeader& header);
 } // namespace BIOS

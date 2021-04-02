@@ -43,8 +43,6 @@ void ImGui::StyleColorsDarker(ImGuiStyle* dst)
   colors[ImGuiCol_TabActive] = ImVec4(0.27f, 0.32f, 0.38f, 1.00f);
   colors[ImGuiCol_TabUnfocused] = ImVec4(0.11f, 0.15f, 0.17f, 1.00f);
   colors[ImGuiCol_TabUnfocusedActive] = ImVec4(0.11f, 0.15f, 0.17f, 1.00f);
-  colors[ImGuiCol_DockingPreview] = ImVec4(0.26f, 0.59f, 0.98f, 0.70f);
-  colors[ImGuiCol_DockingEmptyBg] = ImVec4(0.20f, 0.20f, 0.20f, 1.00f);
   colors[ImGuiCol_PlotLines] = ImVec4(0.61f, 0.61f, 0.61f, 1.00f);
   colors[ImGuiCol_PlotLinesHovered] = ImVec4(1.00f, 0.43f, 0.35f, 1.00f);
   colors[ImGuiCol_PlotHistogram] = ImVec4(0.90f, 0.70f, 0.00f, 1.00f);
@@ -59,8 +57,28 @@ void ImGui::StyleColorsDarker(ImGuiStyle* dst)
 
 #include "font_roboto_regular.inl"
 
-void ImGui::AddRobotoRegularFont(float size /*= 15.0f*/)
+ImFont* ImGui::AddRobotoRegularFont(float size /*= 15.0f*/)
 {
-  ImGui::GetIO().Fonts->AddFontFromMemoryCompressedTTF(s_font_roboto_regular_compressed_data,
-                                                       s_font_roboto_regular_compressed_size, size);
+  static const ImWchar ranges[] = {
+    // Basic Latin + Latin Supplement + Central European diacritics
+    0x0020,
+    0x017F,
+
+    // Cyrillic + Cyrillic Supplement
+    0x0400,
+    0x052F,
+
+    // Cyrillic Extended-A
+    0x2DE0,
+    0x2DFF,
+
+    // Cyrillic Extended-B
+    0xA640,
+    0xA69F,
+
+    0,
+  };
+
+  return ImGui::GetIO().Fonts->AddFontFromMemoryCompressedTTF(
+    s_font_roboto_regular_compressed_data, s_font_roboto_regular_compressed_size, size, nullptr, ranges);
 }

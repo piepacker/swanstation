@@ -129,7 +129,10 @@ bool QtDisplayWidget::event(QEvent* event)
     {
       const QKeyEvent* key_event = static_cast<QKeyEvent*>(event);
       if (!key_event->isAutoRepeat())
-        emit windowKeyEvent(QtUtils::KeyEventToInt(key_event), event->type() == QEvent::KeyPress);
+      {
+        emit windowKeyEvent(key_event->key(), static_cast<int>(key_event->modifiers()),
+                            event->type() == QEvent::KeyPress);
+      }
 
       return true;
     }
@@ -177,6 +180,13 @@ bool QtDisplayWidget::event(QEvent* event)
       return true;
     }
 
+    case QEvent::Wheel:
+    {
+      const QWheelEvent* wheel_event = static_cast<QWheelEvent*>(event);
+      emit windowMouseWheelEvent(wheel_event->angleDelta());
+      return true;
+    }
+
     case QEvent::Resize:
     {
       QWidget::event(event);
@@ -198,6 +208,22 @@ bool QtDisplayWidget::event(QEvent* event)
 
       if (static_cast<QWindowStateChangeEvent*>(event)->oldState() & Qt::WindowMinimized)
         emit windowRestoredEvent();
+
+      return true;
+    }
+
+    case QEvent::FocusIn:
+    {
+      QWidget::event(event);
+      emit windowFocusEvent();
+      return true;
+    }
+
+    case QEvent::ActivationChange:
+    {
+      QWidget::event(event);
+      if (isActiveWindow())
+        emit windowFocusEvent();
 
       return true;
     }

@@ -152,6 +152,12 @@ void GamePropertiesDialog::setupAdditionalUi()
       qApp->translate("GPUTextureFilter", Settings::GetTextureFilterDisplayName(static_cast<GPUTextureFilter>(i))));
   }
 
+  m_ui.userMultitapMode->addItem(tr("(unchanged)"));
+  for (u32 i = 0; i < static_cast<u32>(MultitapMode::Count); i++)
+  {
+    m_ui.userMultitapMode->addItem(
+      qApp->translate("MultitapMode", Settings::GetMultitapModeDisplayName(static_cast<MultitapMode>(i))));
+  }
   m_ui.userControllerType1->addItem(tr("(unchanged)"));
   for (u32 i = 0; i < static_cast<u32>(ControllerType::Count); i++)
   {
@@ -218,7 +224,7 @@ void GamePropertiesDialog::populateTracksInfo(const std::string& image_path)
   m_ui.tracks->clearContents();
   m_path = image_path;
 
-  std::unique_ptr<CDImage> image = CDImage::Open(image_path.c_str());
+  std::unique_ptr<CDImage> image = CDImage::Open(image_path.c_str(), nullptr);
   if (!image)
     return;
 
@@ -230,7 +236,7 @@ void GamePropertiesDialog::populateTracksInfo(const std::string& image_path)
     const CDImage::TrackMode mode = image->GetTrackMode(static_cast<u8>(track));
     const int row = static_cast<int>(track - 1u);
     m_ui.tracks->insertRow(row);
-    m_ui.tracks->setItem(row, 0, new QTableWidgetItem(QStringLiteral("%1").arg(track)));
+    m_ui.tracks->setItem(row, 0, new QTableWidgetItem(QString::number(track)));
     m_ui.tracks->setItem(row, 1, new QTableWidgetItem(track_mode_strings[static_cast<u32>(mode)]));
     m_ui.tracks->setItem(row, 2, new QTableWidgetItem(MSFTotString(position)));
     m_ui.tracks->setItem(row, 3, new QTableWidgetItem(MSFTotString(length)));
@@ -266,6 +272,12 @@ void GamePropertiesDialog::populateGameSettings()
   {
     QSignalBlocker sb(m_trait_checkboxes[i]);
     m_trait_checkboxes[i]->setChecked(gs.HasTrait(static_cast<GameSettings::Trait>(i)));
+  }
+
+  if (gs.runahead_frames.has_value())
+  {
+    QSignalBlocker sb(m_ui.userRunaheadFrames);
+    m_ui.userRunaheadFrames->setCurrentIndex(static_cast<int>(gs.runahead_frames.value()));
   }
 
   if (gs.cpu_overclock_numerator.has_value() || gs.cpu_overclock_denominator.has_value())
@@ -400,8 +412,14 @@ void GamePropertiesDialog::populateGameSettings()
   populateBooleanUserSetting(m_ui.userWidescreenHack, gs.gpu_widescreen_hack);
   populateBooleanUserSetting(m_ui.userForce43For24Bit, gs.display_force_4_3_for_24bit);
   populateBooleanUserSetting(m_ui.userPGXP, gs.gpu_pgxp);
+  populateBooleanUserSetting(m_ui.userPGXPProjectionPrecision, gs.gpu_pgxp_projection_precision);
   populateBooleanUserSetting(m_ui.userPGXPDepthBuffer, gs.gpu_pgxp_depth_buffer);
 
+  if (gs.multitap_mode.has_value())
+  {
+    QSignalBlocker sb(m_ui.userMultitapMode);
+    m_ui.userMultitapMode->setCurrentIndex(static_cast<int>(gs.multitap_mode.value()) + 1);
+  }
   if (gs.controller_1_type.has_value())
   {
     QSignalBlocker sb(m_ui.userControllerType1);
@@ -489,6 +507,14 @@ void GamePropertiesDialog::connectUi()
     m_ui.computeHashes->setVisible(show_buttons);
     m_ui.verifyDump->setVisible(show_buttons);
     m_ui.exportCompatibilityInfo->setVisible(show_buttons);
+  });
+
+  connect(m_ui.userRunaheadFrames, QOverload<int>::of(&QComboBox::currentIndexChanged), [this](int index) {
+    if (index <= 0)
+      m_game_settings.runahead_frames.reset();
+    else
+      m_game_settings.runahead_frames = static_cast<u32>(index - 1);
+    saveGameSettings();
   });
 
   connectBooleanUserSetting(m_ui.userEnableCPUClockSpeedControl, &m_game_settings.cpu_overclock_enable);
@@ -587,7 +613,16 @@ void GamePropertiesDialog::connectUi()
   connectBooleanUserSetting(m_ui.userWidescreenHack, &m_game_settings.gpu_widescreen_hack);
   connectBooleanUserSetting(m_ui.userForce43For24Bit, &m_game_settings.display_force_4_3_for_24bit);
   connectBooleanUserSetting(m_ui.userPGXP, &m_game_settings.gpu_pgxp);
+  connectBooleanUserSetting(m_ui.userPGXPProjectionPrecision, &m_game_settings.gpu_pgxp_projection_precision);
   connectBooleanUserSetting(m_ui.userPGXPDepthBuffer, &m_game_settings.gpu_pgxp_depth_buffer);
+
+  connect(m_ui.userMultitapMode, QOverload<int>::of(&QComboBox::currentIndexChanged), [this](int index) {
+    if (index <= 0)
+      m_game_settings.multitap_mode.reset();
+    else
+      m_game_settings.multitap_mode = static_cast<MultitapMode>(index - 1);
+    saveGameSettings();
+  });
 
   connect(m_ui.userControllerType1, QOverload<int>::of(&QComboBox::currentIndexChanged), [this](int index) {
     if (index <= 0)
@@ -825,7 +860,7 @@ void GamePropertiesDialog::computeTrackHashes()
   if (m_path.empty())
     return;
 
-  std::unique_ptr<CDImage> image = CDImage::Open(m_path.c_str());
+  std::unique_ptr<CDImage> image = CDImage::Open(m_path.c_str(), nullptr);
   if (!image)
     return;
 

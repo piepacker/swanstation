@@ -3,6 +3,7 @@
 #include "common/heap_array.h"
 #include "common/log.h"
 #include "common/state_wrapper.h"
+#include "common/string_util.h"
 #include "dma.h"
 #include "host_display.h"
 #include "host_interface.h"
@@ -31,9 +32,13 @@ bool GPU::Initialize(HostDisplay* host_display)
   m_force_progressive_scan = g_settings.gpu_disable_interlacing;
   m_force_ntsc_timings = g_settings.gpu_force_ntsc_timings;
   m_crtc_tick_event = TimingEvents::CreateTimingEvent(
-    "GPU CRTC Tick", 1, 1, std::bind(&GPU::CRTCTickEvent, this, std::placeholders::_1), true);
+    "GPU CRTC Tick", 1, 1,
+    [](void* param, TickCount ticks, TickCount ticks_late) { static_cast<GPU*>(param)->CRTCTickEvent(ticks); }, this,
+    true);
   m_command_tick_event = TimingEvents::CreateTimingEvent(
-    "GPU Command Tick", 1, 1, std::bind(&GPU::CommandTickEvent, this, std::placeholders::_1), true);
+    "GPU Command Tick", 1, 1,
+    [](void* param, TickCount ticks, TickCount ticks_late) { static_cast<GPU*>(param)->CommandTickEvent(ticks); }, this,
+    true);
   m_fifo_size = g_settings.gpu_fifo_size;
   m_max_run_ahead = g_settings.gpu_max_run_ahead;
   m_console_is_pal = System::IsPALRegion();
@@ -70,7 +75,7 @@ std::tuple<u32, u32> GPU::GetEffectiveDisplayResolution()
   return std::tie(m_crtc_state.display_vram_width, m_crtc_state.display_vram_height);
 }
 
-void GPU::Reset()
+void GPU::Reset(bool clear_vram)
 {
   SoftReset();
   m_set_texture_disable_mask = false;
@@ -114,12 +119,12 @@ void GPU::SoftReset()
   UpdateCommandTickEvent();
 }
 
-bool GPU::DoState(StateWrapper& sw, bool update_display)
+bool GPU::DoState(StateWrapper& sw, HostDisplayTexture** host_texture, bool update_display)
 {
   if (sw.IsReading())
   {
     // perform a reset to discard all pending draws/fb state
-    Reset();
+    Reset(host_texture == nullptr);
   }
 
   sw.Do(&m_GPUSTAT.bits);
@@ -209,27 +214,33 @@ bool GPU::DoState(StateWrapper& sw, bool update_display)
     UpdateDMARequest();
   }
 
-  if (!sw.DoMarker("GPU-VRAM"))
-    return false;
+  if (!host_texture)
+  {
+    if (!sw.DoMarker("GPU-VRAM"))
+      return false;
+
+    if (sw.IsReading())
+    {
+      // Still need a temporary here.
+      HeapArray<u16, VRAM_WIDTH * VRAM_HEIGHT> temp;
+      sw.DoBytes(temp.data(), VRAM_WIDTH * VRAM_HEIGHT * sizeof(u16));
+      UpdateVRAM(0, 0, VRAM_WIDTH, VRAM_HEIGHT, temp.data(), false, false);
+    }
+    else
+    {
+      ReadVRAM(0, 0, VRAM_WIDTH, VRAM_HEIGHT);
+      sw.DoBytes(m_vram_ptr, VRAM_WIDTH * VRAM_HEIGHT * sizeof(u16));
+    }
+  }
 
   if (sw.IsReading())
   {
-    // Still need a temporary here.
-    HeapArray<u16, VRAM_WIDTH * VRAM_HEIGHT> temp;
-    sw.DoBytes(temp.data(), VRAM_WIDTH * VRAM_HEIGHT * sizeof(u16));
-    UpdateVRAM(0, 0, VRAM_WIDTH, VRAM_HEIGHT, temp.data(), false, false);
-
     UpdateCRTCConfig();
     if (update_display)
       UpdateDisplay();
 
     UpdateCRTCTickEvent();
     UpdateCommandTickEvent();
-  }
-  else
-  {
-    ReadVRAM(0, 0, VRAM_WIDTH, VRAM_HEIGHT);
-    sw.DoBytes(m_vram_ptr, VRAM_WIDTH * VRAM_HEIGHT * sizeof(u16));
   }
 
   return !sw.HasError();
@@ -761,7 +772,8 @@ void GPU::UpdateCRTCTickEvent()
 
 bool GPU::IsCRTCScanlinePending() const
 {
-  return (GetPendingCRTCTicks() + m_crtc_state.current_tick_in_scanline) >= m_crtc_state.horizontal_total;
+  const TickCount ticks = (GetPendingCRTCTicks() + m_crtc_state.current_tick_in_scanline);
+  return (ticks >= (m_crtc_state.in_hblank ? m_crtc_state.horizontal_total : m_crtc_state.horizontal_sync_start));
 }
 
 bool GPU::IsCommandCompletionPending() const
@@ -1036,6 +1048,10 @@ void GPU::WriteGP1(u32 value)
       const bool disable = ConvertToBoolUnchecked(value & 0x01);
       Log_DebugPrintf("Display %s", disable ? "disabled" : "enabled");
       SynchronizeCRTC();
+
+      if (!m_GPUSTAT.display_disable && disable && m_GPUSTAT.vertical_interlace && !m_force_progressive_scan)
+        ClearDisplay();
+
       m_GPUSTAT.display_disable = disable;
     }
     break;
@@ -1229,7 +1245,7 @@ void GPU::ReadVRAM(u32 x, u32 y, u32 width, u32 height) {}
 
 void GPU::FillVRAM(u32 x, u32 y, u32 width, u32 height, u32 color)
 {
-  const u16 color16 = RGBA8888ToRGBA5551(color);
+  const u16 color16 = VRAMRGBA8888ToRGBA5551(color);
   if ((x + width) <= VRAM_WIDTH && !IsInterlacedRenderingEnabled())
   {
     for (u32 yoffs = 0; yoffs < height; yoffs++)
@@ -1449,6 +1465,26 @@ void GPU::SetTextureWindow(u32 value)
   m_draw_mode.texture_window_changed = true;
 }
 
+bool GPU::DumpVRAMToFile(const char* filename)
+{
+  ReadVRAM(0, 0, VRAM_WIDTH, VRAM_HEIGHT);
+
+  const char* extension = std::strrchr(filename, '.');
+  if (extension && StringUtil::Strcasecmp(extension, ".png") == 0)
+  {
+    return DumpVRAMToFile(filename, VRAM_WIDTH, VRAM_HEIGHT, sizeof(u16) * VRAM_WIDTH, m_vram_ptr, true);
+  }
+  else if (extension && StringUtil::Strcasecmp(extension, ".bin") == 0)
+  {
+    return FileSystem::WriteBinaryFile(filename, m_vram_ptr, VRAM_WIDTH * VRAM_HEIGHT * sizeof(u16));
+  }
+  else
+  {
+    Log_ErrorPrintf("Unknown extension: '%s'", filename);
+    return false;
+  }
+}
+
 bool GPU::DumpVRAMToFile(const char* filename, u32 width, u32 height, u32 stride, const void* buffer, bool remove_alpha)
 {
   auto fp = FileSystem::OpenManagedCFile(filename, "wb");
@@ -1471,7 +1507,7 @@ bool GPU::DumpVRAMToFile(const char* filename, u32 width, u32 height, u32 stride
       u16 src_col;
       std::memcpy(&src_col, row_ptr_in, sizeof(u16));
       row_ptr_in += sizeof(u16);
-      *(ptr_out++) = RGBA5551ToRGBA8888(remove_alpha ? (src_col | u16(0x8000)) : src_col);
+      *(ptr_out++) = VRAMRGBA5551ToRGBA8888(remove_alpha ? (src_col | u16(0x8000)) : src_col);
     }
 
     ptr_in += stride;
@@ -1489,7 +1525,7 @@ void GPU::DrawDebugStateWindow()
   const float framebuffer_scale = ImGui::GetIO().DisplayFramebufferScale.x;
 
   ImGui::SetNextWindowSize(ImVec2(450.0f * framebuffer_scale, 550.0f * framebuffer_scale), ImGuiCond_FirstUseEver);
-  if (!ImGui::Begin("GPU", &g_settings.debugging.show_gpu_state))
+  if (!ImGui::Begin("GPU", nullptr))
   {
     ImGui::End();
     return;

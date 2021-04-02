@@ -1077,10 +1077,29 @@ void CodeGenerator::EmitStoreCPUStructField(u32 offset, const Value& value)
 
 void CodeGenerator::EmitAddCPUStructField(u32 offset, const Value& value)
 {
-  DebugAssert(value.IsInHostRegister() || value.IsConstant());
-
   const s32 s_offset = static_cast<s32>(offset);
   const a32::MemOperand o_offset(GetCPUPtrReg(), s_offset);
+
+  Value real_value;
+  if (value.IsInHostRegister())
+  {
+    real_value.SetHostReg(&m_register_cache, value.host_reg, value.size);
+  }
+  else
+  {
+    // do we need temporary storage for the constant, if it won't fit in an immediate?
+    Assert(value.IsConstant());
+    const s32 constant_value = value.GetS32ConstantValue();
+    if (!a32::ImmediateA32::IsImmediateA32(static_cast<u32>(constant_value)))
+    {
+      real_value.SetHostReg(&m_register_cache, RARG2, value.size);
+      EmitCopyValue(real_value.host_reg, value);
+    }
+    else
+    {
+      real_value = value;
+    }
+  }
 
   // Don't need to mask here because we're storing back to memory.
   switch (value.size)
@@ -1088,10 +1107,10 @@ void CodeGenerator::EmitAddCPUStructField(u32 offset, const Value& value)
     case RegSize_8:
     {
       m_emit->Ldrb(GetHostReg8(RARG1), o_offset);
-      if (value.IsConstant())
-        m_emit->Add(GetHostReg8(RARG1), GetHostReg8(RARG1), value.GetS32ConstantValue());
+      if (real_value.IsConstant())
+        m_emit->Add(GetHostReg8(RARG1), GetHostReg8(RARG1), real_value.GetS32ConstantValue());
       else
-        m_emit->Add(GetHostReg8(RARG1), GetHostReg8(RARG1), GetHostReg8(value));
+        m_emit->Add(GetHostReg8(RARG1), GetHostReg8(RARG1), GetHostReg8(real_value));
       m_emit->Strb(GetHostReg8(RARG1), o_offset);
     }
     break;
@@ -1099,10 +1118,10 @@ void CodeGenerator::EmitAddCPUStructField(u32 offset, const Value& value)
     case RegSize_16:
     {
       m_emit->Ldrh(GetHostReg16(RARG1), o_offset);
-      if (value.IsConstant())
-        m_emit->Add(GetHostReg16(RARG1), GetHostReg16(RARG1), value.GetS32ConstantValue());
+      if (real_value.IsConstant())
+        m_emit->Add(GetHostReg16(RARG1), GetHostReg16(RARG1), real_value.GetS32ConstantValue());
       else
-        m_emit->Add(GetHostReg16(RARG1), GetHostReg16(RARG1), GetHostReg16(value));
+        m_emit->Add(GetHostReg16(RARG1), GetHostReg16(RARG1), GetHostReg16(real_value));
       m_emit->Strh(GetHostReg16(RARG1), o_offset);
     }
     break;
@@ -1110,10 +1129,10 @@ void CodeGenerator::EmitAddCPUStructField(u32 offset, const Value& value)
     case RegSize_32:
     {
       m_emit->Ldr(GetHostReg32(RARG1), o_offset);
-      if (value.IsConstant())
-        m_emit->Add(GetHostReg32(RARG1), GetHostReg32(RARG1), value.GetS32ConstantValue());
+      if (real_value.IsConstant())
+        m_emit->Add(GetHostReg32(RARG1), GetHostReg32(RARG1), real_value.GetS32ConstantValue());
       else
-        m_emit->Add(GetHostReg32(RARG1), GetHostReg32(RARG1), GetHostReg32(value));
+        m_emit->Add(GetHostReg32(RARG1), GetHostReg32(RARG1), GetHostReg32(real_value));
       m_emit->Str(GetHostReg32(RARG1), o_offset);
     }
     break;

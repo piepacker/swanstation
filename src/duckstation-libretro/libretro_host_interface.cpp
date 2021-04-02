@@ -101,7 +101,8 @@ bool LibretroHostInterface::Initialize()
     return false;
 
   InitInterfaces();
-  LoadSettings();
+  LibretroSettingsInterface si;
+  LoadSettings(si);
   FixIncompatibleSettings(true);
   UpdateLogging();
 
@@ -136,7 +137,7 @@ void LibretroHostInterface::GetGameInfo(const char* path, CDImage* image, std::s
 {
   // Just use the filename for now... we don't have the game list. Unless we can pull this from the frontend somehow?
   *title = System::GetTitleForPath(path);
-  *code = System::GetGameCodeForImage(image);
+  *code = System::GetGameCodeForImage(image, true);
 }
 
 static const char* GetSaveDirectory()
@@ -489,7 +490,7 @@ void LibretroHostInterface::OnSystemDestroyed()
   m_using_hardware_renderer = false;
 }
 
-static std::array<retro_core_option_definition, 52> s_option_definitions = {{
+static std::array<retro_core_option_definition, 53> s_option_definitions = {{
   {"duckstation_Console.Region",
    "Console Region",
    "Determines which region/hardware to emulate. Auto-Detect will use the region of the disc inserted.",
@@ -759,6 +760,14 @@ static std::array<retro_core_option_definition, 52> s_option_definitions = {{
    "will be used for all discs. If unchecked, a separate card will be used for each disc.",
    {{"true", "Enabled"}, {"false", "Disabled"}},
    "true"},
+  {"duckstation_ControllerPorts.MultitapMode",
+   "Multitap Mode",
+   "Sets the mode for the multitap",
+   {{"Disabled", "Disabled"},
+    {"Port1Only", "Enable on Port 1 Only"},
+    {"Port2Only", "Enable on Port 2 Only"},
+    {"BothPorts", "Enable on Ports 1 and 2"}},
+   "Disabled"},
   {"duckstation_Controller1.Type",
    "Controller 1 Type",
    "Sets the type of controller for Slot 1.",
@@ -928,9 +937,8 @@ std::unique_ptr<ByteStream> LibretroHostInterface::OpenPackageFile(const char* p
   return {};
 }
 
-void LibretroHostInterface::LoadSettings()
+void LibretroHostInterface::LoadSettings(SettingsInterface& si)
 {
-  LibretroSettingsInterface si;
   HostInterface::LoadSettings(si);
 
   // turn percentage into fraction for overclock
@@ -950,10 +958,15 @@ void LibretroHostInterface::LoadSettings()
     g_settings.memory_card_paths[i] = GetSharedMemoryCardPath(i);
 }
 
+std::vector<std::string> LibretroHostInterface::GetSettingStringList(const char* section, const char* key)
+{
+}
+
 void LibretroHostInterface::UpdateSettings()
 {
   Settings old_settings(std::move(g_settings));
-  LoadSettings();
+  LibretroSettingsInterface si;
+  LoadSettings(si);
   ApplyGameSettings();
   FixIncompatibleSettings(false);
 
@@ -1000,7 +1013,8 @@ void LibretroHostInterface::CheckForSettingsChanges(const Settings& old_settings
     UpdateLogging();
 }
 
-void LibretroHostInterface::OnRunningGameChanged()
+void LibretroHostInterface::OnRunningGameChanged(const std::string& path, CDImage* image, const std::string& game_code,
+                                                 const std::string& game_title)
 {
   Log_InfoPrintf("Running game changed: %s (%s)", System::GetRunningCode().c_str(), System::GetRunningTitle().c_str());
   if (UpdateGameSettings())
@@ -1462,7 +1476,7 @@ bool LibretroHostInterface::DiskControlAddImageIndex()
     return false;
   }
 
-  Log_DevPrintf("DiskControlAddImageIndex() -> %zu", System::GetMediaPlaylistCount());
+  Log_DevPrintf("DiskControlAddImageIndex() -> %u", System::GetMediaPlaylistCount());
   System::AddMediaPathToPlaylist({});
   return true;
 }

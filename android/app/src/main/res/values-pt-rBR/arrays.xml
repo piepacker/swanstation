@@ -12,31 +12,31 @@
     </string-array>
     <string-array name="settings_cpu_fastmem_mode_entries">
         <item>Desabilitado (Lento)</item>
-        <item>MMap (Hardware, Mais Rápido, só dispositivos 64-Bits)</item>
+        <item>MMap (Hardware, Mais Rápido, (Dispositivos 64-Bits)</item>
         <item>LUT (Rápido)</item>
     </string-array>
     <string-array name="gpu_renderer_entries">
         <item>Dedicado (OpenGL)</item>
         <item>Dedicado (Vulkan)</item>
-        <item>Software</item>
+        <item>Aplicativo</item>
     </string-array>
     <string-array name="settings_gpu_resolution_scale_entries">
-        <item>1x > (1024x512)</item>
-        <item>2x > (2048x1024)</item>
-        <item>3x > (3072x1536)</item>
-        <item>4x > (4096x2048)</item>
-        <item>5x > (5120x2560)</item>
-        <item>6x > (6144x3072)</item>
-        <item>7x > (7168x3584)</item>
-        <item>8x > (8192x4096)</item>
-        <item>9x > (9216x4608)</item>
-        <item>10x > (10240x5120)</item>
-        <item>11x > (11264x5632)</item>
-        <item>12x > (12288x6144)</item>
-        <item>13x > (13312x6656)</item>
-        <item>14x > (14336x7168)</item>
-        <item>15x > (15360x7680)</item>
-        <item>16x > (16384x8192)</item>
+        <item>1x</item>
+        <item>2x</item>
+        <item>3x (para 720p)</item>
+        <item>4x</item>
+        <item>5x (para 1080p)</item>
+        <item>6x (para 1440p)</item>
+        <item>7x</item>
+        <item>8x</item>
+        <item>9x (para 4K)</item>
+        <item>10x</item>
+        <item>11x</item>
+        <item>12x</item>
+        <item>13x</item>
+        <item>14x</item>
+        <item>15x</item>
+        <item>16x</item>
     </string-array>
     <string-array name="settings_display_crop_mode_entries">
         <item>Nenhum</item>
@@ -44,11 +44,12 @@
         <item>Todas as Bordas</item>
     </string-array>
     <string-array name="settings_display_aspect_ratio_names">
-        <item>Auto (Game Native)</item>
+       <item>Auto (Nativo)</item>
         <item>4:3</item>
         <item>16:9</item>
         <item>16:10</item>
         <item>19:9</item>
+        <item>20:9</item>
         <item>21:9</item>
         <item>32:9</item>
         <item>8:7</item>
@@ -61,15 +62,18 @@
     <string-array name="settings_gpu_texture_filter_names">
         <item>Nearest-Neighbor</item>
         <item>Bilinear</item>
-        <item>Bilinear (Sem ajustes laterais)</item>
+        <item>Bilinear (Sem AA)</item>
         <item>JINC2</item>
-        <item>JINC2 (Sem ajustes laterais)</item>
+        <item>JINC2 (Sem AA)</item>
         <item>xBR</item>
-        <item>xBR (Sem ajustes laterais)</item>
+        <item>xBR (Sem AA)</item>
     </string-array>
     <string-array name="settings_controller_type_entries">
-        <item>Controle digital (Gamepad)</item>
+        <item>None</item>
+        <item>Controle Digital (Gamepad)</item>
         <item>Controle Analógico (DualShock)</item>
+        <item>Analog Joystick</item>
+        <item>NeGcon</item>
     </string-array>
     <string-array name="settings_memory_card_mode_entries">
         <item>Sem Cartão de Memória</item>
@@ -80,8 +84,8 @@
     <string-array name="emulation_menu">
         <item>Carregar Estado</item>
         <item>Salvar Estado</item>
-        <item>Salvar para Compartimento</item>
         <item>Avanço (Fixo)</item>
+        <item>Achievements</item>
         <item>Mais Opções</item>
         <item>Sair</item>
     </string-array>
@@ -89,23 +93,16 @@
         <item>Reiniciar</item>
         <item>Trapaças</item>
         <item>Mudar Disco</item>
-        <item>Configurações</item>
         <item>Mudar controle em Tela</item>
-        <item>Editar Posição dos Controles (Tela)</item>
+        <item>Controller Settings</item>
+        <item>Configurações</item>
     </string-array>
-    <string-array name="emulation_save_state_slot_menu">
-        <item>Armazenamento Rápido</item>
-        <item>Armazenamento 1</item>
-        <item>Armazenamento 2</item>
-        <item>Armazenamento 3</item>
-        <item>Armazenamento 4</item>
-        <item>Armazenamento 5</item>
-        <item>Armazenamento 6</item>
-        <item>Armazenamento 7</item>
-        <item>Armazenamento 8</item>
-        <item>Armazenamento 9</item>
-        <item>Armazenamento 10</item>
-    </string-array>
+		<string-array name="emulation_touchscreen_menu">
+		<item>Mudar</item>
+		<item>Ajustar Visibilidade</item>
+		<item>Adicionar/Remover botões</item>
+		<item>Mudar Layout</item>
+	</string-array>
     <string-array name="settings_cdrom_read_speedup_entries">
         <item>Nenhum</item>
         <item>2x (4x Veloz)</item>
@@ -125,7 +122,7 @@
         <item>2 Analógicos</item>
     </string-array>
     <string-array name="settings_audio_backend_entries">
-        <item>Mudo</item>
+         <item>Mudo</item>
         <item>Cubeb</item>
         <item>SLES (Recomendado)</item>
     </string-array>
@@ -152,7 +149,7 @@
         <item>Vídeo</item>
         <item>Áudio</item>
         <item>Melhorias</item>
-        <item>Controles</item>
+        <item>Conquistas</item>
         <item>Avançado</item>
     </string-array>
     <string-array name="settings_gpu_msaa_entries">
@@ -230,5 +227,19 @@
         <item>Padrão do Dispositivo</item>
         <item>Retrato</item>
         <item>Paisagem</item>
+    </string-array>
+    <string-array name="settings_theme_entries">
+        <item>Padrão do Sistema</item>
+		<item>Claro</item>
+        <item>Escuro</item>
+    </string-array>
+    <string-array name="settings_downsample_mode_entries">
+        <item>Desabilitado</item>
+		<item>Misto (Reduz 3D / Suaviza Tudo)</item>
+        <item>Adaptativo (Preserva o 3D / Suaviza 2D)</item>
+    </string-array>
+    <string-array name="settings_boolean_entries">
+        <item>Disabled</item>
+        <item>Enabled</item>
     </string-array>
 </resources>

@@ -8,6 +8,8 @@ import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
 import android.content.res.Configuration;
 import android.content.res.Resources;
+import android.graphics.Bitmap;
+import android.graphics.BitmapFactory;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
@@ -16,26 +18,29 @@ import android.view.Gravity;
 import android.view.Menu;
 import android.view.MenuItem;
 import android.view.View;
-import android.widget.AdapterView;
+import android.widget.Button;
 import android.widget.ListView;
-import android.widget.PopupMenu;
 import android.widget.Toast;
 
+import androidx.annotation.NonNull;
+import androidx.annotation.Nullable;
 import androidx.appcompat.app.AlertDialog;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.appcompat.app.AppCompatDelegate;
 import androidx.appcompat.widget.Toolbar;
 import androidx.core.app.ActivityCompat;
 import androidx.core.content.ContextCompat;
+import androidx.fragment.app.Fragment;
 import androidx.preference.PreferenceManager;
 
 import java.io.ByteArrayOutputStream;
+import java.io.File;
 import java.io.FileNotFoundException;
+import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
-import java.util.HashSet;
+import java.io.OutputStream;
 import java.util.Locale;
-import java.util.Set;
 
 public class MainActivity extends AppCompatActivity {
     private static final int REQUEST_EXTERNAL_STORAGE_PERMISSIONS = 1;
@@ -43,10 +48,33 @@ public class MainActivity extends AppCompatActivity {
     private static final int REQUEST_IMPORT_BIOS_IMAGE = 3;
     private static final int REQUEST_START_FILE = 4;
     private static final int REQUEST_SETTINGS = 5;
+    private static final int REQUEST_EDIT_GAME_DIRECTORIES = 6;
+    private static final int REQUEST_CHOOSE_COVER_IMAGE = 7;
 
     private GameList mGameList;
     private ListView mGameListView;
+    private GameListFragment mGameListFragment;
+    private GameGridFragment mGameGridFragment;
+    private Fragment mEmptyGameListFragment;
     private boolean mHasExternalStoragePermissions = false;
+    private boolean mIsShowingGameGrid = false;
+    private String mPathForChosenCoverImage = null;
+
+    public GameList getGameList() {
+        return mGameList;
+    }
+
+    public boolean shouldResumeStateByDefault() {
+        SharedPreferences prefs = PreferenceManager.getDefaultSharedPreferences(this);
+        if (!prefs.getBoolean("Main/SaveStateOnExit", true))
+            return false;
+
+        // don't resume with challenge mode on
+        if (Achievement.willChallengeModeBeEnabled(this))
+            return false;
+
+        return true;
+    }
 
     private void setLanguage() {
         String language = PreferenceManager.getDefaultSharedPreferences(this).getString("Main/Language", "none");
@@ -85,38 +113,44 @@ public class MainActivity extends AppCompatActivity {
     private void loadSettings() {
         setLanguage();
         setTheme();
+
+        mIsShowingGameGrid = PreferenceManager.getDefaultSharedPreferences(this).getBoolean("Main/GameGridView", false);
     }
 
-    private boolean shouldResumeStateByDefault() {
-        SharedPreferences prefs = PreferenceManager.getDefaultSharedPreferences(this);
-        return prefs.getBoolean("Main/SaveStateOnExit", true);
+    private void switchGameListView() {
+        mIsShowingGameGrid = !mIsShowingGameGrid;
+        PreferenceManager.getDefaultSharedPreferences(this)
+                .edit()
+                .putBoolean("Main/GameGridView", mIsShowingGameGrid)
+                .commit();
+
+        updateGameListFragment(true);
+        invalidateOptionsMenu();
     }
 
-    private static String getTitleString() {
-        String scmVersion = AndroidHostInterface.getScmVersion();
-        final int gitHashPos = scmVersion.indexOf("-g");
-        if (gitHashPos > 0)
-            scmVersion = scmVersion.substring(0, gitHashPos);
+    private void updateGameListFragment(boolean allowEmpty) {
+        final Fragment listFragment = (allowEmpty && mGameList.getEntryCount() == 0) ?
+                mEmptyGameListFragment :
+                (mIsShowingGameGrid ? mGameGridFragment : mGameListFragment);
 
-        return String.format("DuckStation %s", scmVersion);
+        getSupportFragmentManager()
+                .beginTransaction()
+                .setReorderingAllowed(true).
+                replace(R.id.content_fragment, listFragment)
+                .commitAllowingStateLoss();
     }
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
-        super.onCreate(savedInstanceState);
         loadSettings();
+        setTitle(null);
+
+        super.onCreate(savedInstanceState);
 
         setContentView(R.layout.activity_main);
         Toolbar toolbar = findViewById(R.id.toolbar);
         setSupportActionBar(toolbar);
-        getSupportActionBar().setTitle(getTitleString());
 
-        findViewById(R.id.fab_add_game_directory).setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(View view) {
-                startAddGameDirectory();
-            }
-        });
         findViewById(R.id.fab_resume).setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View view) {
@@ -126,46 +160,21 @@ public class MainActivity extends AppCompatActivity {
 
         // Set up game list view.
         mGameList = new GameList(this);
-        mGameListView = findViewById(R.id.game_list_view);
-        mGameListView.setAdapter(mGameList.getListViewAdapter());
-        mGameListView.setOnItemClickListener(new AdapterView.OnItemClickListener() {
-            @Override
-            public void onItemClick(AdapterView<?> parent, View view, int position, long id) {
-                startEmulation(mGameList.getEntry(position).getPath(), shouldResumeStateByDefault());
-            }
-        });
-        mGameListView.setOnItemLongClickListener(new AdapterView.OnItemLongClickListener() {
-            @Override
-            public boolean onItemLongClick(AdapterView<?> parent, View view, int position,
-                                           long id) {
-                PopupMenu menu = new PopupMenu(MainActivity.this, view,
-                        Gravity.RIGHT | Gravity.TOP);
-                menu.getMenuInflater().inflate(R.menu.menu_game_list_entry, menu.getMenu());
-                menu.setOnMenuItemClickListener(new PopupMenu.OnMenuItemClickListener() {
-                    @Override
-                    public boolean onMenuItemClick(MenuItem item) {
-                        int id = item.getItemId();
-                        if (id == R.id.game_list_entry_menu_start_game) {
-                            startEmulation(mGameList.getEntry(position).getPath(), false);
-                            return true;
-                        } else if (id == R.id.game_list_entry_menu_resume_game) {
-                            startEmulation(mGameList.getEntry(position).getPath(), true);
-                            return true;
-                        } else if (id == R.id.game_list_entry_menu_properties) {
-                            openGameProperties(mGameList.getEntry(position).getPath());
-                            return true;
-                        }
-                        return false;
-                    }
-                });
-                menu.show();
-                return true;
-            }
-        });
+        mGameList.addRefreshListener(() -> updateGameListFragment(true));
+        mGameListFragment = new GameListFragment(this);
+        mGameGridFragment = new GameGridFragment(this);
+        mEmptyGameListFragment = new EmptyGameListFragment(this);
+        updateGameListFragment(false);
 
         mHasExternalStoragePermissions = checkForExternalStoragePermissions();
         if (mHasExternalStoragePermissions)
             completeStartup();
+    }
+
+    @Override
+    protected void onSaveInstanceState(@NonNull Bundle outState) {
+        super.onSaveInstanceState(outState);
+        outState.remove("android:support:fragments");
     }
 
     private void completeStartup() {
@@ -174,10 +183,12 @@ public class MainActivity extends AppCompatActivity {
             throw new RuntimeException("Failed to create host interface");
         }
 
+        AndroidHostInterface.getInstance().setContext(this);
         mGameList.refresh(false, false, this);
+        UpdateNotes.displayUpdateNotes(this);
     }
 
-    private void startAddGameDirectory() {
+    public void startAddGameDirectory() {
         if (!checkForExternalStoragePermissions())
             return;
 
@@ -192,6 +203,13 @@ public class MainActivity extends AppCompatActivity {
     public boolean onCreateOptionsMenu(Menu menu) {
         // Inflate the menu; this adds items to the action bar if it is present.
         getMenuInflater().inflate(R.menu.menu_main, menu);
+
+        final MenuItem switchViewItem = menu.findItem(R.id.action_switch_view);
+        if (switchViewItem != null) {
+            switchViewItem.setTitle(mIsShowingGameGrid ? R.string.action_show_game_list : R.string.action_show_game_grid);
+            switchViewItem.setIcon(mIsShowingGameGrid ? R.drawable.ic_baseline_view_list_24 : R.drawable.ic_baseline_grid_view_24);
+        }
+
         return true;
     }
 
@@ -203,14 +221,14 @@ public class MainActivity extends AppCompatActivity {
         int id = item.getItemId();
 
         //noinspection SimplifiableIfStatement
-        if (id == R.id.action_resume) {
-            startEmulation(null, true);
-        } else if (id == R.id.action_start_bios) {
+        if (id == R.id.action_start_bios) {
             startEmulation(null, false);
         } else if (id == R.id.action_start_file) {
             startStartFile();
-        } else if (id == R.id.action_add_game_directory) {
-            startAddGameDirectory();
+        } else if (id == R.id.action_edit_game_directories) {
+            Intent intent = new Intent(this, GameDirectoriesActivity.class);
+            startActivityForResult(intent, REQUEST_EDIT_GAME_DIRECTORIES);
+            return true;
         } else if (id == R.id.action_scan_for_new_games) {
             mGameList.refresh(false, false, this);
         } else if (id == R.id.action_rescan_all_games) {
@@ -221,9 +239,16 @@ public class MainActivity extends AppCompatActivity {
             Intent intent = new Intent(this, SettingsActivity.class);
             startActivityForResult(intent, REQUEST_SETTINGS);
             return true;
-        } else if (id == R.id.action_controller_mapping) {
-            Intent intent = new Intent(this, ControllerMappingActivity.class);
+        } else if (id == R.id.action_controller_settings) {
+            Intent intent = new Intent(this, ControllerSettingsActivity.class);
             startActivity(intent);
+            return true;
+        } else if (id == R.id.action_memory_card_editor) {
+            Intent intent = new Intent(this, MemoryCardEditorActivity.class);
+            startActivity(intent);
+            return true;
+        } else if (id == R.id.action_switch_view) {
+            switchGameListView();
             return true;
         } else if (id == R.id.action_show_version) {
             showVersion();
@@ -239,38 +264,6 @@ public class MainActivity extends AppCompatActivity {
         return super.onOptionsItemSelected(item);
     }
 
-    private String getPathFromUri(Uri uri) {
-        String path = FileUtil.getFullPathFromUri(uri, this);
-        if (path.length() < 5) {
-            new AlertDialog.Builder(this)
-                    .setTitle(R.string.main_activity_error)
-                    .setMessage(R.string.main_activity_get_path_from_file_error)
-                    .setPositiveButton(R.string.main_activity_ok, (dialog, button) -> {
-                    })
-                    .create()
-                    .show();
-            return null;
-        }
-
-        return path;
-    }
-
-    private String getPathFromTreeUri(Uri treeUri) {
-        String path = FileUtil.getFullPathFromTreeUri(treeUri, this);
-        if (path.length() < 5) {
-            new AlertDialog.Builder(this)
-                    .setTitle(R.string.main_activity_error)
-                    .setMessage(R.string.main_activity_get_path_from_directory_error)
-                    .setPositiveButton(R.string.main_activity_ok, (dialog, button) -> {
-                    })
-                    .create()
-                    .show();
-            return null;
-        }
-
-        return path;
-    }
-
     @Override
     public void onActivityResult(int requestCode, int resultCode, Intent data) {
         super.onActivityResult(requestCode, resultCode, data);
@@ -280,20 +273,11 @@ public class MainActivity extends AppCompatActivity {
                 if (resultCode != RESULT_OK)
                     return;
 
-                String path = getPathFromTreeUri(data.getData());
+                String path = GameDirectoriesActivity.getPathFromTreeUri(this, data.getData());
                 if (path == null)
                     return;
 
-                SharedPreferences prefs = PreferenceManager.getDefaultSharedPreferences(this);
-                Set<String> currentValues = prefs.getStringSet("GameList/RecursivePaths", null);
-                if (currentValues == null)
-                    currentValues = new HashSet<String>();
-
-                currentValues.add(path);
-                SharedPreferences.Editor editor = prefs.edit();
-                editor.putStringSet("GameList/RecursivePaths", currentValues);
-                editor.apply();
-                Log.i("MainActivity", "Added path '" + path + "' to game list search directories");
+                GameDirectoriesActivity.addSearchDirectory(this, path, true);
                 mGameList.refresh(false, false, this);
             }
             break;
@@ -310,7 +294,7 @@ public class MainActivity extends AppCompatActivity {
                 if (resultCode != RESULT_OK)
                     return;
 
-                String path = getPathFromUri(data.getData());
+                String path = GameDirectoriesActivity.getPathFromUri(this, data.getData());
                 if (path == null)
                     return;
 
@@ -320,6 +304,21 @@ public class MainActivity extends AppCompatActivity {
 
             case REQUEST_SETTINGS: {
                 loadSettings();
+            }
+            break;
+
+            case REQUEST_EDIT_GAME_DIRECTORIES: {
+                mGameList.refresh(false, false, this);
+            }
+            break;
+
+            case REQUEST_CHOOSE_COVER_IMAGE: {
+                final String gamePath = mPathForChosenCoverImage;
+                mPathForChosenCoverImage = null;
+                if (resultCode != RESULT_OK)
+                    return;
+
+                finishChooseCoverImage(gamePath, data.getData());
             }
             break;
         }
@@ -359,14 +358,45 @@ public class MainActivity extends AppCompatActivity {
         }
     }
 
-    private boolean openGameProperties(String path) {
+    public boolean openGameProperties(String path) {
         Intent intent = new Intent(this, GamePropertiesActivity.class);
         intent.putExtra("path", path);
         startActivity(intent);
         return true;
     }
 
-    private boolean startEmulation(String bootPath, boolean resumeState) {
+    public void openGamePopupMenu(View anchorToView, GameListEntry entry) {
+        androidx.appcompat.widget.PopupMenu menu = new androidx.appcompat.widget.PopupMenu(this, anchorToView, Gravity.RIGHT | Gravity.TOP);
+        menu.getMenuInflater().inflate(R.menu.menu_game_list_entry, menu.getMenu());
+        menu.setOnMenuItemClickListener(item -> {
+            int id = item.getItemId();
+            if (id == R.id.game_list_entry_menu_start_game) {
+                startEmulation(entry.getPath(), false);
+                return true;
+            } else if (id == R.id.game_list_entry_menu_resume_game) {
+                startEmulation(entry.getPath(), true);
+                return true;
+            } else if (id == R.id.game_list_entry_menu_properties) {
+                openGameProperties(entry.getPath());
+                return true;
+            } else if (id == R.id.game_list_entry_menu_choose_cover_image) {
+                startChooseCoverImage(entry.getPath());
+                return true;
+            }
+            return false;
+        });
+
+        // disable resume state when challenge mode is on
+        if (Achievement.willChallengeModeBeEnabled(this)) {
+            MenuItem item = menu.getMenu().findItem(R.id.game_list_entry_menu_resume_game);
+            if (item != null)
+                item.setEnabled(false);
+        }
+
+        menu.show();
+    }
+
+    public boolean startEmulation(String bootPath, boolean resumeState) {
         if (!doBIOSCheck())
             return false;
 
@@ -377,11 +407,53 @@ public class MainActivity extends AppCompatActivity {
         return true;
     }
 
-    private void startStartFile() {
+    public void startStartFile() {
         Intent intent = new Intent(Intent.ACTION_GET_CONTENT);
         intent.setType("*/*");
         intent.addCategory(Intent.CATEGORY_OPENABLE);
         startActivityForResult(Intent.createChooser(intent, getString(R.string.main_activity_choose_disc_image)), REQUEST_START_FILE);
+    }
+
+    private void startChooseCoverImage(String gamePath) {
+        Intent intent = new Intent(Intent.ACTION_GET_CONTENT);
+        intent.setType("image/*");
+        intent.addCategory(Intent.CATEGORY_OPENABLE);
+        mPathForChosenCoverImage = gamePath;
+        startActivityForResult(Intent.createChooser(intent, getString(R.string.menu_game_list_entry_choose_cover_image)),
+                REQUEST_CHOOSE_COVER_IMAGE);
+    }
+
+    private void finishChooseCoverImage(String gamePath, Uri uri) {
+        final GameListEntry gameListEntry = mGameList.getEntryForPath(gamePath);
+        if (gameListEntry == null)
+            return;
+
+        final Bitmap bitmap = FileUtil.loadBitmapFromUri(this, uri);
+        if (bitmap == null) {
+            Toast.makeText(this, "Failed to open/decode image.", Toast.LENGTH_LONG).show();
+            return;
+        }
+
+        final String coverFileName = String.format("%s/covers/%s.png",
+                AndroidHostInterface.getUserDirectory(), gameListEntry.getTitle());
+        try {
+            final File file = new File(coverFileName);
+            final OutputStream outputStream = new FileOutputStream(file);
+            final boolean result = bitmap.compress(Bitmap.CompressFormat.PNG, 100, outputStream);
+            outputStream.close();;
+            if (!result) {
+                file.delete();
+                throw new Exception("Failed to compress bitmap.");
+            }
+
+            gameListEntry.setCoverPath(coverFileName);
+            mGameList.fireRefreshListeners();
+        } catch (Exception e) {
+            e.printStackTrace();
+            Toast.makeText(this, "Failed to save image.", Toast.LENGTH_LONG).show();
+        }
+
+        bitmap.recycle();
     }
 
     private boolean doBIOSCheck() {

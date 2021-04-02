@@ -91,9 +91,9 @@ bool GPU_HW::Initialize(HostDisplay* host_display)
   return true;
 }
 
-void GPU_HW::Reset()
+void GPU_HW::Reset(bool clear_vram)
 {
-  GPU::Reset();
+  GPU::Reset(clear_vram);
 
   m_batch_current_vertex_ptr = m_batch_start_vertex_ptr;
 
@@ -107,9 +107,9 @@ void GPU_HW::Reset()
   SetFullVRAMDirtyRectangle();
 }
 
-bool GPU_HW::DoState(StateWrapper& sw, bool update_display)
+bool GPU_HW::DoState(StateWrapper& sw, HostDisplayTexture** host_texture, bool update_display)
 {
-  if (!GPU::DoState(sw, update_display))
+  if (!GPU::DoState(sw, host_texture, update_display))
     return false;
 
   // invalidate the whole VRAM read texture when loading state
@@ -581,8 +581,10 @@ void GPU_HW::LoadVertices()
         }
         else if (g_settings.gpu_pgxp_depth_buffer)
         {
-          SetBatchDepthBuffer(true);
-          CheckForDepthClear(vertices.data(), num_vertices);
+          const bool use_depth = (m_batch.transparency_mode == GPUTransparencyMode::Disabled);
+          SetBatchDepthBuffer(use_depth);
+          if (use_depth)
+            CheckForDepthClear(vertices.data(), num_vertices);
         }
       }
 
@@ -885,7 +887,7 @@ GPU_HW::VRAMFillUBOData GPU_HW::GetVRAMFillUBOData(u32 x, u32 y, u32 width, u32 
 {
   // drop precision unless true colour is enabled
   if (!m_true_color)
-    color = RGBA5551ToRGBA8888(RGBA8888ToRGBA5551(color));
+    color = VRAMRGBA5551ToRGBA8888(VRAMRGBA8888ToRGBA5551(color));
 
   VRAMFillUBOData uniforms;
   std::tie(uniforms.u_fill_color[0], uniforms.u_fill_color[1], uniforms.u_fill_color[2], uniforms.u_fill_color[3]) =
@@ -947,7 +949,7 @@ GPU_HW::VRAMCopyUBOData GPU_HW::GetVRAMCopyUBOData(u32 src_x, u32 src_y, u32 dst
   return uniforms;
 }
 
-void GPU_HW::IncludeVRAMDityRectangle(const Common::Rectangle<u32>& rect)
+void GPU_HW::IncludeVRAMDirtyRectangle(const Common::Rectangle<u32>& rect)
 {
   m_vram_dirty_rect.Include(rect);
 
@@ -1022,14 +1024,14 @@ void GPU_HW::ResetBatchVertexDepth()
 
 void GPU_HW::FillVRAM(u32 x, u32 y, u32 width, u32 height, u32 color)
 {
-  IncludeVRAMDityRectangle(
+  IncludeVRAMDirtyRectangle(
     Common::Rectangle<u32>::FromExtents(x, y, width, height).Clamped(0, 0, VRAM_WIDTH, VRAM_HEIGHT));
 }
 
 void GPU_HW::UpdateVRAM(u32 x, u32 y, u32 width, u32 height, const void* data, bool set_mask, bool check_mask)
 {
   DebugAssert((x + width) <= VRAM_WIDTH && (y + height) <= VRAM_HEIGHT);
-  IncludeVRAMDityRectangle(Common::Rectangle<u32>::FromExtents(x, y, width, height));
+  IncludeVRAMDirtyRectangle(Common::Rectangle<u32>::FromExtents(x, y, width, height));
 
   if (check_mask)
   {
@@ -1040,7 +1042,7 @@ void GPU_HW::UpdateVRAM(u32 x, u32 y, u32 width, u32 height, const void* data, b
 
 void GPU_HW::CopyVRAM(u32 src_x, u32 src_y, u32 dst_x, u32 dst_y, u32 width, u32 height)
 {
-  IncludeVRAMDityRectangle(
+  IncludeVRAMDirtyRectangle(
     Common::Rectangle<u32>::FromExtents(dst_x, dst_y, width, height).Clamped(0, 0, VRAM_WIDTH, VRAM_HEIGHT));
 
   if (m_GPUSTAT.check_mask_before_draw)
@@ -1089,8 +1091,8 @@ void GPU_HW::DispatchRenderCommand()
   const GPUTransparencyMode transparency_mode =
     rc.transparency_enable ? m_draw_mode.mode_reg.transparency_mode : GPUTransparencyMode::Disabled;
   const bool dithering_enable = (!m_true_color && rc.IsDitheringEnabled()) ? m_GPUSTAT.dither_enable : false;
-  if (m_batch.texture_mode != texture_mode || m_batch.transparency_mode != transparency_mode ||
-      dithering_enable != m_batch.dithering)
+  if (texture_mode != m_batch.texture_mode || transparency_mode != m_batch.transparency_mode ||
+      transparency_mode == GPUTransparencyMode::BackgroundMinusForeground || dithering_enable != m_batch.dithering)
   {
     FlushRender();
   }
@@ -1168,7 +1170,7 @@ void GPU_HW::FlushRender()
     m_batch_ubo_dirty = false;
   }
 
-  if (m_batch.NeedsTwoPassRendering())
+  if (NeedsTwoPassRendering())
   {
     m_renderer_stats.num_batches += 2;
     DrawBatchVertices(BatchRenderMode::OnlyOpaque, m_batch_base_vertex, vertex_count);

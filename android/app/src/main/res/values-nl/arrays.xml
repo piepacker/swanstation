@@ -49,6 +49,7 @@
         <item>16:9</item>
         <item>16:10</item>
         <item>19:9</item>
+        <item>20:9</item>
         <item>21:9</item>
         <item>32:9</item>
         <item>8:7</item>
@@ -68,8 +69,11 @@
         <item>xBR (Geen Edge Blending)</item>
     </string-array>
     <string-array name="settings_controller_type_entries">
+        <item>None</item>
         <item>Digitale Controller (Gamepad)</item>
         <item>Analoge Controller (DualShock)</item>
+        <item>Analog Joystick</item>
+        <item>NeGcon</item>
     </string-array>
     <string-array name="settings_memory_card_mode_entries">
         <item>Geen Geheugenkaart</item>
@@ -80,8 +84,8 @@
     <string-array name="emulation_menu">
         <item>Staat Laden</item>
         <item>Staat Opslaan</item>
-        <item>Staat Nummer</item>
         <item>Doorspoelen aan/uitzetten</item>
+        <item>Achievements</item>
         <item>Meer Opties</item>
         <item>Afsluiten</item>
     </string-array>
@@ -89,22 +93,9 @@
         <item>Resetten</item>
         <item>Patch Codes</item>
         <item>Disc Veranderen</item>
-        <item>Instellingen</item>
         <item>Touchscreen Controller Aanpassen</item>
-        <item>Edit Touchscreen Controller Layout</item>
-    </string-array>
-    <string-array name="emulation_save_state_slot_menu">
-        <item>Snel Slot</item>
-        <item>Game Slot 1</item>
-        <item>Game Slot 2</item>
-        <item>Game Slot 3</item>
-        <item>Game Slot 4</item>
-        <item>Game Slot 5</item>
-        <item>Game Slot 6</item>
-        <item>Game Slot 7</item>
-        <item>Game Slot 8</item>
-        <item>Game Slot 9</item>
-        <item>Game Slot 10</item>
+        <item>Controller Settings</item>
+        <item>Instellingen</item>
     </string-array>
     <string-array name="settings_cdrom_read_speedup_entries">
         <item>Geen (Dubbele Snelheid)</item>
@@ -152,7 +143,7 @@
         <item>Weergave</item>
         <item>Audio</item>
         <item>Verbeteringen</item>
-        <item>Controllers</item>
+        <item>Achievements</item>
         <item>Geavanceerd</item>
     </string-array>
     <string-array name="settings_gpu_msaa_entries">

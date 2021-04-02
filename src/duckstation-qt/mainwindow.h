@@ -40,6 +40,9 @@ public:
   /// Opens memory card editor with the specified paths.
   void openMemoryCardEditor(const QString& card_a_path, const QString& card_b_path);
 
+  /// Updates the state of the controls which should be disabled by achievements challenge mode.
+  void onAchievementsChallengeModeToggled(bool enabled);
+
 public Q_SLOTS:
   /// Updates debug menu visibility (hides if disabled).
   void updateDebugMenuVisibility();
@@ -80,6 +83,7 @@ private Q_SLOTS:
   void onCheatsMenuAboutToShow();
   void onRemoveDiscActionTriggered();
   void onViewToolbarActionToggled(bool checked);
+  void onViewLockToolbarActionToggled(bool checked);
   void onViewStatusBarActionToggled(bool checked);
   void onViewGameListActionTriggered();
   void onViewGameGridActionTriggered();
@@ -107,15 +111,18 @@ private Q_SLOTS:
 protected:
   void closeEvent(QCloseEvent* event) override;
   void changeEvent(QEvent* event) override;
+  void dragEnterEvent(QDragEnterEvent* event) override;
+  void dropEvent(QDropEvent* event) override;
 
 private:
   void setupAdditionalUi();
   void connectSignals();
   void addThemeToMenu(const QString& name, const QString& key);
-  void updateEmulationActions(bool starting, bool running);
+  void updateEmulationActions(bool starting, bool running, bool cheevos_challenge_mode);
   bool isShowingGameList() const;
   void switchToGameListView();
   void switchToEmulationView();
+  void startGameOrChangeDiscs(const std::string& path);
   void saveStateToConfig();
   void restoreStateFromConfig();
   void saveDisplayWindowGeometryToConfig();

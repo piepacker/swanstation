@@ -22,6 +22,7 @@
 #include <QtCore/QDebug>
 #include <QtCore/QFile>
 #include <QtCore/QFileInfo>
+#include <QtCore/QMimeData>
 #include <QtCore/QUrl>
 #include <QtGui/QCursor>
 #include <QtGui/QWindowStateChangeEvent>
@@ -33,9 +34,10 @@
 
 static constexpr char DISC_IMAGE_FILTER[] = QT_TRANSLATE_NOOP(
   "MainWindow",
-  "All File Types (*.bin *.img *.iso *.cue *.chd *.exe *.psexe *.psf *.m3u);;Single-Track Raw Images (*.bin *.img "
-  "*.iso);;Cue Sheets (*.cue);;MAME CHD Images (*.chd);;PlayStation Executables (*.exe *.psexe);;Portable Sound Format "
-  "Files (*.psf);;Playlists (*.m3u)");
+  "All File Types (*.bin *.img *.iso *.cue *.chd *.ecm *.mds *.pbp *.exe *.psexe *.psf *.minipsf *.m3u);;Single-Track "
+  "Raw Images (*.bin *.img *.iso);;Cue Sheets (*.cue);;MAME CHD Images (*.chd);;Error Code Modeler Images "
+  "(*.ecm);;Media Descriptor Sidecar Images (*.mds);;PlayStation EBOOTs (*.pbp);;PlayStation Executables (*.exe "
+  "*.psexe);;Portable Sound Format Files (*.psf *.minipsf);;Playlists (*.m3u)");
 
 ALWAYS_INLINE static QString getWindowTitle()
 {
@@ -174,6 +176,28 @@ QtDisplayWidget* MainWindow::updateDisplay(QThread* worker_thread, bool fullscre
   if (fullscreen == is_fullscreen && is_rendering_to_main == render_to_main)
     return m_display_widget;
 
+  // Skip recreating the surface if we're just transitioning between fullscreen and windowed with render-to-main off.
+  if (!is_rendering_to_main && !render_to_main && !is_exclusive_fullscreen)
+  {
+    qDebug() << "Toggling to" << (fullscreen ? "fullscreen" : "windowed") << "without recreating surface";
+    if (m_host_display && m_host_display->IsFullscreen())
+      m_host_display->SetFullscreen(false, 0, 0, 0.0f);
+
+    if (fullscreen)
+    {
+      m_display_widget->showFullScreen();
+    }
+    else
+    {
+      restoreDisplayWindowGeometryFromConfig();
+      m_display_widget->showNormal();
+    }
+
+    QCoreApplication::processEvents(QEventLoop::ExcludeUserInputEvents);
+    updateMouseMode(System::IsPaused());
+    return m_display_widget;
+  }
+
   m_host_display->DestroyRenderSurface();
 
   destroyDisplayWidget();
@@ -234,10 +258,15 @@ void MainWindow::setDisplayFullscreen(const std::string& fullscreen_mode)
   if (CommonHostInterface::ParseFullscreenMode(fullscreen_mode, &width, &height, &refresh_rate))
   {
     result = m_host_display->SetFullscreen(true, width, height, refresh_rate);
-    if (!result)
+    if (result)
     {
       m_host_interface->AddOSDMessage(
-        m_host_interface->TranslateStdString("OSDMessage", "Failed to acquire exclusive fullscreen."), 20.0f);
+        m_host_interface->TranslateStdString("OSDMessage", "Acquired exclusive fullscreen."), 10.0f);
+    }
+    else
+    {
+      m_host_interface->AddOSDMessage(
+        m_host_interface->TranslateStdString("OSDMessage", "Failed to acquire exclusive fullscreen."), 10.0f);
     }
   }
 }
@@ -327,7 +356,7 @@ void MainWindow::updateMouseMode(bool paused)
 void MainWindow::onEmulationStarting()
 {
   m_emulation_running = true;
-  updateEmulationActions(true, false);
+  updateEmulationActions(true, false, m_host_interface->IsCheevosChallengeModeActive());
 
   // ensure it gets updated, since the boot can take a while
   QGuiApplication::processEvents(QEventLoop::ExcludeUserInputEvents);
@@ -335,13 +364,13 @@ void MainWindow::onEmulationStarting()
 
 void MainWindow::onEmulationStarted()
 {
-  updateEmulationActions(false, true);
+  updateEmulationActions(false, true, m_host_interface->IsCheevosChallengeModeActive());
 }
 
 void MainWindow::onEmulationStopped()
 {
   m_emulation_running = false;
-  updateEmulationActions(false, false);
+  updateEmulationActions(false, false, m_host_interface->IsCheevosChallengeModeActive());
   switchToGameListView();
 
   if (m_cheat_manager_dialog)
@@ -393,6 +422,15 @@ void MainWindow::onRunningGameChanged(const QString& filename, const QString& ga
 
   if (m_display_widget)
     m_display_widget->setWindowTitle(windowTitle());
+
+  bool has_game_list_entry = false;
+  if (!filename.isEmpty())
+  {
+    const GameListEntry* entry = m_host_interface->getGameList()->GetEntryForPath(filename.toStdString().c_str());
+    has_game_list_entry = (entry != nullptr);
+  }
+
+  m_ui.actionViewGameProperties->setEnabled(has_game_list_entry);
 }
 
 void MainWindow::onApplicationStateChanged(Qt::ApplicationState state)
@@ -483,6 +521,12 @@ void MainWindow::onViewToolbarActionToggled(bool checked)
   saveStateToConfig();
 }
 
+void MainWindow::onViewLockToolbarActionToggled(bool checked)
+{
+  m_host_interface->SetBoolSettingValue("UI", "LockToolbar", checked);
+  m_ui.toolBar->setMovable(!checked);
+}
+
 void MainWindow::onViewStatusBarActionToggled(bool checked)
 {
   m_host_interface->SetBoolSettingValue("UI", "ShowStatusBar", checked);
@@ -516,21 +560,14 @@ void MainWindow::onViewSystemDisplayTriggered()
 
 void MainWindow::onViewGamePropertiesActionTriggered()
 {
-  const GameListEntry* entry;
+  if (!m_emulation_running)
+    return;
 
-  if (m_emulation_running)
-  {
-    const std::string& path = System::GetRunningPath();
-    if (path.empty())
-      return;
+  const std::string& path = System::GetRunningPath();
+  if (path.empty())
+    return;
 
-    entry = m_host_interface->getGameList()->GetEntryForPath(path.c_str());
-  }
-  else
-  {
-    entry = m_game_list_widget->getSelectedEntry();
-  }
-
+  const GameListEntry* entry = m_host_interface->getGameList()->GetEntryForPath(path.c_str());
   if (!entry)
     return;
 
@@ -573,25 +610,7 @@ void MainWindow::onGameListEntrySelected(const GameListEntry* entry)
 
 void MainWindow::onGameListEntryDoubleClicked(const GameListEntry* entry)
 {
-  // if we're not running, boot the system, otherwise swap discs
-  QString path = QString::fromStdString(entry->path);
-  if (!m_emulation_running)
-  {
-    if (!entry->code.empty() && m_host_interface->GetBoolSettingValue("Main", "SaveStateOnExit", true))
-    {
-      m_host_interface->resumeSystemFromState(path, true);
-    }
-    else
-    {
-      m_host_interface->bootSystem(std::make_shared<const SystemBootParameters>(path.toStdString()));
-    }
-  }
-  else
-  {
-    m_host_interface->changeDisc(path);
-    m_host_interface->pauseSystem(false);
-    switchToEmulationView();
-  }
+  startGameOrChangeDiscs(entry->path);
 }
 
 void MainWindow::onGameListContextMenuRequested(const QPoint& point, const GameListEntry* entry)
@@ -637,7 +656,7 @@ void MainWindow::onGameListContextMenuRequested(const QPoint& point, const GameL
         m_host_interface->bootSystem(std::move(boot_params));
       });
 
-      if (m_ui.menuDebug->menuAction()->isVisible())
+      if (m_ui.menuDebug->menuAction()->isVisible() && !m_host_interface->IsCheevosChallengeModeActive())
       {
         connect(menu.addAction(tr("Boot and Debug")), &QAction::triggered, [this, entry]() {
           m_open_debugger_on_start = true;
@@ -710,6 +729,11 @@ void MainWindow::setupAdditionalUi()
   const bool status_bar_visible = m_host_interface->GetBoolSettingValue("UI", "ShowStatusBar", true);
   m_ui.actionViewStatusBar->setChecked(status_bar_visible);
   m_ui.statusBar->setVisible(status_bar_visible);
+
+  const bool toolbars_locked = m_host_interface->GetBoolSettingValue("UI", "LockToolbar", false);
+  m_ui.actionViewLockToolbar->setChecked(toolbars_locked);
+  m_ui.toolBar->setMovable(!toolbars_locked);
+  m_ui.toolBar->setContextMenuPolicy(Qt::PreventContextMenu);
 
   m_game_list_widget = new GameListWidget(m_ui.mainContainer);
   m_game_list_widget->initialize(m_host_interface);
@@ -803,29 +827,36 @@ void MainWindow::setupAdditionalUi()
   }
 }
 
-void MainWindow::updateEmulationActions(bool starting, bool running)
+void MainWindow::updateEmulationActions(bool starting, bool running, bool cheevos_challenge_mode)
 {
   m_ui.actionStartDisc->setDisabled(starting || running);
   m_ui.actionStartBios->setDisabled(starting || running);
-  m_ui.actionResumeLastState->setDisabled(starting || running);
+  m_ui.actionResumeLastState->setDisabled(starting || running || cheevos_challenge_mode);
 
   m_ui.actionPowerOff->setDisabled(starting || !running);
+  m_ui.actionPowerOffWithoutSaving->setDisabled(starting || !running);
   m_ui.actionReset->setDisabled(starting || !running);
   m_ui.actionPause->setDisabled(starting || !running);
   m_ui.actionChangeDisc->setDisabled(starting || !running);
-  m_ui.actionCheats->setDisabled(starting || !running);
+  m_ui.actionCheats->setDisabled(starting || !running || cheevos_challenge_mode);
   m_ui.actionScreenshot->setDisabled(starting || !running);
   m_ui.actionViewSystemDisplay->setEnabled(starting || running);
   m_ui.menuChangeDisc->setDisabled(starting || !running);
-  m_ui.menuCheats->setDisabled(starting || !running);
-  m_ui.actionCheatManager->setDisabled(starting || !running);
-  m_ui.actionCPUDebugger->setDisabled(starting || !running);
+  m_ui.menuCheats->setDisabled(starting || !running || cheevos_challenge_mode);
+  m_ui.actionCheatManager->setDisabled(starting || !running || cheevos_challenge_mode);
+  m_ui.actionCPUDebugger->setDisabled(starting || !running || cheevos_challenge_mode);
+  m_ui.actionDumpRAM->setDisabled(starting || !running || cheevos_challenge_mode);
+  m_ui.actionDumpVRAM->setDisabled(starting || !running || cheevos_challenge_mode);
+  m_ui.actionDumpSPURAM->setDisabled(starting || !running || cheevos_challenge_mode);
 
   m_ui.actionSaveState->setDisabled(starting || !running);
   m_ui.menuSaveState->setDisabled(starting || !running);
   m_ui.menuWindowSize->setDisabled(starting || !running);
 
   m_ui.actionFullscreen->setDisabled(starting || !running);
+
+  m_ui.actionLoadState->setDisabled(cheevos_challenge_mode);
+  m_ui.menuLoadState->setDisabled(cheevos_challenge_mode);
 
   if (running && m_status_speed_widget->isHidden())
   {
@@ -861,6 +892,8 @@ void MainWindow::updateEmulationActions(bool starting, bool running)
       m_ui.toolBar->insertAction(m_ui.actionPowerOff, m_ui.actionResumeLastState);
       m_ui.toolBar->removeAction(m_ui.actionPowerOff);
     }
+
+    m_ui.actionViewGameProperties->setEnabled(false);
   }
 
   if (m_open_debugger_on_start && running)
@@ -901,9 +934,27 @@ void MainWindow::switchToEmulationView()
   m_display_widget->setFocus();
 }
 
+void MainWindow::startGameOrChangeDiscs(const std::string& path)
+{
+  // if we're not running, boot the system, otherwise swap discs
+  if (!m_emulation_running)
+  {
+    if (m_host_interface->CanResumeSystemFromFile(path.c_str()))
+      m_host_interface->resumeSystemFromState(QString::fromStdString(path), true);
+    else
+      m_host_interface->bootSystem(std::make_shared<const SystemBootParameters>(path));
+  }
+  else
+  {
+    m_host_interface->changeDisc(QString::fromStdString(path));
+    m_host_interface->pauseSystem(false);
+    switchToEmulationView();
+  }
+}
+
 void MainWindow::connectSignals()
 {
-  updateEmulationActions(false, false);
+  updateEmulationActions(false, false, m_host_interface->IsCheevosChallengeModeActive());
   onEmulationPaused(false);
 
   connect(qApp, &QGuiApplication::applicationStateChanged, this, &MainWindow::onApplicationStateChanged);
@@ -926,6 +977,8 @@ void MainWindow::connectSignals()
   connect(m_ui.actionAddGameDirectory, &QAction::triggered,
           [this]() { getSettingsDialog()->getGameListSettingsWidget()->addSearchDirectory(this); });
   connect(m_ui.actionPowerOff, &QAction::triggered, m_host_interface, &QtHostInterface::powerOffSystem);
+  connect(m_ui.actionPowerOffWithoutSaving, &QAction::triggered, m_host_interface,
+          &QtHostInterface::powerOffSystemWithoutSaving);
   connect(m_ui.actionReset, &QAction::triggered, m_host_interface, &QtHostInterface::resetSystem);
   connect(m_ui.actionPause, &QAction::toggled, [this](bool active) { m_host_interface->pauseSystem(active); });
   connect(m_ui.actionScreenshot, &QAction::triggered, m_host_interface, &QtHostInterface::saveScreenshot);
@@ -944,6 +997,8 @@ void MainWindow::connectSignals()
           [this]() { doSettings(SettingsDialog::Category::BIOSSettings); });
   connect(m_ui.actionConsoleSettings, &QAction::triggered,
           [this]() { doSettings(SettingsDialog::Category::ConsoleSettings); });
+  connect(m_ui.actionEmulationSettings, &QAction::triggered,
+          [this]() { doSettings(SettingsDialog::Category::EmulationSettings); });
   connect(m_ui.actionGameListSettings, &QAction::triggered,
           [this]() { doSettings(SettingsDialog::Category::GameListSettings); });
   connect(m_ui.actionHotkeySettings, &QAction::triggered,
@@ -960,9 +1015,12 @@ void MainWindow::connectSignals()
           [this]() { doSettings(SettingsDialog::Category::PostProcessingSettings); });
   connect(m_ui.actionAudioSettings, &QAction::triggered,
           [this]() { doSettings(SettingsDialog::Category::AudioSettings); });
+  connect(m_ui.actionAchievementSettings, &QAction::triggered,
+          [this]() { doSettings(SettingsDialog::Category::AchievementSettings); });
   connect(m_ui.actionAdvancedSettings, &QAction::triggered,
           [this]() { doSettings(SettingsDialog::Category::AdvancedSettings); });
   connect(m_ui.actionViewToolbar, &QAction::toggled, this, &MainWindow::onViewToolbarActionToggled);
+  connect(m_ui.actionViewLockToolbar, &QAction::toggled, this, &MainWindow::onViewLockToolbarActionToggled);
   connect(m_ui.actionViewStatusBar, &QAction::toggled, this, &MainWindow::onViewStatusBarActionToggled);
   connect(m_ui.actionViewGameList, &QAction::triggered, this, &MainWindow::onViewGameListActionTriggered);
   connect(m_ui.actionViewGameGrid, &QAction::triggered, this, &MainWindow::onViewGameGridActionTriggered);
@@ -1023,6 +1081,8 @@ void MainWindow::connectSignals()
 
   m_host_interface->populateSaveStateMenus(nullptr, m_ui.menuLoadState, m_ui.menuSaveState);
 
+  SettingWidgetBinder::BindWidgetToBoolSetting(m_host_interface, m_ui.actionDisableAllEnhancements, "Main",
+                                               "DisableAllEnhancements");
   SettingWidgetBinder::BindWidgetToBoolSetting(m_host_interface, m_ui.actionDisableInterlacing, "GPU",
                                                "DisableInterlacing");
   SettingWidgetBinder::BindWidgetToBoolSetting(m_host_interface, m_ui.actionForceNTSCTimings, "GPU",
@@ -1038,11 +1098,28 @@ void MainWindow::connectSignals()
       m_host_interface->stopDumpingAudio();
   });
   connect(m_ui.actionDumpRAM, &QAction::triggered, [this]() {
-    const QString filename = QFileDialog::getSaveFileName(this, tr("Destination File"));
+    const QString filename =
+      QFileDialog::getSaveFileName(this, tr("Destination File"), QString(), tr("Binary Files (*.bin)"));
     if (filename.isEmpty())
       return;
 
     m_host_interface->dumpRAM(filename);
+  });
+  connect(m_ui.actionDumpVRAM, &QAction::triggered, [this]() {
+    const QString filename = QFileDialog::getSaveFileName(this, tr("Destination File"), QString(),
+                                                          tr("Binary Files (*.bin);;PNG Images (*.png)"));
+    if (filename.isEmpty())
+      return;
+
+    m_host_interface->dumpVRAM(filename);
+  });
+  connect(m_ui.actionDumpSPURAM, &QAction::triggered, [this]() {
+    const QString filename =
+      QFileDialog::getSaveFileName(this, tr("Destination File"), QString(), tr("Binary Files (*.bin)"));
+    if (filename.isEmpty())
+      return;
+
+    m_host_interface->dumpSPURAM(filename);
   });
   SettingWidgetBinder::BindWidgetToBoolSetting(m_host_interface, m_ui.actionDebugShowVRAM, "Debug", "ShowVRAM");
   SettingWidgetBinder::BindWidgetToBoolSetting(m_host_interface, m_ui.actionDebugShowGPUState, "Debug", "ShowGPUState");
@@ -1341,6 +1418,39 @@ void MainWindow::changeEvent(QEvent* event)
   QMainWindow::changeEvent(event);
 }
 
+static std::string getFilenameFromMimeData(const QMimeData* md)
+{
+  std::string filename;
+  if (md->hasUrls())
+  {
+    // only one url accepted
+    const QList<QUrl> urls(md->urls());
+    if (urls.size() == 1)
+      filename = urls.front().toLocalFile().toStdString();
+  }
+
+  return filename;
+}
+
+void MainWindow::dragEnterEvent(QDragEnterEvent* event)
+{
+  const std::string filename(getFilenameFromMimeData(event->mimeData()));
+  if (!System::IsLoadableFilename(filename.c_str()))
+    return;
+
+  event->acceptProposedAction();
+}
+
+void MainWindow::dropEvent(QDropEvent* event)
+{
+  const std::string filename(getFilenameFromMimeData(event->mimeData()));
+  if (!System::IsLoadableFilename(filename.c_str()))
+    return;
+
+  event->acceptProposedAction();
+  startGameOrChangeDiscs(filename);
+}
+
 void MainWindow::startupUpdateCheck()
 {
   if (!m_host_interface->GetBoolSettingValue("AutoUpdater", "CheckAtStartup", true))
@@ -1388,6 +1498,28 @@ void MainWindow::openMemoryCardEditor(const QString& card_a_path, const QString&
         tr("Memory card '%1' could not be found. Try starting the game and saving to create it.").arg(card_b_path));
     }
   }
+}
+
+void MainWindow::onAchievementsChallengeModeToggled(bool enabled)
+{
+  if (enabled)
+  {
+    if (m_cheat_manager_dialog)
+    {
+      m_cheat_manager_dialog->close();
+      delete m_cheat_manager_dialog;
+      m_cheat_manager_dialog = nullptr;
+    }
+
+    if (m_debugger_window)
+    {
+      m_debugger_window->close();
+      delete m_debugger_window;
+      m_debugger_window = nullptr;
+    }
+  }
+
+  updateEmulationActions(false, System::IsValid(), enabled);
 }
 
 void MainWindow::onToolsMemoryCardEditorTriggered()

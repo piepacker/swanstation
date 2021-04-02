@@ -28,7 +28,7 @@ D3D11_TEXTURE2D_DESC Texture::GetDesc() const
   return desc;
 }
 
-bool Texture::Create(ID3D11Device* device, u32 width, u32 height, u16 levels, u16 samples, DXGI_FORMAT format,
+bool Texture::Create(ID3D11Device* device, u32 width, u32 height, u32 levels, u32 samples, DXGI_FORMAT format,
                      u32 bind_flags, const void* initial_data /* = nullptr */, u32 initial_data_stride /* = 0 */,
                      bool dynamic)
 {
@@ -45,7 +45,9 @@ bool Texture::Create(ID3D11Device* device, u32 width, u32 height, u16 levels, u1
   const HRESULT tex_hr = device->CreateTexture2D(&desc, initial_data ? &srd : nullptr, texture.GetAddressOf());
   if (FAILED(tex_hr))
   {
-    Log_ErrorPrintf("Create texture failed: 0x%08X", tex_hr);
+    Log_ErrorPrintf(
+      "Create texture failed: 0x%08X (%ux%u levels:%u samples:%u format:%u bind_flags:%X initial_data:%p)", tex_hr,
+      width, height, levels, samples, static_cast<unsigned>(format), bind_flags, initial_data);
     return false;
   }
 
@@ -58,7 +60,7 @@ bool Texture::Create(ID3D11Device* device, u32 width, u32 height, u16 levels, u1
     const HRESULT hr = device->CreateShaderResourceView(texture.Get(), &srv_desc, srv.GetAddressOf());
     if (FAILED(hr))
     {
-      Log_ErrorPrintf("Create SRV for adopted texture failed: 0x%08X", hr);
+      Log_ErrorPrintf("Create SRV for texture failed: 0x%08X", hr);
       return false;
     }
   }
@@ -72,7 +74,7 @@ bool Texture::Create(ID3D11Device* device, u32 width, u32 height, u16 levels, u1
     const HRESULT hr = device->CreateRenderTargetView(texture.Get(), &rtv_desc, rtv.GetAddressOf());
     if (FAILED(hr))
     {
-      Log_ErrorPrintf("Create RTV for adopted texture failed: 0x%08X", hr);
+      Log_ErrorPrintf("Create RTV for texture failed: 0x%08X", hr);
       return false;
     }
   }
@@ -82,8 +84,8 @@ bool Texture::Create(ID3D11Device* device, u32 width, u32 height, u16 levels, u1
   m_rtv = std::move(rtv);
   m_width = width;
   m_height = height;
-  m_levels = levels;
-  m_samples = samples;
+  m_levels = static_cast<u16>(levels);
+  m_samples = static_cast<u16>(samples);
   return true;
 }
 

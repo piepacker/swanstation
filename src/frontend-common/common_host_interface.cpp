@@ -2,6 +2,7 @@
 #include "common/assert.h"
 #include "common/audio_stream.h"
 #include "common/byte_stream.h"
+#include "common/crash_handler.h"
 #include "common/file_system.h"
 #include "common/log.h"
 #include "common/string_util.h"
@@ -20,9 +21,12 @@
 #include "core/texture_replacements.h"
 #include "core/timers.h"
 #include "cubeb_audio_stream.h"
+#include "fullscreen_ui.h"
 #include "game_list.h"
 #include "icon.h"
 #include "imgui.h"
+#include "imgui_fullscreen.h"
+#include "imgui_styles.h"
 #include "ini_settings_interface.h"
 #include "save_state_selector_ui.h"
 #include "scmversion/scmversion.h"
@@ -39,6 +43,10 @@
 #include "discord_rpc.h"
 #endif
 
+#ifdef WITH_CHEEVOS
+#include "cheevos.h"
+#endif
+
 #ifdef WIN32
 #include "common/windows_headers.h"
 #include <KnownFolders.h>
@@ -47,6 +55,8 @@
 #endif
 
 Log_SetChannel(CommonHostInterface);
+
+static std::string s_settings_filename;
 
 CommonHostInterface::CommonHostInterface() = default;
 
@@ -57,12 +67,14 @@ bool CommonHostInterface::Initialize()
   if (!HostInterface::Initialize())
     return false;
 
-  SetUserDirectory();
   InitializeUserDirectory();
 
   // Change to the user directory so that all default/relative paths in the config are after this.
   if (!FileSystem::SetWorkingDirectory(m_user_directory.c_str()))
     Log_ErrorPrintf("Failed to set working directory to '%s'", m_user_directory.c_str());
+
+  // Set crash handler to dump to user directory, because of permissions.
+  CrashHandler::SetWriteDirectory(m_user_directory);
 
   LoadSettings();
   UpdateLogSettings(g_settings.log_level, g_settings.log_filter.empty() ? nullptr : g_settings.log_filter.c_str(),
@@ -77,12 +89,16 @@ bool CommonHostInterface::Initialize()
 
   m_save_state_selector_ui = std::make_unique<FrontendCommon::SaveStateSelectorUI>(this);
 
-  RegisterGeneralHotkeys();
-  RegisterGraphicsHotkeys();
-  RegisterSaveStateHotkeys();
-  RegisterAudioHotkeys();
+  RegisterHotkeys();
 
   UpdateControllerInterface();
+
+  CreateImGuiContext();
+
+#ifdef WITH_CHEEVOS
+  UpdateCheevosActive();
+#endif
+
   return true;
 }
 
@@ -90,8 +106,14 @@ void CommonHostInterface::Shutdown()
 {
   HostInterface::Shutdown();
 
+  ImGui::DestroyContext();
+
 #ifdef WITH_DISCORD_PRESENCE
   ShutdownDiscordPresence();
+#endif
+
+#ifdef WITH_CHEEVOS
+  Cheevos::Shutdown();
 #endif
 
   if (m_controller_interface)
@@ -119,11 +141,17 @@ void CommonHostInterface::InitializeUserDirectory()
 
   result &= FileSystem::CreateDirectory(GetUserDirectoryRelativePath("bios").c_str(), false);
   result &= FileSystem::CreateDirectory(GetUserDirectoryRelativePath("cache").c_str(), false);
+  result &= FileSystem::CreateDirectory(
+    GetUserDirectoryRelativePath("cache" FS_OSPATH_SEPARATOR_STR "achievement_badge").c_str(), false);
+  result &= FileSystem::CreateDirectory(
+    GetUserDirectoryRelativePath("cache" FS_OSPATH_SEPARATOR_STR "achievement_gameicon").c_str(), false);
   result &= FileSystem::CreateDirectory(GetUserDirectoryRelativePath("cheats").c_str(), false);
   result &= FileSystem::CreateDirectory(GetUserDirectoryRelativePath("covers").c_str(), false);
   result &= FileSystem::CreateDirectory(GetUserDirectoryRelativePath("dump").c_str(), false);
-  result &= FileSystem::CreateDirectory(GetUserDirectoryRelativePath("dump/audio").c_str(), false);
-  result &= FileSystem::CreateDirectory(GetUserDirectoryRelativePath("dump/textures").c_str(), false);
+  result &=
+    FileSystem::CreateDirectory(GetUserDirectoryRelativePath("dump" FS_OSPATH_SEPARATOR_STR "audio").c_str(), false);
+  result &=
+    FileSystem::CreateDirectory(GetUserDirectoryRelativePath("dump" FS_OSPATH_SEPARATOR_STR "textures").c_str(), false);
   result &= FileSystem::CreateDirectory(GetUserDirectoryRelativePath("inputprofiles").c_str(), false);
   result &= FileSystem::CreateDirectory(GetUserDirectoryRelativePath("memcards").c_str(), false);
   result &= FileSystem::CreateDirectory(GetUserDirectoryRelativePath("savestates").c_str(), false);
@@ -137,6 +165,10 @@ void CommonHostInterface::InitializeUserDirectory()
 
 bool CommonHostInterface::BootSystem(const SystemBootParameters& parameters)
 {
+  // If the fullscreen UI is enabled, make sure it's finished loading the game list so we don't race it.
+  if (m_display && m_fullscreen_ui_enabled)
+    FullscreenUI::EnsureGameListLoaded();
+
   if (!HostInterface::BootSystem(parameters))
   {
     // if in batch mode, exit immediately if booting failed
@@ -169,18 +201,27 @@ void CommonHostInterface::DestroySystem()
   HostInterface::DestroySystem();
 }
 
-void CommonHostInterface::PowerOffSystem()
+void CommonHostInterface::PowerOffSystem(bool save_resume_state)
 {
   if (System::IsShutdown())
     return;
 
-  if (g_settings.save_state_on_exit)
+  if (save_resume_state)
     SaveResumeSaveState();
 
-  HostInterface::PowerOffSystem();
+  DestroySystem();
 
   if (InBatchMode())
     RequestExit();
+}
+
+void CommonHostInterface::ResetSystem()
+{
+  HostInterface::ResetSystem();
+
+#ifdef WITH_CHEEVOS
+  Cheevos::Reset();
+#endif
 }
 
 static void PrintCommandLineVersion(const char* frontend_name)
@@ -266,7 +307,7 @@ bool CommonHostInterface::ParseCommandLineParameters(int argc, char* argv[],
       else if (CHECK_ARG("-batch"))
       {
         Log_InfoPrintf("Enabling batch mode.");
-        m_command_line_flags.batch_mode = true;
+        m_flags.batch_mode = true;
         continue;
       }
       else if (CHECK_ARG("-fastboot"))
@@ -284,7 +325,7 @@ bool CommonHostInterface::ParseCommandLineParameters(int argc, char* argv[],
       else if (CHECK_ARG("-nocontroller"))
       {
         Log_InfoPrintf("Disabling controller support.");
-        m_command_line_flags.disable_controller_interface = true;
+        m_flags.disable_controller_interface = true;
         continue;
       }
       else if (CHECK_ARG("-resume"))
@@ -305,6 +346,7 @@ bool CommonHostInterface::ParseCommandLineParameters(int argc, char* argv[],
       else if (CHECK_ARG("-fullscreen"))
       {
         Log_InfoPrintf("Going fullscreen after booting.");
+        m_flags.start_fullscreen = true;
         force_fullscreen = true;
         continue;
       }
@@ -327,7 +369,7 @@ bool CommonHostInterface::ParseCommandLineParameters(int argc, char* argv[],
       }
       else if (CHECK_ARG_PARAM("-settings"))
       {
-        m_settings_filename = argv[++i];
+        s_settings_filename = argv[++i];
         continue;
       }
       else if (CHECK_ARG("--"))
@@ -375,7 +417,7 @@ bool CommonHostInterface::ParseCommandLineParameters(int argc, char* argv[],
       else
       {
         // find the game id, and get its save state path
-        std::string game_code = System::GetGameCodeForPath(boot_filename.c_str());
+        std::string game_code = System::GetGameCodeForPath(boot_filename.c_str(), true);
         if (game_code.empty())
         {
           Log_WarningPrintf("Could not identify game code for '%s', cannot load save state %d.", boot_filename.c_str(),
@@ -424,10 +466,28 @@ bool CommonHostInterface::ParseCommandLineParameters(int argc, char* argv[],
   return true;
 }
 
+void CommonHostInterface::OnAchievementsRefreshed()
+{
+#ifdef WITH_CHEEVOS
+  // noop
+#endif
+}
+
 void CommonHostInterface::PollAndUpdate()
 {
+  if (m_controller_interface)
+    m_controller_interface->PollEvents();
+
+  if (m_fullscreen_ui_enabled)
+    FullscreenUI::SetImGuiNavInputs();
+
 #ifdef WITH_DISCORD_PRESENCE
   PollDiscordPresence();
+#endif
+
+#ifdef WITH_CHEEVOS
+  if (Cheevos::IsActive())
+    Cheevos::Update();
 #endif
 }
 
@@ -441,19 +501,98 @@ bool CommonHostInterface::SetFullscreen(bool enabled)
   return false;
 }
 
+void CommonHostInterface::CreateImGuiContext()
+{
+  ImGui::CreateContext();
+  ImGui::GetIO().IniFilename = nullptr;
+#ifndef __ANDROID__
+  // Android has no keyboard, nor are we using ImGui for any actual user-interactable windows.
+  ImGui::GetIO().ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard | ImGuiConfigFlags_NavEnableGamepad;
+#endif
+}
+
 bool CommonHostInterface::CreateHostDisplayResources()
 {
-  m_logo_texture =
-    m_display->CreateTexture(APP_ICON_WIDTH, APP_ICON_HEIGHT, APP_ICON_DATA, sizeof(u32) * APP_ICON_WIDTH, false);
+  m_logo_texture = m_display->CreateTexture(APP_ICON_WIDTH, APP_ICON_HEIGHT, 1, 1, 1, HostDisplayPixelFormat::RGBA8,
+                                            APP_ICON_DATA, sizeof(u32) * APP_ICON_WIDTH, false);
   if (!m_logo_texture)
     Log_WarningPrintf("Failed to create logo texture");
+
+  const float framebuffer_scale = m_display->GetWindowScale();
+  ImGui::GetIO().DisplayFramebufferScale = ImVec2(framebuffer_scale, framebuffer_scale);
+  ImGui::GetStyle() = ImGuiStyle();
+  ImGui::StyleColorsDarker();
+  ImGui::GetStyle().ScaleAllSizes(framebuffer_scale);
+
+  if (!m_display->CreateImGuiContext())
+  {
+    Log_ErrorPrintf("Failed to create ImGui device context");
+    return false;
+  }
+
+  if (m_fullscreen_ui_enabled)
+  {
+    if (!FullscreenUI::Initialize(this))
+    {
+      Log_ErrorPrintf("Failed to initialize fullscreen UI, disabling.");
+      m_fullscreen_ui_enabled = false;
+    }
+  }
+
+  if (!m_fullscreen_ui_enabled)
+    ImGuiFullscreen::ResetFonts();
+
+  if (!m_display->UpdateImGuiFontTexture())
+  {
+    Log_ErrorPrintf("Failed to create ImGui font text");
+    if (m_fullscreen_ui_enabled)
+      FullscreenUI::Shutdown();
+
+    m_display->DestroyImGuiContext();
+    return false;
+  }
 
   return true;
 }
 
 void CommonHostInterface::ReleaseHostDisplayResources()
 {
+  if (m_fullscreen_ui_enabled)
+    FullscreenUI::Shutdown();
+
+  if (m_display)
+    m_display->DestroyImGuiContext();
+
   m_logo_texture.reset();
+}
+
+void CommonHostInterface::OnHostDisplayResized(u32 new_width, u32 new_height, float new_scale)
+{
+  if (new_scale != ImGui::GetIO().DisplayFramebufferScale.x)
+  {
+    ImGui::GetIO().DisplayFramebufferScale = ImVec2(new_scale, new_scale);
+    ImGui::GetStyle() = ImGuiStyle();
+    ImGui::StyleColorsDarker();
+    ImGui::GetStyle().ScaleAllSizes(new_scale);
+    ImGuiFullscreen::ResetFonts();
+    if (!m_display->UpdateImGuiFontTexture())
+      Panic("Failed to recreate font texture after resize");
+  }
+
+  if (m_fullscreen_ui_enabled)
+  {
+    if (ImGuiFullscreen::UpdateLayoutScale())
+    {
+      if (ImGuiFullscreen::UpdateFonts())
+      {
+        if (!m_display->UpdateImGuiFontTexture())
+          Panic("Failed to update font texture");
+      }
+    }
+  }
+
+  if (!System::IsShutdown())
+    g_gpu->UpdateResolutionScale();
 }
 
 std::unique_ptr<AudioStream> CommonHostInterface::CreateAudioStream(AudioBackend backend)
@@ -478,7 +617,7 @@ std::unique_ptr<AudioStream> CommonHostInterface::CreateAudioStream(AudioBackend
 
 s32 CommonHostInterface::GetAudioOutputVolume() const
 {
-  return g_settings.GetAudioOutputVolume(!m_speed_limiter_enabled);
+  return g_settings.GetAudioOutputVolume(IsRunningAtNonStandardSpeed());
 }
 
 void CommonHostInterface::UpdateControllerInterface()
@@ -489,7 +628,7 @@ void CommonHostInterface::UpdateControllerInterface()
     ControllerInterface::ParseBackendName(backend_str.c_str());
   const ControllerInterface::Backend current_backend =
     (m_controller_interface ? m_controller_interface->GetBackend() : ControllerInterface::Backend::None);
-  if (new_backend == current_backend || m_command_line_flags.disable_controller_interface)
+  if (new_backend == current_backend || m_flags.disable_controller_interface)
     return;
 
   if (m_controller_interface)
@@ -523,6 +662,20 @@ void CommonHostInterface::UpdateControllerInterface()
   }
 }
 
+bool CommonHostInterface::LoadState(const char* filename)
+{
+  const bool system_was_valid = System::IsValid();
+  const bool result = HostInterface::LoadState(filename);
+  if (system_was_valid || !result)
+  {
+#ifdef WITH_CHEEVOS
+    Cheevos::Reset();
+#endif
+  }
+
+  return result;
+}
+
 bool CommonHostInterface::LoadState(bool global, s32 slot)
 {
   if (!global && (System::IsShutdown() || System::GetRunningCode().empty()))
@@ -551,6 +704,20 @@ bool CommonHostInterface::SaveState(bool global, s32 slot)
 
   OnSystemStateSaved(global, slot);
   return true;
+}
+
+bool CommonHostInterface::CanResumeSystemFromFile(const char* filename)
+{
+  if (GetBoolSettingValue("Main", "SaveStateOnExit", true) && !IsCheevosChallengeModeActive())
+  {
+    const GameListEntry* entry = m_game_list->GetEntryForPath(filename);
+    if (entry)
+      return !entry->code.empty();
+    else
+      return !System::GetGameCodeForPath(filename, true).empty();
+  }
+
+  return false;
 }
 
 bool CommonHostInterface::ResumeSystemFromState(const char* filename, bool boot_on_failure)
@@ -605,23 +772,71 @@ bool CommonHostInterface::ResumeSystemFromMostRecentState()
   return LoadState(path.c_str());
 }
 
+bool CommonHostInterface::ShouldSaveResumeState() const
+{
+  return g_settings.save_state_on_exit;
+}
+
+bool CommonHostInterface::IsRunningAtNonStandardSpeed() const
+{
+  if (!System::IsValid())
+    return false;
+
+  const float target_speed = System::GetTargetSpeed();
+  return (target_speed <= 0.95f || target_speed >= 1.05f);
+}
+
 void CommonHostInterface::UpdateSpeedLimiterState()
 {
-  const float target_speed = m_fast_forward_enabled ? g_settings.fast_forward_speed : g_settings.emulation_speed;
-  m_speed_limiter_enabled = (target_speed != 0.0f);
+  float target_speed = m_turbo_enabled ?
+                         g_settings.turbo_speed :
+                         (m_fast_forward_enabled ? g_settings.fast_forward_speed : g_settings.emulation_speed);
+  m_throttler_enabled = (target_speed != 0.0f);
+  m_display_all_frames = !m_throttler_enabled || g_settings.display_all_frames;
+
+  bool syncing_to_host = false;
+  if (g_settings.sync_to_host_refresh_rate && g_settings.audio_resampling && target_speed == 1.0f && m_display &&
+      System::IsRunning())
+  {
+    float host_refresh_rate;
+    if (m_display->GetHostRefreshRate(&host_refresh_rate))
+    {
+      const float ratio = host_refresh_rate / System::GetThrottleFrequency();
+      syncing_to_host = (ratio >= 0.95f && ratio <= 1.05f);
+      Log_InfoPrintf("Refresh rate: Host=%fhz Guest=%fhz Ratio=%f - %s", host_refresh_rate,
+                     System::GetThrottleFrequency(), ratio, syncing_to_host ? "can sync" : "can't sync");
+      if (syncing_to_host)
+        target_speed *= ratio;
+    }
+  }
 
   const bool is_non_standard_speed = (std::abs(target_speed - 1.0f) > 0.05f);
   const bool audio_sync_enabled =
-    !System::IsRunning() || (m_speed_limiter_enabled && g_settings.audio_sync_enabled && !is_non_standard_speed);
+    !System::IsRunning() || (m_throttler_enabled && g_settings.audio_sync_enabled && !is_non_standard_speed);
   const bool video_sync_enabled =
-    !System::IsRunning() || (m_speed_limiter_enabled && g_settings.video_sync_enabled && !is_non_standard_speed);
-  const float max_display_fps = m_speed_limiter_enabled ? 0.0f : g_settings.display_max_fps;
+    !System::IsRunning() || (m_throttler_enabled && g_settings.video_sync_enabled && !is_non_standard_speed);
+  const float max_display_fps = (!System::IsValid() || m_throttler_enabled) ? 0.0f : g_settings.display_max_fps;
+  Log_InfoPrintf("Target speed: %f%%", target_speed * 100.0f);
   Log_InfoPrintf("Syncing to %s%s", audio_sync_enabled ? "audio" : "",
                  (audio_sync_enabled && video_sync_enabled) ? " and video" : (video_sync_enabled ? "video" : ""));
-  Log_InfoPrintf("Max display fps: %f", max_display_fps);
+  Log_InfoPrintf("Max display fps: %f (%s)", max_display_fps,
+                 m_display_all_frames ? "displaying all frames" : "skipping displaying frames when needed");
+
+  if (System::IsValid())
+  {
+    System::SetTargetSpeed(target_speed);
+    System::ResetPerformanceCounters();
+  }
 
   if (m_audio_stream)
   {
+    const u32 input_sample_rate = (target_speed == 0.0f || !g_settings.audio_resampling) ?
+                                    AUDIO_SAMPLE_RATE :
+                                    static_cast<u32>(static_cast<float>(AUDIO_SAMPLE_RATE) * target_speed);
+    Log_InfoPrintf("Audio input sample rate: %u hz", input_sample_rate);
+
+    m_audio_stream->SetInputSampleRate(input_sample_rate);
+    m_audio_stream->SetWaitForBufferFill(!m_display_all_frames);
     m_audio_stream->SetOutputVolume(GetAudioOutputVolume());
     m_audio_stream->SetSync(audio_sync_enabled);
     if (audio_sync_enabled)
@@ -635,12 +850,13 @@ void CommonHostInterface::UpdateSpeedLimiterState()
   }
 
   if (g_settings.increase_timer_resolution)
-    SetTimerResolutionIncreased(m_speed_limiter_enabled);
+    SetTimerResolutionIncreased(m_throttler_enabled);
 
-  if (System::IsValid())
+  // When syncing to host and using vsync, we don't need to sleep.
+  if (syncing_to_host && video_sync_enabled && m_display_all_frames)
   {
-    System::SetTargetSpeed(m_speed_limiter_enabled ? target_speed : 1.0f);
-    System::ResetPerformanceCounters();
+    Log_InfoPrintf("Using host vsync for throttling.");
+    m_throttler_enabled = false;
   }
 }
 
@@ -689,7 +905,7 @@ void CommonHostInterface::SetUserDirectory()
   }
   else
   {
-#ifdef WIN32
+#if defined(WIN32)
     // On Windows, use My Documents\DuckStation.
     PWSTR documents_directory;
     if (SUCCEEDED(SHGetKnownFolderPath(FOLDERID_Documents, 0, NULL, &documents_directory)))
@@ -702,7 +918,7 @@ void CommonHostInterface::SetUserDirectory()
       }
       CoTaskMemFree(documents_directory);
     }
-#elif __linux__
+#elif defined(__linux__) || defined(__FreeBSD__)
     // On Linux, use .local/share/duckstation as a user directory by default.
     const char* xdg_data_home = getenv("XDG_DATA_HOME");
     if (xdg_data_home && xdg_data_home[0] == '/')
@@ -715,7 +931,7 @@ void CommonHostInterface::SetUserDirectory()
       if (home_path)
         m_user_directory = StringUtil::StdStringFromFormat("%s/.local/share/duckstation", home_path);
     }
-#elif __APPLE__
+#elif defined(__APPLE__)
     // On macOS, default to ~/Library/Application Support/DuckStation.
     const char* home_path = getenv("HOME");
     if (home_path)
@@ -734,6 +950,9 @@ void CommonHostInterface::OnSystemCreated()
 {
   HostInterface::OnSystemCreated();
 
+  if (m_fullscreen_ui_enabled)
+    FullscreenUI::SystemCreated();
+
   if (g_settings.display_post_processing && !m_display->SetPostProcessingChain(g_settings.display_post_process_chain))
     AddOSDMessage(TranslateStdString("OSDMessage", "Failed to load post processing shader chain."), 20.0f);
 }
@@ -742,9 +961,12 @@ void CommonHostInterface::OnSystemPaused(bool paused)
 {
   ReportFormattedMessage("System %s.", paused ? "paused" : "resumed");
 
+  if (m_fullscreen_ui_enabled)
+    FullscreenUI::SystemPaused(paused);
+
   if (paused)
   {
-    if (IsFullscreen())
+    if (IsFullscreen() && !m_fullscreen_ui_enabled)
       SetFullscreen(false);
 
     StopControllerRumble();
@@ -755,24 +977,43 @@ void CommonHostInterface::OnSystemPaused(bool paused)
 
 void CommonHostInterface::OnSystemDestroyed()
 {
+  // Restore present-all-frames behavior.
+  if (m_display)
+    m_display->SetDisplayMaxFPS(0.0f);
+
   HostInterface::OnSystemDestroyed();
+
+  if (m_fullscreen_ui_enabled)
+    FullscreenUI::SystemDestroyed();
 
   StopControllerRumble();
 }
 
-void CommonHostInterface::OnRunningGameChanged()
+void CommonHostInterface::OnRunningGameChanged(const std::string& path, CDImage* image, const std::string& game_code,
+                                               const std::string& game_title)
 {
-  HostInterface::OnRunningGameChanged();
+  HostInterface::OnRunningGameChanged(path, image, game_code, game_title);
+
+  if (g_settings.apply_game_settings)
+    ApplySettings(true);
 
   if (!System::IsShutdown())
   {
     System::SetCheatList(nullptr);
     if (g_settings.auto_load_cheats)
+    {
+      DebugAssert(!IsCheevosChallengeModeActive());
       LoadCheatListFromGameTitle();
+    }
   }
 
 #ifdef WITH_DISCORD_PRESENCE
   UpdateDiscordPresence();
+#endif
+
+#ifdef WITH_CHEEVOS
+  if (Cheevos::IsLoggedIn())
+    Cheevos::GameChanged(path, image);
 #endif
 }
 
@@ -785,16 +1026,23 @@ void CommonHostInterface::OnControllerTypeChanged(u32 slot)
 
 void CommonHostInterface::DrawImGuiWindows()
 {
+  if (m_save_state_selector_ui->IsOpen())
+    m_save_state_selector_ui->Draw();
+
+  if (m_fullscreen_ui_enabled)
+  {
+    FullscreenUI::Render();
+    return;
+  }
+
   if (System::IsValid())
   {
-    DrawDebugWindows();
+    if (!IsCheevosChallengeModeActive())
+      DrawDebugWindows();
     DrawFPSWindow();
   }
 
   DrawOSDMessages();
-
-  if (m_save_state_selector_ui->IsOpen())
-    m_save_state_selector_ui->Draw();
 }
 
 void CommonHostInterface::DrawFPSWindow()
@@ -805,72 +1053,73 @@ void CommonHostInterface::DrawFPSWindow()
     return;
   }
 
-  const ImVec2 window_size =
-    ImVec2(175.0f * ImGui::GetIO().DisplayFramebufferScale.x, 48.0f * ImGui::GetIO().DisplayFramebufferScale.y);
-  ImGui::SetNextWindowPos(ImVec2(ImGui::GetIO().DisplaySize.x - window_size.x, 0.0f), ImGuiCond_Always);
-  ImGui::SetNextWindowSize(window_size);
-
-  if (!ImGui::Begin("FPSWindow", nullptr,
-                    ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoCollapse |
-                      ImGuiWindowFlags_NoBackground | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMouseInputs |
-                      ImGuiWindowFlags_NoBringToFrontOnFocus | ImGuiWindowFlags_NoNav))
-  {
-    ImGui::End();
-    return;
-  }
-
+  const float scale = ImGui::GetIO().DisplayFramebufferScale.x;
+  const float shadow_offset = 1.0f * scale;
+  float margin = 10.0f * scale;
+  float spacing = 5.0f * scale;
+  float position_y = margin;
+  ImDrawList* dl = ImGui::GetBackgroundDrawList();
+  ImFont* font = ImGui::GetFont();
+  TinyString text;
+  ImVec2 text_size;
   bool first = true;
-  if (g_settings.display_show_fps)
-  {
-    ImGui::Text("%.2f", System::GetFPS());
-    first = false;
-  }
-  if (g_settings.display_show_vps)
-  {
-    if (first)
-    {
-      first = false;
-    }
-    else
-    {
-      ImGui::SameLine();
-      ImGui::Text("/");
-      ImGui::SameLine();
-    }
 
-    ImGui::Text("%.2f", System::GetVPS());
-  }
-  if (g_settings.display_show_speed)
-  {
-    if (first)
-    {
-      first = false;
-    }
-    else
-    {
-      ImGui::SameLine();
-      ImGui::Text("/");
-      ImGui::SameLine();
-    }
+#define DRAW_LINE(color)                                                                                               \
+  do                                                                                                                   \
+  {                                                                                                                    \
+    text_size = font->CalcTextSizeA(font->FontSize, std::numeric_limits<float>::max(), -1.0f, text,                    \
+                                    text.GetCharArray() + text.GetLength(), nullptr);                                  \
+    dl->AddText(                                                                                                       \
+      font, font->FontSize,                                                                                            \
+      ImVec2(ImGui::GetIO().DisplaySize.x - margin - text_size.x + shadow_offset, position_y + shadow_offset),         \
+      IM_COL32(0, 0, 0, 100), text, text.GetCharArray() + text.GetLength());                                           \
+    dl->AddText(font, font->FontSize, ImVec2(ImGui::GetIO().DisplaySize.x - margin - text_size.x, position_y), color,  \
+                text, text.GetCharArray() + text.GetLength());                                                         \
+    position_y += text_size.y + spacing;                                                                               \
+  } while (0)
 
+  const System::State state = System::GetState();
+  if (System::GetState() == System::State::Running)
+  {
     const float speed = System::GetEmulationSpeed();
-    const u32 rounded_speed = static_cast<u32>(std::round(speed));
-    if (speed < 90.0f)
-      ImGui::TextColored(ImVec4(1.0f, 0.4f, 0.4f, 1.0f), "%u%%", rounded_speed);
-    else if (speed < 110.0f)
-      ImGui::TextColored(ImVec4(1.0f, 1.0f, 1.0f, 1.0f), "%u%%", rounded_speed);
-    else
-      ImGui::TextColored(ImVec4(0.4f, 1.0f, 0.4f, 1.0f), "%u%%", rounded_speed);
+    if (g_settings.display_show_fps)
+    {
+      text.AppendFormattedString("%.2f", System::GetFPS());
+      first = false;
+    }
+    if (g_settings.display_show_vps)
+    {
+      text.AppendFormattedString("%s%.2f", first ? "" : " / ", System::GetVPS());
+      first = false;
+    }
+    if (g_settings.display_show_speed)
+    {
+      text.AppendFormattedString("%s%u%%", first ? "" : " / ", static_cast<u32>(std::round(speed)));
+      first = false;
+    }
+    if (!text.IsEmpty())
+    {
+      ImU32 color;
+      if (speed < 95.0f)
+        color = IM_COL32(255, 100, 100, 255);
+      else if (speed > 105.0f)
+        color = IM_COL32(100, 255, 100, 255);
+      else
+        color = IM_COL32(255, 255, 255, 255);
+
+      DRAW_LINE(color);
+    }
+
+    if (g_settings.display_show_resolution)
+    {
+      const auto [effective_width, effective_height] = g_gpu->GetEffectiveDisplayResolution();
+      const bool interlaced = g_gpu->IsInterlacedDisplayEnabled();
+      text.Format("%ux%u (%s)", effective_width, effective_height, interlaced ? "interlaced" : "progressive");
+      DRAW_LINE(IM_COL32(255, 255, 255, 255));
+    }
   }
 
-  if (g_settings.display_show_resolution)
-  {
-    const auto [effective_width, effective_height] = g_gpu->GetEffectiveDisplayResolution();
-    const bool interlaced = g_gpu->IsInterlacedDisplayEnabled();
-    ImGui::Text("%ux%u (%s)", effective_width, effective_height, interlaced ? "interlaced" : "progressive");
-  }
-
-  ImGui::End();
+#undef DRAW_LINE
 }
 
 void CommonHostInterface::AddOSDMessage(std::string message, float duration /*= 2.0f*/)
@@ -880,67 +1129,115 @@ void CommonHostInterface::AddOSDMessage(std::string message, float duration /*= 
   msg.duration = duration;
 
   std::unique_lock<std::mutex> lock(m_osd_messages_lock);
-  m_osd_messages.push_back(std::move(msg));
+  m_osd_posted_messages.push_back(std::move(msg));
 }
 
 void CommonHostInterface::ClearOSDMessages()
 {
   std::unique_lock<std::mutex> lock(m_osd_messages_lock);
-  m_osd_messages.clear();
+  m_osd_posted_messages.clear();
 }
 
-void CommonHostInterface::DrawOSDMessages()
+bool CommonHostInterface::EnumerateOSDMessages(std::function<bool(const std::string&, float)> callback)
 {
-  constexpr ImGuiWindowFlags window_flags = ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoInputs |
-                                            ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoSavedSettings |
-                                            ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoNav |
-                                            ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoFocusOnAppearing;
-
-  std::unique_lock<std::mutex> lock(m_osd_messages_lock);
-  if (m_osd_messages.empty())
-    return;
-
-  const float scale = ImGui::GetIO().DisplayFramebufferScale.x;
-
-  auto iter = m_osd_messages.begin();
-  float position_x = 10.0f * scale;
-  float position_y = (10.0f + (static_cast<float>(m_display->GetDisplayTopMargin()))) * scale;
-  u32 index = 0;
-  while (iter != m_osd_messages.end())
+  auto iter = m_osd_active_messages.begin();
+  while (iter != m_osd_active_messages.end())
   {
     const OSDMessage& msg = *iter;
     const double time = msg.time.GetTimeSeconds();
     const float time_remaining = static_cast<float>(msg.duration - time);
     if (time_remaining <= 0.0f)
     {
-      iter = m_osd_messages.erase(iter);
+      iter = m_osd_active_messages.erase(iter);
       continue;
     }
 
-    if (!g_settings.display_show_osd_messages)
-    {
-      ++iter;
-      continue;
-    }
+    if (callback && !callback(iter->text, time_remaining))
+      return false;
 
-    const float opacity = std::min(time_remaining, 1.0f);
-    ImGui::SetNextWindowPos(ImVec2(position_x, position_y));
-    ImGui::SetNextWindowSize(ImVec2(0.0f, 0.0f));
-    ImGui::PushStyleVar(ImGuiStyleVar_Alpha, opacity);
-
-    char buf[64];
-    std::snprintf(buf, sizeof(buf), "osd_%u", index++);
-
-    if (ImGui::Begin(buf, nullptr, window_flags))
-    {
-      ImGui::TextUnformatted(msg.text.c_str());
-      position_y += ImGui::GetWindowSize().y + (4.0f * scale);
-    }
-
-    ImGui::End();
-    ImGui::PopStyleVar();
     ++iter;
   }
+
+  return true;
+}
+
+void CommonHostInterface::AcquirePendingOSDMessages()
+{
+  // memory_order_consume is roughly equivalent to adding a volatile keyword to the read from the deque.
+  // we just want to force the compiler to always reload the deque size value from memory.
+  //
+  // ARM doesn't have good atomic read guarantees so it _could_ read some non-zero value here spuriously,
+  // but that's OK because we lock the mutex later and recheck things anyway. This early out will still
+  // avoid 99.99% of the unnecessary lock attempts when size == 0.
+
+  std::atomic_thread_fence(std::memory_order_consume);
+  if (!m_osd_posted_messages.empty())
+  {
+    std::unique_lock<std::mutex> lock(m_osd_messages_lock);
+    for (;;)
+    {
+      // lock-and-copy mechanism.
+      // this allows us to unlock the deque and minimize time that the mutex is held.
+      // it is almost always the best model to follow for multithread deque.
+
+      if (m_osd_posted_messages.empty())
+        break;
+
+      if (g_settings.display_show_osd_messages)
+        m_osd_active_messages.push_back(std::move(m_osd_posted_messages.front()));
+
+      m_osd_posted_messages.pop_front();
+
+      // somewhat arbitrary hard cap on # of messages. This might be unnecessarily paranoid. If something is
+      // spamming the osd message log this badly, then probably this isn't going to really help things much.
+      static constexpr size_t MAX_ACTIVE_OSD_MESSAGES = 512;
+      if (m_osd_active_messages.size() > MAX_ACTIVE_OSD_MESSAGES)
+        m_osd_active_messages.pop_front();
+    }
+  }
+}
+
+void CommonHostInterface::DrawOSDMessages()
+{
+  AcquirePendingOSDMessages();
+
+  constexpr ImGuiWindowFlags window_flags = ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoInputs |
+                                            ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoSavedSettings |
+                                            ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoNav |
+                                            ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoFocusOnAppearing;
+
+  const float scale = ImGui::GetIO().DisplayFramebufferScale.x;
+  const float spacing = 5.0f * scale;
+  const float margin = 10.0f * scale;
+  const float padding = 8.0f * scale;
+  const float rounding = 5.0f * scale;
+  const float max_width = ImGui::GetIO().DisplaySize.x - margin;
+  float position_x = margin;
+  float position_y = margin;
+
+  EnumerateOSDMessages([max_width, spacing, padding, rounding, &position_x, &position_y](const std::string& message,
+                                                                                         float time_remaining) -> bool {
+    const float opacity = std::min(time_remaining, 1.0f);
+    const u32 alpha = static_cast<u32>(opacity * 255.0f);
+
+    if (position_y >= ImGui::GetIO().DisplaySize.y)
+      return false;
+
+    const ImVec2 pos(position_x, position_y);
+    const ImVec2 text_size(ImGui::CalcTextSize(message.c_str(), nullptr, false, max_width));
+    const ImVec2 size(text_size.x + padding * 2.0f, text_size.y + padding * 2.0f);
+    const ImVec4 text_rect(pos.x + padding, pos.y + padding, pos.x + size.x - padding, pos.y + size.y - padding);
+
+    ImDrawList* dl = ImGui::GetBackgroundDrawList();
+    ImFont* font = ImGui::GetFont();
+    dl->AddRectFilled(pos, ImVec2(pos.x + size.x, pos.y + size.y), IM_COL32(0x21, 0x21, 0x21, alpha), rounding);
+    dl->AddRect(pos, ImVec2(pos.x + size.x, pos.y + size.y), IM_COL32(0x48, 0x48, 0x48, alpha), rounding);
+    dl->AddText(font, font->FontSize, ImVec2(text_rect.x, text_rect.y), IM_COL32(0xff, 0xff, 0xff, alpha),
+                message.c_str(), nullptr, max_width, &text_rect);
+    position_y += size.y + spacing;
+
+    return true;
+  });
 }
 
 void CommonHostInterface::DrawDebugWindows()
@@ -957,6 +1254,15 @@ void CommonHostInterface::DrawDebugWindows()
     g_mdec.DrawDebugStateWindow();
   if (g_settings.debugging.show_dma_state)
     g_dma.DrawDebugStateWindow();
+}
+
+bool CommonHostInterface::IsCheevosChallengeModeActive() const
+{
+#ifdef WITH_CHEEVOS
+  return Cheevos::IsChallengeModeActive();
+#else
+  return false;
+#endif
 }
 
 void CommonHostInterface::DoFrameStep()
@@ -981,10 +1287,10 @@ void CommonHostInterface::DoToggleCheats()
   }
 
   cl->SetMasterEnable(!cl->GetMasterEnable());
-  AddFormattedOSDMessage(10.0f,
-                         cl->GetMasterEnable() ? TranslateString("OSDMessage", "%u cheats are now active.") :
-                                                 TranslateString("OSDMessage", "%u cheats are now inactive."),
-                         cl->GetEnabledCodeCount());
+  AddOSDMessage(cl->GetMasterEnable() ?
+                  TranslateStdString("OSDMessage", "%n cheats are now active.", "", cl->GetEnabledCodeCount()) :
+                  TranslateStdString("OSDMessage", "%n cheats are now inactive.", "", cl->GetEnabledCodeCount()),
+                10.0f);
 }
 
 std::optional<CommonHostInterface::HostKeyCode>
@@ -998,11 +1304,15 @@ void CommonHostInterface::RegisterHotkey(String category, String name, String di
   m_hotkeys.push_back(HotkeyInfo{std::move(category), std::move(name), std::move(display_name), std::move(handler)});
 }
 
-bool CommonHostInterface::HandleHostKeyEvent(HostKeyCode key, bool pressed)
+bool CommonHostInterface::HandleHostKeyEvent(HostKeyCode code, HostKeyCode modifiers, bool pressed)
 {
-  const auto iter = m_keyboard_input_handlers.find(key);
+  auto iter = m_keyboard_input_handlers.find(code | modifiers);
   if (iter == m_keyboard_input_handlers.end())
-    return false;
+  {
+    // try without the modifier
+    if (modifiers == 0 || (iter = m_keyboard_input_handlers.find(code)) == m_keyboard_input_handlers.end())
+      return false;
+  }
 
   iter->second(pressed);
   return true;
@@ -1044,11 +1354,22 @@ void CommonHostInterface::AddControllerRumble(u32 controller_index, u32 num_moto
   rumble.num_motors = std::min<u32>(num_motors, ControllerRumbleState::MAX_MOTORS);
   rumble.last_strength.fill(0.0f);
   rumble.update_callback = std::move(callback);
+  rumble.last_update_time = Common::Timer::GetValue();
   m_controller_vibration_motors.push_back(std::move(rumble));
 }
 
 void CommonHostInterface::UpdateControllerRumble()
 {
+  if (m_controller_vibration_motors.empty())
+    return;
+
+  // Rumble update frequency in milliseconds.
+  // We won't send an update to the controller unless this amount of time has passed, if the value has not changed.
+  // This is because the rumble update is synchronous, and with bluetooth latency can severely impact fast forward
+  // performance.
+  static constexpr float UPDATE_FREQUENCY = 1000.0f;
+  const u64 time = Common::Timer::GetValue();
+
   for (ControllerRumbleState& rumble : m_controller_vibration_motors)
   {
     Controller* controller = System::GetController(rumble.controller_index);
@@ -1059,12 +1380,18 @@ void CommonHostInterface::UpdateControllerRumble()
     for (u32 i = 0; i < rumble.num_motors; i++)
     {
       const float strength = controller->GetVibrationMotorStrength(i);
-      changed |= (strength != rumble.last_strength[i]);
-      rumble.last_strength[i] = strength;
+      if (rumble.last_strength[i] != strength)
+      {
+        rumble.last_strength[i] = strength;
+        changed = true;
+      }
     }
 
-    if (changed)
+    if (changed || Common::Timer::ConvertValueToMilliseconds(time - rumble.last_update_time) >= UPDATE_FREQUENCY)
+    {
+      rumble.last_update_time = time;
       rumble.update_callback(rumble.last_strength.data(), rumble.num_motors);
+    }
   }
 }
 
@@ -1072,15 +1399,10 @@ void CommonHostInterface::StopControllerRumble()
 {
   for (ControllerRumbleState& rumble : m_controller_vibration_motors)
   {
-    bool changed = false;
     for (u32 i = 0; i < rumble.num_motors; i++)
-    {
-      changed |= (rumble.last_strength[i] != 0.0f);
       rumble.last_strength[i] = 0.0f;
-    }
 
-    if (changed)
-      rumble.update_callback(rumble.last_strength.data(), rumble.num_motors);
+    rumble.update_callback(rumble.last_strength.data(), rumble.num_motors);
   }
 }
 
@@ -1103,7 +1425,7 @@ void CommonHostInterface::UpdateControllerInputMap(SettingsInterface& si)
   StopControllerRumble();
   m_controller_vibration_motors.clear();
 
-  for (u32 controller_index = 0; controller_index < 2; controller_index++)
+  for (u32 controller_index = 0; controller_index < NUM_CONTROLLER_AND_CARD_PORTS; controller_index++)
   {
     const ControllerType ctype = g_settings.controller_types[controller_index];
     if (ctype == ControllerType::None)
@@ -1191,6 +1513,8 @@ void CommonHostInterface::UpdateHotkeyInputMap(SettingsInterface& si)
       AddButtonToInputMap(binding, device, button, hi.handler);
     }
   }
+
+  m_save_state_selector_ui->RefreshHotkeyLegend();
 }
 
 bool CommonHostInterface::AddButtonToInputMap(const std::string& binding, const std::string_view& device,
@@ -1228,21 +1552,9 @@ bool CommonHostInterface::AddButtonToInputMap(const std::string& binding, const 
     return false;
   }
 
-  if (StringUtil::StartsWith(device, "Controller"))
+  std::optional<int> controller_index;
+  if (m_controller_interface && (controller_index = m_controller_interface->GetControllerIndex(device)))
   {
-    if (!m_controller_interface)
-    {
-      Log_ErrorPrintf("No controller interface set, cannot bind '%s'", binding.c_str());
-      return false;
-    }
-
-    const std::optional<int> controller_index = StringUtil::FromChars<int>(device.substr(10));
-    if (!controller_index || *controller_index < 0)
-    {
-      Log_WarningPrintf("Invalid controller index in button binding '%s'", binding.c_str());
-      return false;
-    }
-
     if (StringUtil::StartsWith(button, "Button"))
     {
       const std::optional<int> button_index = StringUtil::FromChars<int>(button.substr(6));
@@ -1342,21 +1654,9 @@ bool CommonHostInterface::AddAxisToInputMap(const std::string& binding, const st
     }
   }
 
-  if (StringUtil::StartsWith(device, "Controller"))
+  std::optional<int> controller_index;
+  if (m_controller_interface && (controller_index = m_controller_interface->GetControllerIndex(device)))
   {
-    if (!m_controller_interface)
-    {
-      Log_ErrorPrintf("No controller interface set, cannot bind '%s'", binding.c_str());
-      return false;
-    }
-
-    const std::optional<int> controller_index = StringUtil::FromChars<int>(device.substr(10));
-    if (!controller_index || *controller_index < 0)
-    {
-      Log_WarningPrintf("Invalid controller index in axis binding '%s'", binding.c_str());
-      return false;
-    }
-
     if (StringUtil::StartsWith(axis, "Axis") || StringUtil::StartsWith(axis, "+Axis") ||
         StringUtil::StartsWith(axis, "-Axis"))
     {
@@ -1413,21 +1713,9 @@ bool CommonHostInterface::AddAxisToInputMap(const std::string& binding, const st
 
 bool CommonHostInterface::AddRumbleToInputMap(const std::string& binding, u32 controller_index, u32 num_motors)
 {
-  if (StringUtil::StartsWith(binding, "Controller"))
+  std::optional<int> host_controller_index;
+  if (m_controller_interface && (host_controller_index = m_controller_interface->GetControllerIndex(binding)))
   {
-    if (!m_controller_interface)
-    {
-      Log_ErrorPrintf("No controller interface set, cannot bind '%s'", binding.c_str());
-      return false;
-    }
-
-    const std::optional<int> host_controller_index = StringUtil::FromChars<int>(binding.substr(10));
-    if (!host_controller_index || *host_controller_index < 0)
-    {
-      Log_WarningPrintf("Invalid controller index in rumble binding '%s'", binding.c_str());
-      return false;
-    }
-
     AddControllerRumble(controller_index, num_motors,
                         std::bind(&ControllerInterface::SetControllerRumbleStrength, m_controller_interface.get(),
                                   host_controller_index.value(), std::placeholders::_1, std::placeholders::_2));
@@ -1439,25 +1727,68 @@ bool CommonHostInterface::AddRumbleToInputMap(const std::string& binding, u32 co
   return false;
 }
 
+void CommonHostInterface::SetFastForwardEnabled(bool enabled)
+{
+  if (!System::IsValid())
+    return;
+
+  m_fast_forward_enabled = enabled;
+  UpdateSpeedLimiterState();
+  AddOSDMessage(enabled ? TranslateStdString("OSDMessage", "Fast forwarding...") :
+                          TranslateStdString("OSDMessage", "Stopped fast forwarding."),
+                2.0f);
+}
+
+void CommonHostInterface::SetTurboEnabled(bool enabled)
+{
+  if (!System::IsValid())
+    return;
+
+  m_turbo_enabled = enabled;
+  UpdateSpeedLimiterState();
+  AddOSDMessage(enabled ? TranslateStdString("OSDMessage", "Turboing...") :
+                          TranslateStdString("OSDMessage", "Stopped turboing."),
+                2.0f);
+}
+
+void CommonHostInterface::RegisterHotkeys()
+{
+  RegisterGeneralHotkeys();
+  RegisterGraphicsHotkeys();
+  RegisterSaveStateHotkeys();
+  RegisterAudioHotkeys();
+}
+
+static void DisplayHotkeyBlockedByChallengeModeMessage()
+{
+  g_host_interface->AddOSDMessage(g_host_interface->TranslateStdString(
+    "OSDMessage", "Hotkey unavailable because achievements hardcore mode is active."));
+}
+
 void CommonHostInterface::RegisterGeneralHotkeys()
 {
-  RegisterHotkey(StaticString(TRANSLATABLE("Hotkeys", "General")), StaticString("FastForward"),
-                 TRANSLATABLE("Hotkeys", "Fast Forward"), [this](bool pressed) {
-                   m_fast_forward_enabled = pressed;
-                   UpdateSpeedLimiterState();
+  RegisterHotkey(StaticString(TRANSLATABLE("Hotkeys", "General")), StaticString("OpenQuickMenu"),
+                 TRANSLATABLE("Hotkeys", "Open Quick Menu"), [this](bool pressed) {
+                   if (pressed && m_fullscreen_ui_enabled)
+                     FullscreenUI::OpenQuickMenu();
                  });
+
+  RegisterHotkey(StaticString(TRANSLATABLE("Hotkeys", "General")), StaticString("FastForward"),
+                 TRANSLATABLE("Hotkeys", "Fast Forward"), [this](bool pressed) { SetFastForwardEnabled(pressed); });
 
   RegisterHotkey(StaticString(TRANSLATABLE("Hotkeys", "General")), StaticString("ToggleFastForward"),
                  StaticString(TRANSLATABLE("Hotkeys", "Toggle Fast Forward")), [this](bool pressed) {
                    if (pressed)
-                   {
-                     m_fast_forward_enabled = !m_fast_forward_enabled;
-                     UpdateSpeedLimiterState();
-                     AddOSDMessage(m_fast_forward_enabled ?
-                                     TranslateStdString("OSDMessage", "Fast forwarding...") :
-                                     TranslateStdString("OSDMessage", "Stopped fast forwarding."),
-                                   2.0f);
-                   }
+                     SetFastForwardEnabled(!m_fast_forward_enabled);
+                 });
+
+  RegisterHotkey(StaticString(TRANSLATABLE("Hotkeys", "General")), StaticString("Turbo"),
+                 TRANSLATABLE("Hotkeys", "Turbo"), [this](bool pressed) { SetTurboEnabled(pressed); });
+
+  RegisterHotkey(StaticString(TRANSLATABLE("Hotkeys", "General")), StaticString("ToggleTurbo"),
+                 StaticString(TRANSLATABLE("Hotkeys", "Toggle Turbo")), [this](bool pressed) {
+                   if (pressed)
+                     SetTurboEnabled(!m_turbo_enabled);
                  });
 #ifndef ANDROID
   RegisterHotkey(StaticString(TRANSLATABLE("Hotkeys", "General")), StaticString("ToggleFullscreen"),
@@ -1474,8 +1805,13 @@ void CommonHostInterface::RegisterGeneralHotkeys()
 
   RegisterHotkey(StaticString(TRANSLATABLE("Hotkeys", "General")), StaticString("ToggleCheats"),
                  StaticString(TRANSLATABLE("Hotkeys", "Toggle Cheats")), [this](bool pressed) {
-                   if (pressed)
-                     DoToggleCheats();
+                   if (pressed && System::IsValid())
+                   {
+                     if (!IsCheevosChallengeModeActive())
+                       DoToggleCheats();
+                     else
+                       DisplayHotkeyBlockedByChallengeModeMessage();
+                   }
                  });
 
   RegisterHotkey(StaticString(TRANSLATABLE("Hotkeys", "General")), StaticString("PowerOff"),
@@ -1486,7 +1822,7 @@ void CommonHostInterface::RegisterGeneralHotkeys()
                      {
                        SmallString confirmation_message(
                          TranslateString("CommonHostInterface", "Are you sure you want to stop emulation?"));
-                       if (g_settings.save_state_on_exit)
+                       if (ShouldSaveResumeState())
                        {
                          confirmation_message.AppendString("\n\n");
                          confirmation_message.AppendString(
@@ -1500,15 +1836,15 @@ void CommonHostInterface::RegisterGeneralHotkeys()
                        }
                      }
 
-                     PowerOffSystem();
+                     PowerOffSystem(ShouldSaveResumeState());
                    }
                  });
 #else
   RegisterHotkey(StaticString(TRANSLATABLE("Hotkeys", "General")), StaticString("TogglePatchCodes"),
                  StaticString(TRANSLATABLE("Hotkeys", "Toggle Patch Codes")), [this](bool pressed) {
-              if (pressed)
-                DoToggleCheats();
-          });
+                   if (pressed && System::IsValid() && !IsCheevosChallengeModeActive())
+                     DoToggleCheats();
+                 });
 #endif
 
   RegisterHotkey(StaticString(TRANSLATABLE("Hotkeys", "General")), StaticString("Reset"),
@@ -1525,28 +1861,56 @@ void CommonHostInterface::RegisterGeneralHotkeys()
 
   RegisterHotkey(StaticString(TRANSLATABLE("Hotkeys", "General")), StaticString("FrameStep"),
                  StaticString(TRANSLATABLE("Hotkeys", "Frame Step")), [this](bool pressed) {
-                   if (pressed)
-                     DoFrameStep();
+                   if (pressed && System::IsValid())
+                   {
+                     if (!IsCheevosChallengeModeActive())
+                       DoFrameStep();
+                     else
+                       DisplayHotkeyBlockedByChallengeModeMessage();
+                   }
                  });
+
+#ifndef __ANDROID__
+  RegisterHotkey(StaticString(TRANSLATABLE("Hotkeys", "General")), StaticString("Rewind"),
+                 StaticString(TRANSLATABLE("Hotkeys", "Rewind")), [this](bool pressed) {
+                   if (System::IsValid())
+                   {
+                     if (!IsCheevosChallengeModeActive())
+                     {
+                       AddOSDMessage(pressed ? TranslateStdString("OSDMessage", "Rewinding...") :
+                                               TranslateStdString("OSDMessage", "Stopped rewinding."),
+                                     5.0f);
+                       System::SetRewinding(pressed);
+                     }
+                     else
+                     {
+                       DisplayHotkeyBlockedByChallengeModeMessage();
+                     }
+                   }
+                 });
+#endif
 }
 
 void CommonHostInterface::RegisterGraphicsHotkeys()
 {
   RegisterHotkey(StaticString(TRANSLATABLE("Hotkeys", "Graphics")), StaticString("ToggleSoftwareRendering"),
                  StaticString(TRANSLATABLE("Hotkeys", "Toggle Software Rendering")), [this](bool pressed) {
-                   if (pressed)
+                   if (pressed && System::IsValid())
                      ToggleSoftwareRendering();
                  });
 
   RegisterHotkey(StaticString(TRANSLATABLE("Hotkeys", "Graphics")), StaticString("TogglePGXP"),
                  StaticString(TRANSLATABLE("Hotkeys", "Toggle PGXP")), [this](bool pressed) {
-                   if (pressed)
+                   if (pressed && System::IsValid())
                    {
                      g_settings.gpu_pgxp_enable = !g_settings.gpu_pgxp_enable;
+                     g_gpu->RestoreGraphicsAPIState();
                      g_gpu->UpdateSettings();
+                     g_gpu->ResetGraphicsAPIState();
+                     System::ClearMemorySaveStates();
                      AddOSDMessage(g_settings.gpu_pgxp_enable ?
                                      TranslateStdString("OSDMessage", "PGXP is now enabled.") :
-                                     TranslateStdString("OSDMessage", "PGXP is now disabled"),
+                                     TranslateStdString("OSDMessage", "PGXP is now disabled."),
                                    5.0f);
 
                      if (g_settings.gpu_pgxp_enable)
@@ -1562,13 +1926,16 @@ void CommonHostInterface::RegisterGraphicsHotkeys()
 
   RegisterHotkey(StaticString(TRANSLATABLE("Hotkeys", "Graphics")), StaticString("TogglePGXPDepth"),
                  StaticString(TRANSLATABLE("Hotkeys", "Toggle PGXP Depth Buffer")), [this](bool pressed) {
-                   if (pressed)
+                   if (pressed && System::IsValid())
                    {
                      g_settings.gpu_pgxp_depth_buffer = !g_settings.gpu_pgxp_depth_buffer;
                      if (!g_settings.gpu_pgxp_enable)
                        return;
 
+                     g_gpu->RestoreGraphicsAPIState();
                      g_gpu->UpdateSettings();
+                     g_gpu->ResetGraphicsAPIState();
+                     System::ClearMemorySaveStates();
                      AddOSDMessage(g_settings.gpu_pgxp_depth_buffer ?
                                      TranslateStdString("OSDMessage", "PGXP Depth Buffer is now enabled.") :
                                      TranslateStdString("OSDMessage", "PGXP Depth Buffer is now disabled."),
@@ -1578,31 +1945,31 @@ void CommonHostInterface::RegisterGraphicsHotkeys()
 
   RegisterHotkey(StaticString(TRANSLATABLE("Hotkeys", "Graphics")), StaticString("IncreaseResolutionScale"),
                  StaticString(TRANSLATABLE("Hotkeys", "Increase Resolution Scale")), [this](bool pressed) {
-                   if (pressed)
+                   if (pressed && System::IsValid())
                      ModifyResolutionScale(1);
                  });
 
   RegisterHotkey(StaticString(TRANSLATABLE("Hotkeys", "Graphics")), StaticString("DecreaseResolutionScale"),
                  StaticString(TRANSLATABLE("Hotkeys", "Decrease Resolution Scale")), [this](bool pressed) {
-                   if (pressed)
+                   if (pressed && System::IsValid())
                      ModifyResolutionScale(-1);
                  });
 
   RegisterHotkey(StaticString(TRANSLATABLE("Hotkeys", "Graphics")), StaticString("TogglePostProcessing"),
                  StaticString(TRANSLATABLE("Hotkeys", "Toggle Post-Processing")), [this](bool pressed) {
-                   if (pressed)
+                   if (pressed && System::IsValid())
                      TogglePostProcessing();
                  });
 
   RegisterHotkey(StaticString(TRANSLATABLE("Hotkeys", "Graphics")), StaticString("ReloadPostProcessingShaders"),
                  StaticString(TRANSLATABLE("Hotkeys", "Reload Post Processing Shaders")), [this](bool pressed) {
-                   if (pressed)
+                   if (pressed && System::IsValid())
                      ReloadPostProcessingShaders();
                  });
 
   RegisterHotkey(StaticString(TRANSLATABLE("Hotkeys", "Graphics")), StaticString("ReloadTextureReplacements"),
                  StaticString(TRANSLATABLE("Hotkeys", "Reload Texture Replacements")), [this](bool pressed) {
-                   if (pressed)
+                   if (pressed && System::IsValid())
                    {
                      AddOSDMessage(TranslateStdString("OSDMessage", "Texture replacements reloaded."), 10.0f);
                      g_texture_replacements.Reload();
@@ -1615,7 +1982,12 @@ void CommonHostInterface::RegisterSaveStateHotkeys()
   RegisterHotkey(StaticString(TRANSLATABLE("Hotkeys", "Save States")), StaticString("LoadSelectedSaveState"),
                  StaticString(TRANSLATABLE("Hotkeys", "Load From Selected Slot")), [this](bool pressed) {
                    if (pressed)
-                     m_save_state_selector_ui->LoadCurrentSlot();
+                   {
+                     if (!IsCheevosChallengeModeActive())
+                       m_save_state_selector_ui->LoadCurrentSlot();
+                     else
+                       DisplayHotkeyBlockedByChallengeModeMessage();
+                   }
                  });
   RegisterHotkey(StaticString(TRANSLATABLE("Hotkeys", "Save States")), StaticString("SaveSelectedSaveState"),
                  StaticString(TRANSLATABLE("Hotkeys", "Save To Selected Slot")), [this](bool pressed) {
@@ -1639,7 +2011,12 @@ void CommonHostInterface::RegisterSaveStateHotkeys()
                    TinyString::FromFormat("LoadGameState%u", slot), TinyString::FromFormat("Load Game State %u", slot),
                    [this, slot](bool pressed) {
                      if (pressed)
-                       LoadState(false, slot);
+                     {
+                       if (!IsCheevosChallengeModeActive())
+                         LoadState(false, slot);
+                       else
+                         DisplayHotkeyBlockedByChallengeModeMessage();
+                     }
                    });
     RegisterHotkey(StaticString(TRANSLATABLE("Hotkeys", "Save States")),
                    TinyString::FromFormat("SaveGameState%u", slot), TinyString::FromFormat("Save Game State %u", slot),
@@ -1655,7 +2032,12 @@ void CommonHostInterface::RegisterSaveStateHotkeys()
                    TinyString::FromFormat("LoadGlobalState%u", slot),
                    TinyString::FromFormat("Load Global State %u", slot), [this, slot](bool pressed) {
                      if (pressed)
-                       LoadState(true, slot);
+                     {
+                       if (!IsCheevosChallengeModeActive())
+                         LoadState(true, slot);
+                       else
+                         DisplayHotkeyBlockedByChallengeModeMessage();
+                     }
                    });
     RegisterHotkey(StaticString(TRANSLATABLE("Hotkeys", "Save States")),
                    TinyString::FromFormat("SaveGlobalState%u", slot),
@@ -1820,18 +2202,23 @@ std::string CommonHostInterface::GetInputProfilePath(const char* name) const
   return {};
 }
 
-void CommonHostInterface::ClearAllControllerBindings(SettingsInterface& si)
+void CommonHostInterface::ClearAllControllerBindings()
 {
   for (u32 controller_index = 1; controller_index <= NUM_CONTROLLER_AND_CARD_PORTS; controller_index++)
-    si.ClearSection(TinyString::FromFormat("Controller%u", controller_index));
+    m_settings_interface->ClearSection(TinyString::FromFormat("Controller%u", controller_index));
 }
 
-void CommonHostInterface::ApplyInputProfile(const char* profile_path, SettingsInterface& si)
+bool CommonHostInterface::ApplyInputProfile(const char* profile_path)
 {
-  // clear bindings for all controllers
-  ClearAllControllerBindings(si);
+  if (!FileSystem::FileExists(profile_path))
+    return false;
 
   INISettingsInterface profile(profile_path);
+
+  std::lock_guard<std::recursive_mutex> guard(m_settings_mutex);
+
+  // clear bindings for all controllers
+  ClearAllControllerBindings();
 
   for (u32 controller_index = 1; controller_index <= NUM_CONTROLLER_AND_CARD_PORTS; controller_index++)
   {
@@ -1839,7 +2226,7 @@ void CommonHostInterface::ApplyInputProfile(const char* profile_path, SettingsIn
     const std::string ctype_str = profile.GetStringValue(section_name, "Type");
     if (ctype_str.empty())
     {
-      si.SetStringValue(section_name, "Type", Settings::GetControllerTypeName(ControllerType::None));
+      m_settings_interface->SetStringValue(section_name, "Type", Settings::GetControllerTypeName(ControllerType::None));
       g_settings.controller_types[controller_index - 1] = ControllerType::None;
       continue;
     }
@@ -1848,38 +2235,38 @@ void CommonHostInterface::ApplyInputProfile(const char* profile_path, SettingsIn
     if (!ctype)
     {
       Log_ErrorPrintf("Invalid controller type in profile: '%s'", ctype_str.c_str());
-      return;
+      continue;
     }
 
     g_settings.controller_types[controller_index - 1] = *ctype;
     HostInterface::OnControllerTypeChanged(controller_index - 1);
 
-    si.SetStringValue(section_name, "Type", Settings::GetControllerTypeName(*ctype));
+    m_settings_interface->SetStringValue(section_name, "Type", Settings::GetControllerTypeName(*ctype));
 
     for (const auto& button : Controller::GetButtonNames(*ctype))
     {
       const auto key_name = TinyString::FromFormat("Button%s", button.first.c_str());
-      si.DeleteValue(section_name, key_name);
+      m_settings_interface->DeleteValue(section_name, key_name);
       const std::vector<std::string> bindings = profile.GetStringList(section_name, key_name);
       for (const std::string& binding : bindings)
-        si.AddToStringList(section_name, key_name, binding.c_str());
+        m_settings_interface->AddToStringList(section_name, key_name, binding.c_str());
     }
 
     for (const auto& axis : Controller::GetAxisNames(*ctype))
     {
       const auto key_name = TinyString::FromFormat("Axis%s", std::get<std::string>(axis).c_str());
-      si.DeleteValue(section_name, std::get<std::string>(axis).c_str());
+      m_settings_interface->DeleteValue(section_name, std::get<std::string>(axis).c_str());
       const std::vector<std::string> bindings = profile.GetStringList(section_name, key_name);
       for (const std::string& binding : bindings)
-        si.AddToStringList(section_name, key_name, binding.c_str());
+        m_settings_interface->AddToStringList(section_name, key_name, binding.c_str());
     }
 
-    si.DeleteValue(section_name, "Rumble");
+    m_settings_interface->DeleteValue(section_name, "Rumble");
     if (Controller::GetVibrationMotorCount(*ctype) > 0)
     {
       const std::string rumble_value = profile.GetStringValue(section_name, "Rumble");
       if (!rumble_value.empty())
-        si.SetStringValue(section_name, "Rumble", rumble_value.c_str());
+        m_settings_interface->SetStringValue(section_name, "Rumble", rumble_value.c_str());
     }
 
     Controller::SettingList settings = Controller::GetSettings(*ctype);
@@ -1887,19 +2274,16 @@ void CommonHostInterface::ApplyInputProfile(const char* profile_path, SettingsIn
     {
       const std::string value = profile.GetStringValue(section_name, ssi.key, "");
       if (!value.empty())
-        si.SetStringValue(section_name, ssi.key, value.c_str());
+        m_settings_interface->SetStringValue(section_name, ssi.key, value.c_str());
     }
   }
 
-  if (System::IsValid())
-    System::UpdateControllers();
-
-  UpdateInputMap(si);
-
   ReportFormattedMessage(TranslateString("OSDMessage", "Loaded input profile from '%s'"), profile_path);
+  ApplySettings(false);
+  return true;
 }
 
-bool CommonHostInterface::SaveInputProfile(const char* profile_path, SettingsInterface& si)
+bool CommonHostInterface::SaveInputProfile(const char* profile_path)
 {
   if (FileSystem::FileExists(profile_path))
     Log_WarningPrintf("Existing input profile at '%s' will be overwritten", profile_path);
@@ -1922,7 +2306,7 @@ bool CommonHostInterface::SaveInputProfile(const char* profile_path, SettingsInt
     for (const auto& button : Controller::GetButtonNames(ctype))
     {
       const auto key_name = TinyString::FromFormat("Button%s", button.first.c_str());
-      const std::vector<std::string> bindings = si.GetStringList(section_name, key_name);
+      const std::vector<std::string> bindings = m_settings_interface->GetStringList(section_name, key_name);
       for (const std::string& binding : bindings)
         profile.AddToStringList(section_name, key_name, binding.c_str());
     }
@@ -1930,14 +2314,14 @@ bool CommonHostInterface::SaveInputProfile(const char* profile_path, SettingsInt
     for (const auto& axis : Controller::GetAxisNames(ctype))
     {
       const auto key_name = TinyString::FromFormat("Axis%s", std::get<std::string>(axis).c_str());
-      const std::vector<std::string> bindings = si.GetStringList(section_name, key_name);
+      const std::vector<std::string> bindings = m_settings_interface->GetStringList(section_name, key_name);
       for (const std::string& binding : bindings)
         profile.AddToStringList(section_name, key_name, binding.c_str());
     }
 
     if (Controller::GetVibrationMotorCount(ctype) > 0)
     {
-      const std::string rumble_value = si.GetStringValue(section_name, "Rumble");
+      const std::string rumble_value = m_settings_interface->GetStringValue(section_name, "Rumble");
       if (!rumble_value.empty())
         profile.SetStringValue(section_name, "Rumble", rumble_value.c_str());
     }
@@ -1945,7 +2329,7 @@ bool CommonHostInterface::SaveInputProfile(const char* profile_path, SettingsInt
     Controller::SettingList settings = Controller::GetSettings(ctype);
     for (const SettingInfo& ssi : settings)
     {
-      const std::string value = si.GetStringValue(section_name, ssi.key, "");
+      const std::string value = m_settings_interface->GetStringValue(section_name, ssi.key, "");
       if (!value.empty())
         profile.SetStringValue(section_name, ssi.key, value.c_str());
     }
@@ -1963,18 +2347,13 @@ bool CommonHostInterface::SaveInputProfile(const char* profile_path, SettingsInt
 
 std::string CommonHostInterface::GetSettingsFileName() const
 {
-  if (!m_settings_filename.empty())
-  {
-    if (!FileSystem::FileExists(m_settings_filename.c_str()))
-    {
-      Log_ErrorPrintf("Could not find settings file %s, using default", m_settings_filename.c_str());
-    }
-    else
-    {
-      return GetUserDirectoryRelativePath(m_settings_filename.c_str());
-    }
-  }
-  return GetUserDirectoryRelativePath("settings.ini");
+  std::string filename;
+  if (!s_settings_filename.empty())
+    filename = s_settings_filename;
+  else
+    filename = GetUserDirectoryRelativePath("settings.ini");
+
+  return filename;
 }
 
 std::string CommonHostInterface::GetGameSaveStateFileName(const char* game_code, s32 slot) const
@@ -2070,6 +2449,15 @@ CommonHostInterface::GetExtendedSaveStateInfo(const char* game_code, s32 slot)
   header.game_code[sizeof(header.game_code) - 1] = 0;
   ssi.game_code = header.game_code;
 
+  if (header.media_filename_length > 0 &&
+      (header.offset_to_media_filename + header.media_filename_length) <= stream->GetSize())
+  {
+    stream->SeekAbsolute(header.offset_to_media_filename);
+    ssi.media_path.resize(header.media_filename_length);
+    if (!stream->Read2(ssi.media_path.data(), header.media_filename_length))
+      std::string().swap(ssi.media_path);
+  }
+
   if (header.screenshot_width > 0 && header.screenshot_height > 0 && header.screenshot_size > 0 &&
       (static_cast<u64>(header.offset_to_screenshot) + static_cast<u64>(header.screenshot_size)) <= stream->GetSize())
   {
@@ -2123,24 +2511,13 @@ std::string CommonHostInterface::GetMostRecentResumeSaveStatePath() const
   return std::move(most_recent->FileName);
 }
 
-bool CommonHostInterface::CheckSettings(SettingsInterface& si)
-{
-  const int settings_version = si.GetIntValue("Main", "SettingsVersion", -1);
-  if (settings_version == SETTINGS_VERSION)
-    return true;
-
-  Log_ErrorPrintf("Settings version %d does not match expected version %d, resetting", settings_version,
-                  SETTINGS_VERSION);
-
-  si.Clear();
-  si.SetIntValue("Main", "SettingsVersion", SETTINGS_VERSION);
-  SetDefaultSettings(si);
-  return false;
-}
-
 void CommonHostInterface::SetDefaultSettings(SettingsInterface& si)
 {
   HostInterface::SetDefaultSettings(si);
+
+  // TODO: Maybe we should bind this to F1 in the future.
+  if (m_fullscreen_ui_enabled)
+    si.SetStringValue("Hotkeys", "OpenQuickMenu", "Keyboard/Escape");
 
   si.SetStringValue("Controller1", "ButtonUp", "Keyboard/W");
   si.SetStringValue("Controller1", "ButtonDown", "Keyboard/S");
@@ -2159,11 +2536,6 @@ void CommonHostInterface::SetDefaultSettings(SettingsInterface& si)
   si.SetStringValue("Hotkeys", "FastForward", "Keyboard/Tab");
   si.SetStringValue("Hotkeys", "TogglePause", "Keyboard/Pause");
   si.SetStringValue("Hotkeys", "ToggleFullscreen", "Keyboard/Alt+Return");
-  si.SetStringValue("Hotkeys", "PowerOff", "Keyboard/Escape");
-  si.SetStringValue("Hotkeys", "LoadSelectedSaveState", "Keyboard/F1");
-  si.SetStringValue("Hotkeys", "SaveSelectedSaveState", "Keyboard/F2");
-  si.SetStringValue("Hotkeys", "SelectPreviousSaveStateSlot", "Keyboard/F3");
-  si.SetStringValue("Hotkeys", "SelectNextSaveStateSlot", "Keyboard/F4");
   si.SetStringValue("Hotkeys", "Screenshot", "Keyboard/F10");
   si.SetStringValue("Hotkeys", "IncreaseResolutionScale", "Keyboard/PageUp");
   si.SetStringValue("Hotkeys", "DecreaseResolutionScale", "Keyboard/PageDown");
@@ -2172,9 +2544,44 @@ void CommonHostInterface::SetDefaultSettings(SettingsInterface& si)
   si.SetStringValue("Main", "ControllerBackend",
                     ControllerInterface::GetBackendName(ControllerInterface::GetDefaultBackend()));
 
+  si.SetBoolValue("Display", "InternalResolutionScreenshots", false);
+
 #ifdef WITH_DISCORD_PRESENCE
   si.SetBoolValue("Main", "EnableDiscordPresence", false);
 #endif
+
+#ifdef WITH_CHEEVOS
+  si.SetBoolValue("Cheevos", "Enabled", false);
+  si.SetBoolValue("Cheevos", "TestMode", false);
+  si.SetBoolValue("Cheevos", "UseFirstDiscFromPlaylist", true);
+  si.DeleteValue("Cheevos", "Username");
+  si.DeleteValue("Cheevos", "Token");
+#endif
+}
+
+void CommonHostInterface::LoadSettings()
+{
+  // no lock needed here since it's done on startup
+  Assert(m_settings_interface);
+
+#ifndef __ANDROID__
+  // we don't check the settings version on android, because it's not using the ini yet..
+  // we can re-enable this once we move it over.. eventually.
+  const int settings_version = m_settings_interface->GetIntValue("Main", "SettingsVersion", -1);
+  if (settings_version != SETTINGS_VERSION)
+  {
+    ReportFormattedError("Settings version %d does not match expected version %d, resetting", settings_version,
+                         SETTINGS_VERSION);
+
+    m_settings_interface->Clear();
+    m_settings_interface->SetIntValue("Main", "SettingsVersion", SETTINGS_VERSION);
+    SetDefaultSettings(*m_settings_interface);
+    m_settings_interface->Save();
+  }
+#endif
+
+  LoadSettings(*m_settings_interface);
+  FixIncompatibleSettings(false);
 }
 
 void CommonHostInterface::LoadSettings(SettingsInterface& si)
@@ -2184,11 +2591,94 @@ void CommonHostInterface::LoadSettings(SettingsInterface& si)
 #ifdef WITH_DISCORD_PRESENCE
   SetDiscordPresenceEnabled(si.GetBoolValue("Main", "EnableDiscordPresence", false));
 #endif
+
+#ifdef WITH_CHEEVOS
+  UpdateCheevosActive();
+  const bool cheevos_active = Cheevos::IsActive();
+#else
+  const bool cheevos_active = false;
+#endif
+
+  const bool fullscreen_ui_enabled =
+    si.GetBoolValue("Main", "EnableFullscreenUI", false) || cheevos_active || m_flags.force_fullscreen_ui;
+  if (fullscreen_ui_enabled != m_fullscreen_ui_enabled)
+  {
+    m_fullscreen_ui_enabled = fullscreen_ui_enabled;
+    if (m_display)
+    {
+      if (!fullscreen_ui_enabled)
+      {
+        FullscreenUI::Shutdown();
+        ImGuiFullscreen::ResetFonts();
+        if (!m_display->UpdateImGuiFontTexture())
+          Panic("Failed to recreate font texture after fullscreen UI disable");
+      }
+      else
+      {
+        if (FullscreenUI::Initialize(this))
+        {
+          if (!m_display->UpdateImGuiFontTexture())
+            Panic("Failed to recreate font textre after fullscreen UI enable");
+        }
+        else
+        {
+          Log_ErrorPrintf("Failed to initialize fullscreen UI. Disabling.");
+          m_fullscreen_ui_enabled = false;
+        }
+      }
+    }
+  }
 }
 
 void CommonHostInterface::SaveSettings(SettingsInterface& si)
 {
   HostInterface::SaveSettings(si);
+}
+
+void CommonHostInterface::FixIncompatibleSettings(bool display_osd_messages)
+{
+  // if challenge mode is enabled, disable things like rewind since they use save states
+  if (IsCheevosChallengeModeActive())
+  {
+    g_settings.emulation_speed =
+      (g_settings.emulation_speed != 0.0f) ? std::max(g_settings.emulation_speed, 1.0f) : 0.0f;
+    g_settings.fast_forward_speed =
+      (g_settings.fast_forward_speed != 0.0f) ? std::max(g_settings.fast_forward_speed, 1.0f) : 0.0f;
+    g_settings.turbo_speed = (g_settings.turbo_speed != 0.0f) ? std::max(g_settings.turbo_speed, 1.0f) : 0.0f;
+    g_settings.rewind_enable = false;
+    g_settings.auto_load_cheats = false;
+    g_settings.debugging.enable_gdb_server = false;
+    g_settings.debugging.show_vram = false;
+    g_settings.debugging.show_gpu_state = false;
+    g_settings.debugging.show_cdrom_state = false;
+    g_settings.debugging.show_spu_state = false;
+    g_settings.debugging.show_timers_state = false;
+    g_settings.debugging.show_mdec_state = false;
+    g_settings.debugging.show_dma_state = false;
+    g_settings.debugging.dump_cpu_to_vram_copies = false;
+    g_settings.debugging.dump_vram_to_cpu_copies = false;
+  }
+
+  HostInterface::FixIncompatibleSettings(display_osd_messages);
+}
+
+void CommonHostInterface::ApplySettings(bool display_osd_messages)
+{
+  Settings old_settings(std::move(g_settings));
+  {
+    std::lock_guard<std::recursive_mutex> guard(m_settings_mutex);
+    LoadSettings(*m_settings_interface.get());
+    ApplyGameSettings(display_osd_messages);
+    FixIncompatibleSettings(display_osd_messages);
+  }
+
+  CheckForSettingsChanges(old_settings);
+}
+
+void CommonHostInterface::UpdateInputMap()
+{
+  std::lock_guard<std::recursive_mutex> lock(m_settings_mutex);
+  UpdateInputMap(*m_settings_interface.get());
 }
 
 void CommonHostInterface::CheckForSettingsChanges(const Settings& old_settings)
@@ -2206,7 +2696,10 @@ void CommonHostInterface::CheckForSettingsChanges(const Settings& old_settings)
         g_settings.increase_timer_resolution != old_settings.increase_timer_resolution ||
         g_settings.emulation_speed != old_settings.emulation_speed ||
         g_settings.fast_forward_speed != old_settings.fast_forward_speed ||
-        g_settings.display_max_fps != old_settings.display_max_fps)
+        g_settings.display_max_fps != old_settings.display_max_fps ||
+        g_settings.display_all_frames != old_settings.display_all_frames ||
+        g_settings.audio_resampling != old_settings.audio_resampling ||
+        g_settings.sync_to_host_refresh_rate != old_settings.sync_to_host_refresh_rate)
     {
       UpdateSpeedLimiterState();
     }
@@ -2238,6 +2731,37 @@ void CommonHostInterface::CheckForSettingsChanges(const Settings& old_settings)
   UpdateInputMap();
 }
 
+std::string CommonHostInterface::GetStringSettingValue(const char* section, const char* key,
+                                                       const char* default_value /*= ""*/)
+{
+  std::lock_guard<std::recursive_mutex> guard(m_settings_mutex);
+  return m_settings_interface->GetStringValue(section, key, default_value);
+}
+
+bool CommonHostInterface::GetBoolSettingValue(const char* section, const char* key, bool default_value /* = false */)
+{
+  std::lock_guard<std::recursive_mutex> guard(m_settings_mutex);
+  return m_settings_interface->GetBoolValue(section, key, default_value);
+}
+
+int CommonHostInterface::GetIntSettingValue(const char* section, const char* key, int default_value /* = 0 */)
+{
+  std::lock_guard<std::recursive_mutex> guard(m_settings_mutex);
+  return m_settings_interface->GetIntValue(section, key, default_value);
+}
+
+float CommonHostInterface::GetFloatSettingValue(const char* section, const char* key, float default_value /* = 0.0f */)
+{
+  std::lock_guard<std::recursive_mutex> guard(m_settings_mutex);
+  return m_settings_interface->GetFloatValue(section, key, default_value);
+}
+
+std::vector<std::string> CommonHostInterface::GetSettingStringList(const char* section, const char* key)
+{
+  std::lock_guard<std::recursive_mutex> guard(m_settings_mutex);
+  return m_settings_interface->GetStringList(section, key);
+}
+
 void CommonHostInterface::SetTimerResolutionIncreased(bool enabled)
 {
   if (m_timer_resolution_increased == enabled)
@@ -2262,8 +2786,7 @@ void CommonHostInterface::DisplayLoadingScreen(const char* message, int progress
   const bool has_progress = (progress_min < progress_max);
 
   // eat the last imgui frame, it might've been partially rendered by the caller.
-  // ImGui::EndFrame();
-  // ImGui::NewFrame();
+  ImGui::NewFrame();
 
   const float logo_width = static_cast<float>(APP_ICON_WIDTH) * scale;
   const float logo_height = static_cast<float>(APP_ICON_HEIGHT) * scale;
@@ -2307,8 +2830,8 @@ void CommonHostInterface::DisplayLoadingScreen(const char* message, int progress
   }
   ImGui::End();
 
+  ImGui::EndFrame();
   m_display->Render();
-  ImGui::NewFrame();
 }
 
 void CommonHostInterface::GetGameInfo(const char* path, CDImage* image, std::string* code, std::string* title)
@@ -2322,7 +2845,7 @@ void CommonHostInterface::GetGameInfo(const char* path, CDImage* image, std::str
   else
   {
     if (image)
-      *code = System::GetGameCodeForImage(image);
+      *code = System::GetGameCodeForImage(image, true);
 
     const GameListDatabaseEntry* db_entry = (!code->empty()) ? m_game_list->GetDatabaseEntryForCode(*code) : nullptr;
     if (db_entry)
@@ -2419,8 +2942,12 @@ bool CommonHostInterface::SaveScreenshot(const char* filename /* = nullptr */, b
     return false;
   }
 
+  const bool internal_resolution = GetBoolSettingValue("Display", "InternalResolutionScreenshots", false);
   const bool screenshot_saved =
-    m_display->WriteDisplayTextureToFile(filename, full_resolution, apply_aspect_ratio, compress_on_thread);
+    internal_resolution ?
+      m_display->WriteDisplayTextureToFile(filename, full_resolution, apply_aspect_ratio, compress_on_thread) :
+      m_display->WriteScreenshotToFile(filename, compress_on_thread);
+
   if (!screenshot_saved)
   {
     AddFormattedOSDMessage(10.0f, TranslateString("OSDMessage", "Failed to save screenshot to '%s'"), filename);
@@ -2492,14 +3019,18 @@ bool CommonHostInterface::LoadCheatList(const char* filename)
     return false;
   }
 
-  AddFormattedOSDMessage(10.0f, TranslateString("OSDMessage", "Loaded %u cheats from list. %u cheats are enabled."),
-                         cl->GetCodeCount(), cl->GetEnabledCodeCount());
+  AddOSDMessage(TranslateStdString("OSDMessage", "Loaded %n cheats from list.", "", cl->GetCodeCount()) +
+                  TranslateStdString("OSDMessage", " %n cheats are enabled.", "", cl->GetEnabledCodeCount()),
+                10.0f);
   System::SetCheatList(std::move(cl));
   return true;
 }
 
 bool CommonHostInterface::LoadCheatListFromGameTitle()
 {
+  if (IsCheevosChallengeModeActive())
+    return false;
+
   const std::string filename(GetCheatFileName());
   if (filename.empty() || !FileSystem::FileExists(filename.c_str()))
     return false;
@@ -2509,14 +3040,14 @@ bool CommonHostInterface::LoadCheatListFromGameTitle()
 
 bool CommonHostInterface::LoadCheatListFromDatabase()
 {
-  if (System::GetRunningCode().empty())
+  if (System::GetRunningCode().empty() || IsCheevosChallengeModeActive())
     return false;
 
   std::unique_ptr<CheatList> cl = std::make_unique<CheatList>();
   if (!cl->LoadFromPackage(System::GetRunningCode()))
     return false;
 
-  AddFormattedOSDMessage(10.0f, TranslateString("OSDMessage", "Loaded %u cheats from database."), cl->GetCodeCount());
+  AddOSDMessage(TranslateStdString("OSDMessage", "Loaded %n cheats from database.", "", cl->GetCodeCount()), 10.0f);
   System::SetCheatList(std::move(cl));
   return true;
 }
@@ -2546,9 +3077,44 @@ bool CommonHostInterface::SaveCheatList(const char* filename)
   if (!System::GetCheatList()->SaveToPCSXRFile(filename))
     return false;
 
-  AddFormattedOSDMessage(5.0f, TranslateString("OSDMessage", "Saved %u cheats to '%s'."),
-                         System::GetCheatList()->GetCodeCount(), filename);
+  // This shouldn't be needed, but lupdate doesn't gather this string otherwise...
+  const u32 code_count = System::GetCheatList()->GetCodeCount();
+  AddFormattedOSDMessage(5.0f, TranslateString("OSDMessage", "Saved %n cheats to '%s'.", "", code_count), filename);
   return true;
+}
+
+bool CommonHostInterface::DeleteCheatList()
+{
+  if (!System::IsValid())
+    return false;
+
+  const std::string filename(GetCheatFileName());
+  if (!filename.empty())
+  {
+    if (!FileSystem::DeleteFile(filename.c_str()))
+      return false;
+
+    AddFormattedOSDMessage(5.0f, TranslateString("OSDMessage", "Deleted cheat list '%s'."), filename.c_str());
+  }
+
+  System::SetCheatList(nullptr);
+  return true;
+}
+
+void CommonHostInterface::ClearCheatList(bool save_to_file)
+{
+  if (!System::IsValid())
+    return;
+
+  CheatList* cl = System::GetCheatList();
+  if (!cl)
+    return;
+
+  while (cl->GetCodeCount() > 0)
+    cl->RemoveCode(cl->GetCodeCount() - 1);
+
+  if (save_to_file)
+    SaveCheatList();
 }
 
 void CommonHostInterface::SetCheatCodeState(u32 index, bool enabled, bool save_to_file)
@@ -2675,6 +3241,11 @@ bool CommonHostInterface::ParseFullscreenMode(const std::string_view& mode, u32*
   return false;
 }
 
+std::string CommonHostInterface::GetFullscreenModeString(u32 width, u32 height, float refresh_rate)
+{
+  return StringUtil::StdStringFromFormat("%u x %u @ %f hz", width, height, refresh_rate);
+}
+
 bool CommonHostInterface::RequestRenderWindowSize(s32 new_window_width, s32 new_window_height)
 {
   return false;
@@ -2710,6 +3281,15 @@ std::unique_ptr<ByteStream> CommonHostInterface::OpenPackageFile(const char* pat
   const u32 real_flags = (flags & allowed_flags) | BYTESTREAM_OPEN_READ;
   Log_DevPrintf("Requesting package file '%s'", path);
   return FileSystem::OpenFile(full_path.c_str(), real_flags);
+}
+
+bool CommonHostInterface::SetControllerNavigationButtonState(FrontendCommon::ControllerNavigationButton button,
+                                                             bool pressed)
+{
+  if (!m_fullscreen_ui_enabled)
+    return false;
+
+  return FullscreenUI::SetControllerNavInput(button, pressed);
 }
 
 #ifdef WITH_DISCORD_PRESENCE
@@ -2781,6 +3361,33 @@ void CommonHostInterface::PollDiscordPresence()
     return;
 
   Discord_RunCallbacks();
+}
+
+#endif
+
+#ifdef WITH_CHEEVOS
+
+void CommonHostInterface::UpdateCheevosActive()
+{
+  const bool cheevos_enabled = GetBoolSettingValue("Cheevos", "Enabled", false);
+  const bool cheevos_test_mode = GetBoolSettingValue("Cheevos", "TestMode", false);
+  const bool cheevos_use_first_disc_from_playlist = GetBoolSettingValue("Cheevos", "UseFirstDiscFromPlaylist", true);
+  const bool cheevos_rich_presence = GetBoolSettingValue("Cheevos", "RichPresence", true);
+  const bool cheevos_hardcore = GetBoolSettingValue("Cheevos", "ChallengeMode", false);
+
+  if (cheevos_enabled != Cheevos::IsActive() || cheevos_test_mode != Cheevos::IsTestModeActive() ||
+      cheevos_use_first_disc_from_playlist != Cheevos::IsUsingFirstDiscFromPlaylist() ||
+      cheevos_rich_presence != Cheevos::IsRichPresenceEnabled() ||
+      cheevos_hardcore != Cheevos::IsChallengeModeEnabled())
+  {
+    Cheevos::Shutdown();
+    if (cheevos_enabled)
+    {
+      if (!Cheevos::Initialize(cheevos_test_mode, cheevos_use_first_disc_from_playlist, cheevos_rich_presence,
+                               cheevos_hardcore))
+        ReportError("Failed to initialize cheevos after settings change.");
+    }
+  }
 }
 
 #endif

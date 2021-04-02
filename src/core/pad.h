@@ -1,6 +1,7 @@
 #pragma once
 #include "common/bitfield.h"
 #include "common/fifo_queue.h"
+#include "multitap.h"
 #include "types.h"
 #include <array>
 #include <memory>
@@ -28,8 +29,12 @@ public:
   MemoryCard* GetMemoryCard(u32 slot) { return m_memory_cards[slot].get(); }
   void SetMemoryCard(u32 slot, std::unique_ptr<MemoryCard> dev);
 
+  Multitap* GetMultitap(u32 slot) { return &m_multitaps[slot]; };
+
   u32 ReadRegister(u32 offset);
   void WriteRegister(u32 offset, u32 value);
+
+  ALWAYS_INLINE bool IsTransmitting() const { return m_state != State::Idle; }
 
 private:
   static constexpr u32 NUM_SLOTS = 2;
@@ -45,7 +50,8 @@ private:
   {
     None,
     Controller,
-    MemoryCard
+    MemoryCard,
+    Multitap
   };
 
   union JOY_CTRL
@@ -87,10 +93,9 @@ private:
     BitField<u16, u8, 8, 1> clk_polarity;
   };
 
-  bool IsTransmitting() const { return m_state != State::Idle; }
-  bool CanTransfer() const { return m_transmit_buffer_full && m_JOY_CTRL.SELECT && m_JOY_CTRL.TXEN; }
+  ALWAYS_INLINE bool CanTransfer() const { return m_transmit_buffer_full && m_JOY_CTRL.SELECT && m_JOY_CTRL.TXEN; }
 
-  TickCount GetTransferTicks() const { return static_cast<TickCount>(ZeroExtend32(m_JOY_BAUD) * 8); }
+  ALWAYS_INLINE TickCount GetTransferTicks() const { return static_cast<TickCount>(ZeroExtend32(m_JOY_BAUD) * 8); }
 
   // From @JaCzekanski
   // ACK lasts ~96 ticks or approximately 2.84us at master clock (not implemented).
@@ -107,8 +112,13 @@ private:
   void EndTransfer();
   void ResetDeviceTransferState();
 
-  std::array<std::unique_ptr<Controller>, NUM_SLOTS> m_controllers;
-  std::array<std::unique_ptr<MemoryCard>, NUM_SLOTS> m_memory_cards;
+  bool DoStateController(StateWrapper& sw, u32 i);
+  bool DoStateMemcard(StateWrapper& sw, u32 i);
+
+  std::array<std::unique_ptr<Controller>, NUM_CONTROLLER_AND_CARD_PORTS> m_controllers;
+  std::array<std::unique_ptr<MemoryCard>, NUM_CONTROLLER_AND_CARD_PORTS> m_memory_cards;
+
+  std::array<Multitap, NUM_MULTITAPS> m_multitaps;
 
   std::unique_ptr<TimingEvent> m_transfer_event;
   State m_state = State::Idle;

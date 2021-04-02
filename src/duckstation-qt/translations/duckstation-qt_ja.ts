@@ -52,6 +52,10 @@
         <translation>スタック</translation>
     </message>
     <message>
+        <source>Trace</source>
+        <translation>トレース</translation>
+    </message>
+    <message>
         <source>Go To PC</source>
         <translation>PCに移動</translation>
     </message>
@@ -84,6 +88,10 @@
         <translation>デバッグ(&amp;D)</translation>
     </message>
     <message>
+        <source>&amp;Trace</source>
+        <translation>トレース(&amp;T)</translation>
+    </message>
+    <message>
         <source>&amp;Clear Breakpoints</source>
         <translation>ブレークポイントのクリア(&amp;C)</translation>
     </message>
@@ -98,6 +106,10 @@
     <message>
         <source>Ctrl+P</source>
         <translation>Ctrl+P</translation>
+    </message>
+    <message>
+        <source>Ctrl+T</source>
+        <translation>Ctrl+T</translation>
     </message>
     <message>
         <source>Memory</source>
@@ -142,6 +154,12 @@
     <message>
         <source>A breakpoint already exists at this address.</source>
         <translation>このアドレスにはすでにブレークポイントが存在します。</translation>
+    </message>
+    <message>
+        <source>Trace logging started to cpu_log.txt.
+This file can be several gigabytes, so be aware of SSD wear.</source>
+        <translation>cpu_log.txtへのトレースログが開始されました。
+このファイルは数ギガバイトになる可能性があるため、SSDの容量に注意してください。</translation>
     </message>
     <message>
         <source>Address</source>
@@ -216,6 +234,10 @@
         <translation>コードアドレスを入力：</translation>
     </message>
     <message>
+        <source>Trace logging to cpu_log.txt stopped.</source>
+        <translation>cpu_log.txtへのトレースログが停止しました。</translation>
+    </message>
+    <message>
         <source>&amp;Dump Address</source>
         <translation>アドレスをダンプ(&amp;D)</translation>
     </message>
@@ -283,6 +305,10 @@
         <translation>PGXP深度バッファ</translation>
     </message>
     <message>
+        <source>Disabled</source>
+        <translation>無効</translation>
+    </message>
+    <message>
         <source>Enable Clock Speed Control (Overclocking/Underclocking)</source>
         <translation>クロック速度制御を有効にする（オーバークロック/アンダークロック）</translation>
     </message>
@@ -321,6 +347,11 @@
     <message>
         <source>Memory Card 2 Type:</source>
         <translation>メモリーカード2タイプ :</translation>
+    </message>
+    <message>
+        <source>1 Frame</source>
+        <oldsource>1 Frame</oldsource>
+        <translation>1 フレーム</translation>
     </message>
     <message>
         <source>Version Tested:</source>
@@ -404,7 +435,7 @@
     </message>
     <message>
         <source>Set to Current</source>
-        <translation>現在に設定</translation>
+        <translation>現ver.に設定</translation>
     </message>
     <message>
         <source>Properties</source>
@@ -424,7 +455,7 @@
     </message>
     <message>
         <source>Image Path:</source>
-        <translation>画像パス :</translation>
+        <translation>イメージファイルパス :</translation>
     </message>
     <message>
         <source>Texture Filtering:</source>
@@ -441,6 +472,10 @@
     <message>
         <source>PGXP Geometry Correction</source>
         <translation>PGXPジオメトリ補正を有効にする</translation>
+    </message>
+    <message>
+        <source>PGXP Preserve Projection Precision</source>
+        <translation>PGXPで投影精度を維持する</translation>
     </message>
     <message>
         <source>GPU Max Run Ahead:</source>
@@ -491,6 +526,10 @@
         <translation>CPUクロック速度制御</translation>
     </message>
     <message>
+        <source>Runahead Frames:</source>
+        <translation>先行実行フレーム:</translation>
+    </message>
+    <message>
         <source>Compatibility Info Export</source>
         <translation>互換性情報のエクスポート</translation>
     </message>
@@ -520,7 +559,7 @@
     </message>
     <message>
         <source>Force 4:3 For 24-Bit Display (disable widescreen for FMVs)</source>
-        <translation>強制的に 4:3(24ビットディスプレイ)扱い (FMVのワイドスクリーンを無効)</translation>
+        <translation>強制的に 4:3(24ビットディスプレイ)扱い (ビデオ映像のワイドスクリーンを無効)</translation>
     </message>
     <message>
         <source>PGXP Geometry Tolerance:</source>
@@ -589,6 +628,10 @@
     <message>
         <source>5x (10x Speed)</source>
         <translation>5x (10倍速)</translation>
+    </message>
+    <message>
+        <source>Computing Hash for track %1/index %2...</source>
+        <translation>ハッシュを計算しています...トラック %1 /インデックス %2</translation>
     </message>
 </context>
 <context>
@@ -686,11 +729,11 @@
     </message>
     <message>
         <source>Steering</source>
-        <translation>ステアリング</translation>
+        <translation>ネジ軸</translation>
     </message>
     <message>
         <source>Steering Axis Deadzone</source>
-        <translation>ステアリング軸遊び量</translation>
+        <translation>ネジ軸遊び量</translation>
     </message>
 </context>
 <context>
@@ -1231,36 +1274,36 @@
         <translation>バッファーサイズ:</translation>
     </message>
     <message>
-        <source>Controls the volume of the audio played on the host. Values are in percentage.</source>
-        <translation>ホストで再生されるオーディオの音量を制御します。値はパーセンテージです。</translation>
-    </message>
-    <message>
         <source>Output Volume:</source>
         <translation>出力音量:</translation>
     </message>
     <message>
+        <source>When running outside of 100% speed, resamples audio from the target speed instead of dropping frames. Produces much nicer fast forward/slowdown audio at a small cost to performance.</source>
+        <translation>100％以外の速度で実行している場合、フレームドロップをしないように、 実行速度から音声をリサンプリングします。少しのパフォーマンス低下で はるかに優れた早送り/スロー再生時の音声再生をします。</translation>
+    </message>
+    <message>
         <source>Mute CD Audio</source>
-        <translation>CDオーディオをミュート</translation>
+        <translation>CD音声をミュート</translation>
     </message>
     <message>
         <source>Mute All Sound</source>
         <translation>全サウンドをミュート</translation>
     </message>
     <message>
+        <source>Controls the volume of the audio played on the host.</source>
+        <translation>ホストで再生される音声の音量を調整します。</translation>
+    </message>
+    <message>
         <source>Output Volume</source>
         <translation>出力音量</translation>
     </message>
     <message>
-        <source>Controls the volume of the audio played on the host when fast forwarding. Values are in percentage.</source>
-        <translation>早送り時に再生される音声の音量を調整します。値はパーセンテージです。</translation>
-    </message>
-    <message>
         <source>Forcibly mutes both CD-DA and XA audio from the CD-ROM. Can be used to disable background music in some games.</source>
-        <translation>CD-ROMからCD-DAとXAの両方のオーディオを強制的にミュートします。一部のゲームでバックグラウンドミュージックを無効にするために使用できます。</translation>
+        <translation>CD-ROMからCD-DAとXAの両方の音声を強制的にミュートします。一部のゲームでバックグラウンドミュージックを無効にするために使用できます。</translation>
     </message>
     <message>
         <source>Prevents the emulator from producing any audible sound.</source>
-        <translation>エミュレータが可聴音を生成しないようにします。</translation>
+        <translation>エミュレータが音声を再生しないようにします。</translation>
     </message>
     <message>
         <source>Sync To Output</source>
@@ -1268,7 +1311,7 @@
     </message>
     <message>
         <source>The buffer size determines the size of the chunks of audio which will be pulled by the host. Smaller values reduce the output latency, but may cause hitches if the emulation speed is inconsistent. Note that the Cubeb backend uses smaller chunks regardless of this value, so using a low value here may not significantly change latency.</source>
-        <translation>バッファサイズは、ホストによってプルされるオーディオのチャンクのサイズを決定します。値を小さくすると出力レイテンシが減少しますが、エミュレーション速度に一貫性がない場合は問題が発生する可能性があります。 Cubebバックエンドは、この値に関係なく小さいチャンクを使用するため、ここで低い値を使用しても、レイテンシーが大幅に変わることはないことに注意してください。</translation>
+        <translation>バッファサイズは、ホストによってプル動作する音声のチャンクサイズを決定します。値を小さくすると出力レイテンシーが減少しますが、エミュレーション速度に一貫性がない場合は問題が発生する可能性があります。 Cubebバックエンドは、この値に関係なく小さいチャンクを使用するため、ここで低い値を使用しても、レイテンシーが大幅に変わることはないことに注意してください。</translation>
     </message>
     <message>
         <source>Controls</source>
@@ -1276,11 +1319,11 @@
     </message>
     <message>
         <source>Configuration</source>
-        <translation>設定</translation>
+        <translation>音声出力</translation>
     </message>
     <message>
         <source>Throttles the emulation speed based on the audio backend pulling audio frames. This helps to remove noises or crackling if emulation is too fast. Sync will automatically be disabled if not running at 100% speed.</source>
-        <translation>オーディオフレームをプルするオーディオバックエンドに基づいてエミュレーション速度を抑制します。これは、エミュレーションが速すぎる場合にノイズやパチパチという音を取り除くのに役立ちます。 100％の速度で実行されていない場合、同期は自動的に無効になります。</translation>
+        <translation>オーディオフレームをプル動作するオーディオバックエンドに基づいてエミュレーション速度を抑制します。これは、エミュレーションが速すぎる場合にノイズやパチパチという音を取り除くのに役立ちます。 100％の速度で実行されていない場合、同期は自動的に無効になります。</translation>
     </message>
     <message>
         <source>Backend:</source>
@@ -1288,19 +1331,23 @@
     </message>
     <message>
         <source>Start dumping audio to file as soon as the emulator is started. Mainly useful as a debug option.</source>
-        <translation>エミュレーターが起動したらすぐに、オーディオファイルへのダンプを開始します。主にデバッグオプションとして役立ちます。</translation>
+        <translation>エミュレーターが起動したらすぐに、音声ファイルへのダンプを開始します。主にデバッグオプションとして役立ちます。</translation>
     </message>
     <message>
         <source>Maximum latency: 0 frames (0.00ms)</source>
-        <translation>最大レイテンシ― : 0  フレーム (0.00ms)</translation>
+        <translation>最大レイテンシ― : 0 フレーム (0.00ms)</translation>
+    </message>
+    <message>
+        <source>Resampling</source>
+        <translation>リサンプリング</translation>
     </message>
     <message>
         <source>Checked</source>
-        <translation>チェック済</translation>
+        <translation>チェックする</translation>
     </message>
     <message>
         <source>Unchecked</source>
-        <translation>未チェック</translation>
+        <translation>チェックなし</translation>
     </message>
     <message>
         <source>Start Dumping On Boot</source>
@@ -1319,12 +1366,20 @@
         <translation>早送り時音量:</translation>
     </message>
     <message>
-        <source>Maximum latency: %1 frames (%2ms)</source>
-        <translation>最大レイテンシ― : %1 フレーム (%2ms)</translation>
+        <source>Controls the volume of the audio played on the host when fast forwarding.</source>
+        <translation>早送り時に再生される音声の音量を調整します。</translation>
+    </message>
+    <message>
+        <source>Maximum Latency: %n frames (%1ms)</source>
+        <translation>最大レイテンシ― : %n フレーム (%1ms)</translation>
     </message>
     <message>
         <source>Fast Forward Volume</source>
         <translation>早送り時の音量</translation>
+    </message>
+    <message>
+        <source>Mute</source>
+        <translation>ミュート</translation>
     </message>
 </context>
 <context>
@@ -1489,7 +1544,7 @@ This will download approximately 4 megabytes over your current internet connecti
     </message>
     <message>
         <source>Type</source>
-        <translation>種類</translation>
+        <translation>チート種類</translation>
     </message>
     <message>
         <source>Word</source>
@@ -1517,7 +1572,7 @@ This will download approximately 4 megabytes over your current internet connecti
     </message>
     <message>
         <source>Activation</source>
-        <translation>アクティベーション</translation>
+        <translation>適用方法</translation>
     </message>
     <message>
         <source>Memory scan found %1 addresses, but only the first %2 are displayed.</source>
@@ -1545,15 +1600,15 @@ This will download approximately 4 megabytes over your current internet connecti
     </message>
     <message>
         <source>Remove Watch</source>
-        <translation>時計を削除</translation>
+        <translation>ウォッチを削除</translation>
     </message>
     <message>
         <source>Clear Results</source>
-        <translation>すべてクリア</translation>
+        <translation>結果情報のクリア</translation>
     </message>
     <message>
         <source>&amp;Add Group...</source>
-        <translation>グループを追加...(&amp;A)</translation>
+        <translation>グループを追加...</translation>
     </message>
     <message>
         <source>Data Size:</source>
@@ -1581,7 +1636,7 @@ This will download approximately 4 megabytes over your current internet connecti
     </message>
     <message>
         <source>Add To Watch</source>
-        <translation>時計を追加</translation>
+        <translation>ウォッチを追加</translation>
     </message>
     <message>
         <source>New Search</source>
@@ -1625,7 +1680,7 @@ This will download approximately 4 megabytes over your current internet connecti
     </message>
     <message>
         <source>Load Watch</source>
-        <translation>時計を読込み</translation>
+        <translation>ウォッチを読込み</translation>
     </message>
     <message>
         <source>Less Than Previous</source>
@@ -1633,7 +1688,7 @@ This will download approximately 4 megabytes over your current internet connecti
     </message>
     <message>
         <source>Save Watch</source>
-        <translation>時計を保存</translation>
+        <translation>ウォッチを保存</translation>
     </message>
     <message>
         <source>Export...</source>
@@ -1644,12 +1699,20 @@ This will download approximately 4 megabytes over your current internet connecti
         <translation>インポート...</translation>
     </message>
     <message>
+        <source>Clear</source>
+        <translation>クリア</translation>
+    </message>
+    <message>
+        <source>Reset</source>
+        <translation>リセット</translation>
+    </message>
+    <message>
         <source>Address</source>
         <translation>アドレス</translation>
     </message>
     <message>
         <source>PCSXR/Libretro Cheat Files (*.cht *.txt);;All Files (*.*)</source>
-        <translation>PCSXR/Libretro チートファイル(*.cht);;すべてのファイル(*.*)</translation>
+        <translation>PCSXR/Libretro チートファイル(*.cht *.txt);;すべてのファイル(*.*)</translation>
     </message>
     <message>
         <source>Halfword</source>
@@ -1677,7 +1740,23 @@ This will download approximately 4 megabytes over your current internet connecti
     </message>
     <message>
         <source>Failed to save cheat file. The log may contain more information.</source>
-        <translation>チートファイルの保存に失敗しました。ログには、より多くの情報が含まれている場合があります。</translation>
+        <translation>チートファイルの保存に失敗しました。ログに、より多くの情報が含まれている場合があります。</translation>
+    </message>
+    <message>
+        <source>Confirm Clear</source>
+        <translation>クリア確認をする</translation>
+    </message>
+    <message>
+        <source>Confirm Reset</source>
+        <translation>リセット確認をする</translation>
+    </message>
+    <message>
+        <source>Are you sure you want to remove all cheats? This is not reversible.</source>
+        <translation>すべてのチートを削除してもよろしいですか？これは元に戻せません。</translation>
+    </message>
+    <message>
+        <source>Are you sure you want to reset the cheat list? Any cheats not in the DuckStation database WILL BE LOST.</source>
+        <translation>チートリストをリセットしてもよろしいですか？DuckStationデータベースにないチートは失われます。</translation>
     </message>
     <message>
         <source>Scratchpad</source>
@@ -1761,7 +1840,7 @@ This will download approximately 4 megabytes over your current internet connecti
     </message>
     <message>
         <source>&amp;Add Code...</source>
-        <translation>コードを追加...(&amp;A)</translation>
+        <translation>コードを追加...</translation>
     </message>
     <message>
         <source>Are you sure you wish to delete the selected code? This action is not reversible.</source>
@@ -1843,12 +1922,15 @@ This will download approximately 4 megabytes over your current internet connecti
     </message>
     <message>
         <source>DInput</source>
-        <oldsource>XInput</oldsource>
         <translation>DInput</translation>
     </message>
     <message>
         <source>XInput</source>
         <translation>XInput</translation>
+    </message>
+    <message>
+        <source>Evdev</source>
+        <translation>Evdev</translation>
     </message>
 </context>
 <context>
@@ -1910,6 +1992,213 @@ This will download approximately 4 megabytes over your current internet connecti
     </message>
 </context>
 <context>
+    <name>ConsoleSettingsWidget</name>
+    <message>
+        <source>100%</source>
+        <translation>100%</translation>
+    </message>
+    <message>
+        <source>Form</source>
+        <translation>形式</translation>
+    </message>
+    <message>
+        <source>Enable Clock Speed Control (Overclocking/Underclocking)</source>
+        <translation>クロック速度制御を有効にする（オーバークロック/アンダークロック）</translation>
+    </message>
+    <message>
+        <source>Simulates the region check present in original, unmodified consoles.</source>
+        <translation>元の変更されていないコンソールに存在するリージョンチェックをシミュレートします。</translation>
+    </message>
+    <message>
+        <source>Recompiler (Fastest)</source>
+        <translation>再コンパイル（最速）</translation>
+    </message>
+    <message>
+        <source>Auto-Detect</source>
+        <translation>自動検出</translation>
+    </message>
+    <message>
+        <source>Yes, I will confirm bugs without overclocking before reporting.</source>
+        <translation>はい、報告する前にオーバークロックせずにバグがないか確認します。</translation>
+    </message>
+    <message>
+        <source>CPU Emulation</source>
+        <translation>CPUエミュレーション</translation>
+    </message>
+    <message>
+        <source>Region</source>
+        <translation>地域</translation>
+    </message>
+    <message>
+        <source>Enabling CPU overclocking will break games, cause bugs, reduce performance and can significantly increase system requirements.
+
+By enabling this option you are agreeing to not create any bug reports unless you have confirmed the bug also occurs with overclocking disabled.
+
+This warning will only be shown once.</source>
+        <translation>CPUオーバークロックを有効にすると、ゲームが中断し、バグが発生し、パフォーマンスが低下し、システム要件が大幅に増加する可能性があります。
+
+このオプションを有効にすると、オーバークロックを無効にしてもバグが発生することを確認しない限り、バグレポートを作成しないことに同意したことになります。
+
+この警告は1回だけ表示されます。</translation>
+    </message>
+    <message>
+        <source>None (Double Speed)</source>
+        <translation>実機通り（倍速）</translation>
+    </message>
+    <message>
+        <source>2x (Quad Speed)</source>
+        <translation>2x (4倍速)</translation>
+    </message>
+    <message>
+        <source>Overclocking Percentage</source>
+        <translation>CPUオーバークロック警告</translation>
+    </message>
+    <message>
+        <source>Use Read Thread (Asynchronous)</source>
+        <translation>読み取りスレッドを使用する（非同期）</translation>
+    </message>
+    <message>
+        <source>Determines the emulated hardware type.</source>
+        <translation>エミュレートされる機種(国)を決定します。</translation>
+    </message>
+    <message>
+        <source>Speeds up CD-ROM reads by the specified factor. Only applies to double-speed reads, and is ignored when audio is playing. May improve loading speeds in some games, at the cost of breaking others.</source>
+        <translation>指定された係数でCD-ROMの読み取りを高速化します。倍速読み取りにのみ適用され、音声の再生中は無視されます。一部のゲームでは読み込み速度が向上する可能性がありますが、他のゲームは中断されます。</translation>
+    </message>
+    <message>
+        <source>Region:</source>
+        <translation>リージョン :</translation>
+    </message>
+    <message>
+        <source>Enable Region Check</source>
+        <translation>リージョンチェックを有効にする</translation>
+    </message>
+    <message>
+        <source>Selects the percentage of the normal clock speed the emulated hardware will run at.</source>
+        <translation>エミュレートされたハードウェアが実行される通常のクロック速度のパーセンテージを選択します。</translation>
+    </message>
+    <message>
+        <source>Loads the game image into RAM. Useful for network paths that may become unreliable during gameplay. In some cases also eliminates stutter when games initiate audio track playback.</source>
+        <translation>ゲームイメージをRAMにロードします。ゲームプレイ中に信頼性が低下する可能性のあるネットワークパスに役立ちます。場合によっては、ゲームが音声トラックの再生を開始するときのスタッターも排除されます。</translation>
+    </message>
+    <message>
+        <source>No, take me back to safety.</source>
+        <translation>いいえ、安全に戻してください。</translation>
+    </message>
+    <message>
+        <source>Checked</source>
+        <translation>チェックする</translation>
+    </message>
+    <message>
+        <source>Unchecked</source>
+        <translation>チェックなし</translation>
+    </message>
+    <message>
+        <source>Preload Image To RAM</source>
+        <translation>RAMにイメージを先読みする</translation>
+    </message>
+    <message>
+        <source>Console</source>
+        <translation>コンソール</translation>
+    </message>
+    <message>
+        <source>Reduces hitches in emulation by reading/decompressing CD data asynchronously on a worker thread.</source>
+        <translation>ワーカースレッドでCDデータを非同期に読み取り/解凍することにより、エミュレーションの問題を軽減します。</translation>
+    </message>
+    <message>
+        <source>%1% (%2MHz)</source>
+        <translation>%1% (%2MHz)</translation>
+    </message>
+    <message>
+        <source>CDROM Read Speedup</source>
+        <translation>CD-ROM読み取りの高速化</translation>
+    </message>
+    <message>
+        <source>Preload Image to RAM</source>
+        <translation>イメージをRAMに先読みする</translation>
+    </message>
+    <message>
+        <source>Execution Mode:</source>
+        <translation>実行モード :</translation>
+    </message>
+    <message>
+        <source>Determines how the emulated CPU executes instructions.</source>
+        <translation>エミュレートされたCPUが命令を実行する方法を決定します。</translation>
+    </message>
+    <message>
+        <source>Execution Mode</source>
+        <translation>実行モード</translation>
+    </message>
+    <message>
+        <source>CD-ROM Emulation</source>
+        <translation>CD-ROMエミュレーション</translation>
+    </message>
+    <message>
+        <source>4x (8x Speed)</source>
+        <translation>4x (8倍速)</translation>
+    </message>
+    <message>
+        <source>Read Speedup:</source>
+        <translation>CDROM読込速度:</translation>
+    </message>
+    <message>
+        <source>100% (effective 33.3mhz)</source>
+        <translation>100% (実効33.3MHz)</translation>
+    </message>
+    <message>
+        <source>3x (6x Speed)</source>
+        <translation>3x (6倍速)</translation>
+    </message>
+    <message>
+        <source>When this option is chosen, the clock speed set below will be used.</source>
+        <translation>このオプションを選択すると、以下に設定されているクロック速度が使用されます。</translation>
+    </message>
+    <message>
+        <source>10x (20x Speed)</source>
+        <translation>10x (20倍速)</translation>
+    </message>
+    <message>
+        <source>9x (18x Speed)</source>
+        <translation>9x (18倍速)</translation>
+    </message>
+    <message>
+        <source>6x (12x Speed)</source>
+        <translation>6x (12倍速)</translation>
+    </message>
+    <message>
+        <source>7x (14x Speed)</source>
+        <translation>7x (14倍速)</translation>
+    </message>
+    <message>
+        <source>8x (16x Speed)</source>
+        <translation>8x (16倍速)</translation>
+    </message>
+    <message>
+        <source>5x (10x Speed)</source>
+        <translation>5x (10倍速)</translation>
+    </message>
+    <message>
+        <source>Controller Ports</source>
+        <translation>コントローラポート</translation>
+    </message>
+    <message>
+        <source>Enables multitap support on specified controller ports. Leave disabled for games that do not support multitap input.</source>
+        <translation>指定されたコントローラポートでマルチタップを有効にします。マルチタップ入力をサポートしないゲームでは、使用しないでください。</translation>
+    </message>
+    <message>
+        <source>Multitap:</source>
+        <translation>マルチタップ：</translation>
+    </message>
+    <message>
+        <source>Disabled</source>
+        <translation>使用しない</translation>
+    </message>
+    <message>
+        <source>CPU Overclocking Warning</source>
+        <translation>CPUオーバークロック警告</translation>
+    </message>
+</context>
+<context>
     <name>GameListModel</name>
     <message>
         <source>Code</source>
@@ -1938,6 +2227,111 @@ This will download approximately 4 megabytes over your current internet connecti
     <message>
         <source>File Title</source>
         <translation>ファイルタイトル</translation>
+    </message>
+</context>
+<context>
+    <name>AchievementSettingsWidget</name>
+    <message>
+        <source>Form</source>
+        <translation>形式</translation>
+    </message>
+    <message>
+        <source>View Profile...</source>
+        <translation>プロフィール表示...</translation>
+    </message>
+    <message>
+        <source>When enabled, rich presence information will be collected and sent to the server where supported.</source>
+        <translation>有効にすると、リッチプレゼンス情報が収集され、サポートされているサーバーに送信されます。</translation>
+    </message>
+    <message>
+        <source>Enable Hardcore Mode</source>
+        <translation>ハードコアモードを有効にする</translation>
+    </message>
+    <message>
+        <source>Enable Test Mode</source>
+        <translation>テストモードを有効にする</translation>
+    </message>
+    <message>
+        <source>Game Info</source>
+        <translation>ゲーム情報</translation>
+    </message>
+    <message>
+        <source>When enabled and logged in, DuckStation will scan for achievements on startup.</source>
+        <translation>有効にしてログインすると、DuckStationは起動時に実績をスキャンします。</translation>
+    </message>
+    <message>
+        <source>Enable Rich Presence</source>
+        <translation>リッチプレゼンスを有効にする</translation>
+    </message>
+    <message>
+        <source>Enable Achievements</source>
+        <translation>実績を有効にする</translation>
+    </message>
+    <message>
+        <source>Logout</source>
+        <translation>ログアウト</translation>
+    </message>
+    <message>
+        <source>Enabling hardcore mode will disable cheats, save sates, and debugging features.</source>
+        <translation>ハードコアモードを有効にすると、チート、保存状態、およびデバッグ機能が無効になります。</translation>
+    </message>
+    <message>
+        <source>Login...</source>
+        <translation>ログイン...</translation>
+    </message>
+    <message>
+        <source>Account</source>
+        <translation>アカウント</translation>
+    </message>
+    <message>
+        <source>When enabled, DuckStation will assume all achievements are locked and not send any unlock notifications to the server.</source>
+        <translation>有効にすると、DuckStationはすべての実績がロックされていると見なし、サーバーにロック解除通知を送信しません。</translation>
+    </message>
+    <message>
+        <source>Global Settings</source>
+        <translation>Achievement設定</translation>
+    </message>
+    <message>
+        <source>Unchecked</source>
+        <translation>チェック無し</translation>
+    </message>
+    <message>
+        <source>Account Settings</source>
+        <translation>アカウント設定</translation>
+    </message>
+    <message>
+        <source>Not Logged In.</source>
+        <translation>未登録</translation>
+    </message>
+    <message>
+        <source>Username: %1
+Login token generated on %2.</source>
+        <translation>ユーザー名:%1
+%2で生成されたログイントークン</translation>
+    </message>
+    <message>
+        <source>When enabled, the first disc in a playlist will be used for achievements, regardless of which disc is active.</source>
+        <translation>有効にすると、アクティブなディスクに関係なく、プレイリストの最初のディスクが実績に使用されます。</translation>
+    </message>
+    <message>
+        <source>The current state will be saved, but you will be unable to load it until you disable hardcore mode.
+
+</source>
+        <translation>現在の状態は保存されますが、ハードコアモードを無効にするまで読込できません。
+
+</translation>
+    </message>
+    <message>
+        <source>&quot;Challenge&quot; mode for achievements. Disables save state, cheats, and slowdown functions, but you receive double the achievement points.</source>
+        <translation>achievementsの&quot;チャレンジモード&quot;&#x3000;セーブステート、チート、スローダウン機能を無効にしますが、アチーブメントポイントは2倍になります。</translation>
+    </message>
+    <message>
+        <source>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p align=&quot;justify&quot;&gt;DuckStation uses RetroAchievements as an achievement database and for tracking progress. To use achievements, please sign up for an account at &lt;a href=&quot;https://retroachievements.org/&quot;&gt;&lt;span style=&quot; text-decoration: underline; color:#0000ff;&quot;&gt;retroachievements.org&lt;/span&gt;&lt;/a&gt;.&lt;/p&gt;&lt;p align=&quot;justify&quot;&gt;To view the achievement list in-game, press the hotkey for &lt;span style=&quot; font-weight:600;&quot;&gt;Open Quick Menu&lt;/span&gt; and select &lt;span style=&quot; font-weight:600;&quot;&gt;Achievements&lt;/span&gt; from the menu.&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</source>
+        <translation>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p align=&quot;justify&quot;&gt;DuckStationは、RetroAchievementsを達成実績データベースとして使用し、進行状況を保存します。Achievementsを使用するには、&lt;a href=&quot;https://retroachievements.org/&quot;&gt;&lt;span style=&quot; text-decoration: underline; color:#0000ff;&quot;&gt;retroachievements.org&lt;/span&gt;&lt;/a&gt;.&lt;/p&gt;&lt;p align=&quot;justify&quot;&gt;でアカウントにサインアップしてください。&#x3000;&#x3000;&#x3000;&#x3000;&#x3000;メニューからホットキーの&lt;span style=&quot; font-weight:600;&quot;&gt; [クイックメニューを開く] &lt;/span&gt; を押して、  &lt;span style=&quot; font-weight:600;&quot;&gt; Achievements &lt;/span&gt; を選択します。&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</translation>
+    </message>
+    <message>
+        <source>Use First Disc From Playlist</source>
+        <translation>プレイリストの最初のディスクを使用する</translation>
     </message>
 </context>
 <context>
@@ -1980,7 +2374,23 @@ This will download approximately 4 megabytes over your current internet connecti
     </message>
     <message>
         <source>Logging</source>
-        <translation>ロギング</translation>
+        <translation>ログ保存</translation>
+    </message>
+    <message>
+        <source>Logs messages to duckstation.log in the user directory.</source>
+        <translation>ログをユーザーディレクトリのduckstation.logに記録します。</translation>
+    </message>
+    <message>
+        <source>Unchecked</source>
+        <translation>チェックなし</translation>
+    </message>
+    <message>
+        <source>Logs messages to the debug console where supported.</source>
+        <translation>サポートされている場合は、ログをデバッグコンソールに記録します。</translation>
+    </message>
+    <message>
+        <source>Minimum Dumped VRAM Write Height</source>
+        <translation>最小ダンプVRAM書き込み高</translation>
     </message>
     <message>
         <source>Preload Texture Replacements</source>
@@ -1992,7 +2402,7 @@ This will download approximately 4 megabytes over your current internet connecti
     </message>
     <message>
         <source>GPU Max Run-Ahead</source>
-        <translation>GPU最大ランアヘッド</translation>
+        <translation>GPU最大先行実行(Run-Ahead)</translation>
     </message>
     <message>
         <source>Enable Recompiler Fast Memory Access</source>
@@ -2039,16 +2449,36 @@ This will download approximately 4 megabytes over your current internet connecti
         <translation>表示のFPS制限</translation>
     </message>
     <message>
+        <source>Sets the verbosity of messages logged. Higher levels will log more messages.</source>
+        <translation>ログに記録される情報の詳細度を設定します。レベルが高いほど、より多くの情報がログに記録されます。</translation>
+    </message>
+    <message>
+        <source>User Preference</source>
+        <translation>ユーザー設定</translation>
+    </message>
+    <message>
         <source>Minimum Dumped VRAM Write Width</source>
         <translation>最小ダンプVRAM書き込み幅</translation>
+    </message>
+    <message>
+        <source>Logs messages to the console window.</source>
+        <translation>ログをコンソールウィンドウに記録します。</translation>
     </message>
     <message>
         <source>PGXP Depth Clear Threshold</source>
         <translation>PGXPクリア深度 しきい値</translation>
     </message>
     <message>
+        <source>Log Level</source>
+        <translation>ログレベル</translation>
+    </message>
+    <message>
         <source>Enable Recompiler Memory Exceptions</source>
         <translation>リコンパイラのメモリ例外を有効にする</translation>
+    </message>
+    <message>
+        <source>Shows a debug menu bar with additional statistics and quick settings.</source>
+        <translation>追加の統計とクイック設定を含むデバッグメニューバーを表示します。</translation>
     </message>
     <message>
         <source>Log Filters:</source>
@@ -2056,7 +2486,7 @@ This will download approximately 4 megabytes over your current internet connecti
     </message>
     <message>
         <source>Disable All Enhancements</source>
-        <translation>すべての拡張機能を無効にする</translation>
+        <translation>すべての拡張機能を無効</translation>
     </message>
     <message>
         <source>Log To File</source>
@@ -2079,8 +2509,16 @@ This will download approximately 4 megabytes over your current internet connecti
         <translation>PGXPジオメトリトレランス(形状公差)を有効にする</translation>
     </message>
     <message>
+        <source>Logs messages to the window.</source>
+        <translation>ログをウィンドウに記録します。</translation>
+    </message>
+    <message>
         <source>PGXP Vertex Cache</source>
         <translation>PGXP頂点キャッシュを有効にする</translation>
+    </message>
+    <message>
+        <source>Information</source>
+        <translation>情報</translation>
     </message>
 </context>
 <context>
@@ -2135,11 +2573,11 @@ This will download approximately 4 megabytes over your current internet connecti
     </message>
     <message>
         <source>Unchecked</source>
-        <translation>未チェック</translation>
+        <translation>チェックなし</translation>
     </message>
     <message>
         <source>Fast Boot</source>
-        <translation>高速起動</translation>
+        <translation>高速ブート</translation>
     </message>
     <message>
         <source>Refresh List</source>
@@ -2154,155 +2592,12 @@ This will download approximately 4 megabytes over your current internet connecti
         <translation>BIOSの選択</translation>
     </message>
     <message>
+        <source>Patches the BIOS to log calls to printf(). Only use when debugging, can break games.</source>
+        <translation>printf（）への呼び出しをログに記録するようにBIOSにパッチを適用します。デバッグ時にのみ使用し、ゲームを中断する可能性があります。</translation>
+    </message>
+    <message>
         <source>PAL (Europe, Australia):</source>
         <translation>PAL (ヨーロッパ, オーストラリア) :</translation>
-    </message>
-</context>
-<context>
-    <name>ConsoleSettingsWidget</name>
-    <message>
-        <source>Form</source>
-        <translation>形式</translation>
-    </message>
-    <message>
-        <source>Enable Clock Speed Control (Overclocking/Underclocking)</source>
-        <translation>クロック速度制御を有効にする（オーバークロック/アンダークロック）</translation>
-    </message>
-    <message>
-        <source>Yes, I will confirm bugs without overclocking before reporting.</source>
-        <translation>はい、報告する前にオーバークロックせずにバグを確認します。</translation>
-    </message>
-    <message>
-        <source>CPU Emulation</source>
-        <translation>CPUエミュレーション</translation>
-    </message>
-    <message>
-        <source>Enabling CPU overclocking will break games, cause bugs, reduce performance and can significantly increase system requirements.
-
-By enabling this option you are agreeing to not create any bug reports unless you have confirmed the bug also occurs with overclocking disabled.
-
-This warning will only be shown once.</source>
-        <translation>CPUオーバークロックを有効にすると、ゲームが中断し、バグが発生し、パフォーマンスが低下し、システム要件が大幅に増加する可能性があります。
-
-このオプションを有効にすると、オーバークロックを無効にしてもバグが発生することを確認しない限り、バグレポートを作成しないことに同意したことになります。
-
-この警告は1回だけ表示されます。</translation>
-    </message>
-    <message>
-        <source>None (Double Speed)</source>
-        <translation>実機通り（倍速）</translation>
-    </message>
-    <message>
-        <source>2x (Quad Speed)</source>
-        <translation>2x (4倍速)</translation>
-    </message>
-    <message>
-        <source>Use Read Thread (Asynchronous)</source>
-        <translation>読み取りスレッドを使用する（非同期）</translation>
-    </message>
-    <message>
-        <source>Speeds up CD-ROM reads by the specified factor. Only applies to double-speed reads, and is ignored when audio is playing. May improve loading speeds in some games, at the cost of breaking others.</source>
-        <translation>指定された係数でCD-ROMの読み取りを高速化します。倍速読み取りにのみ適用され、オーディオの再生中は無視されます。一部のゲームでは読み込み速度が向上する可能性がありますが、他のゲームは中断されます。</translation>
-    </message>
-    <message>
-        <source>Region:</source>
-        <translation>リージョン :</translation>
-    </message>
-    <message>
-        <source>Enable Region Check</source>
-        <translation>リージョンチェックを有効にする</translation>
-    </message>
-    <message>
-        <source>Loads the game image into RAM. Useful for network paths that may become unreliable during gameplay. In some cases also eliminates stutter when games initiate audio track playback.</source>
-        <translation>ゲームイメージをRAMにロードします。ゲームプレイ中に信頼性が低下する可能性のあるネットワークパスに役立ちます。場合によっては、ゲームがオーディオトラックの再生を開始するときのスタッターも排除されます。</translation>
-    </message>
-    <message>
-        <source>No, take me back to safety.</source>
-        <translation>いいえ、安全に戻してください。</translation>
-    </message>
-    <message>
-        <source>Unchecked</source>
-        <translation>未チェック</translation>
-    </message>
-    <message>
-        <source>Preload Image To RAM</source>
-        <translation>RAMにイメージを先読みする</translation>
-    </message>
-    <message>
-        <source>CPU Clock Speed Control</source>
-        <translation>CPUクロック速度制御</translation>
-    </message>
-    <message>
-        <source>Console</source>
-        <translation>コンソール</translation>
-    </message>
-    <message>
-        <source>%1% (%2MHz)</source>
-        <translation>%1% (%2MHz)</translation>
-    </message>
-    <message>
-        <source>CDROM Read Speedup</source>
-        <translation>CD-ROM読み取りの高速化</translation>
-    </message>
-    <message>
-        <source>Preload Image to RAM</source>
-        <translation>イメージをRAMに先読みする</translation>
-    </message>
-    <message>
-        <source>Execution Mode:</source>
-        <translation>実行モード :</translation>
-    </message>
-    <message>
-        <source>CD-ROM Emulation</source>
-        <translation>CD-ROMエミュレーション</translation>
-    </message>
-    <message>
-        <source>None (Double Speed</source>
-        <translation>実機通り（倍速）</translation>
-    </message>
-    <message>
-        <source>4x (8x Speed)</source>
-        <translation>4x (8倍速)</translation>
-    </message>
-    <message>
-        <source>Read Speedup:</source>
-        <translation>CDROM読込速度:</translation>
-    </message>
-    <message>
-        <source>100% (effective 33.3mhz)</source>
-        <translation>100% (実効33.3MHz)</translation>
-    </message>
-    <message>
-        <source>3x (6x Speed)</source>
-        <translation>3x (6倍速)</translation>
-    </message>
-    <message>
-        <source>10x (20x Speed)</source>
-        <translation>10x (20倍速)</translation>
-    </message>
-    <message>
-        <source>9x (18x Speed)</source>
-        <translation>9x (18倍速)</translation>
-    </message>
-    <message>
-        <source>6x (12x Speed)</source>
-        <translation>6x (12倍速)</translation>
-    </message>
-    <message>
-        <source>7x (14x Speed)</source>
-        <translation>7x (14倍速)</translation>
-    </message>
-    <message>
-        <source>8x (16x Speed)</source>
-        <translation>8x (16倍速)</translation>
-    </message>
-    <message>
-        <source>5x (10x Speed)</source>
-        <translation>5x (10倍速)</translation>
-    </message>
-    <message>
-        <source>CPU Overclocking Warning</source>
-        <translation>CPUオーバークロック警告</translation>
     </message>
 </context>
 <context>
@@ -2312,12 +2607,16 @@ This warning will only be shown once.</source>
         <translation>形式</translation>
     </message>
     <message>
+        <source>Enable this option will ensure every frame the console renders is displayed to the screen, for optimal frame pacing. If you are having difficulties maintaining full speed, or are getting audio glitches, try disabling this option.</source>
+        <translation>このオプションを有効にすると、最適なフレームペーシングのために、コンソールがレンダリングするすべてのフレームが画面に表示されます。フルスピードを維持するのが難しい場合、または音声の不具合が発生する場合は、このオプションを無効にしてみてください。</translation>
+    </message>
+    <message>
         <source>Changes the aspect ratio used to display the console&apos;s output to the screen. The default is Auto (Game Native) which automatically adjusts the aspect ratio to match how a game would be shown on a typical TV of the era.</source>
-        <translation>コンソールの出力を画面に表示するために使用するアスペクト比を変更します。デフォルトは「自動(ゲームに基づく)」で、アスペクト比を自動的に調整して、その時代の典型的なテレビでのゲームの表示方法と一致させます。</translation>
+        <translation>コンソールの出力を画面に表示するために使用するアスペクト比を変更します。デフォルトは[自動(ゲームに基づく)]で、アスペクト比を自動的に調整して、その時代の典型的なテレビでのゲームの表示方法と一致させます。</translation>
     </message>
     <message>
         <source>Basic</source>
-        <translation>基本</translation>
+        <translation>表示方式</translation>
     </message>
     <message>
         <source>Crop:</source>
@@ -2325,7 +2624,7 @@ This warning will only be shown once.</source>
     </message>
     <message>
         <source>Enable this option to match DuckStation&apos;s refresh rate with your current monitor or screen. VSync is automatically disabled when it is not possible (e.g. running at non-100% speed).</source>
-        <translation>このオプションを有効にすると、DuckStationの更新レートが現在のモニターまたは画面と一致します。 VSyncが不可能な場合（100％以外の速度で実行している場合など）、VSyncは自動的に無効になります。</translation>
+        <translation>このオプションを有効にすると、DuckStationの更新レートが現在のモニターまたは画面と一致します。 垂直同期が不可能な場合（100％以外の速度で実行している場合など）、垂直同期は自動的に無効になります。</translation>
     </message>
     <message>
         <source>VSync</source>
@@ -2353,7 +2652,7 @@ This warning will only be shown once.</source>
     </message>
     <message>
         <source>Determines how much of the area typically not visible on a consumer TV set to crop/hide. &lt;br&gt;Some games display content in the overscan area, or use it for screen effects. &lt;br&gt;May not display correctly with the &quot;All Borders&quot; setting. &quot;Only Overscan&quot; offers a good compromise between stability and hiding black borders.</source>
-        <translation>トリミング/非表示にするために、消費者向けテレビに通常表示されない領域の量を決定します。 &lt;br&gt;一部のゲームでは、オーバースキャン領域にコンテンツを表示したり、画面効果に使用したりします。 &lt;br&gt;「すべてのボーダー」設定では正しく表示されない場合があります。  &lt;br&gt;「オーバースキャンエリアのみ」は、安定性と黒い境界線を隠すことの間の適切な妥協点を提供します。</translation>
+        <translation>トリミング/非表示にするために、消費者向けテレビに通常表示されない領域の量を決定します。 &lt;br&gt;一部のゲームでは、オーバースキャンエリアにコンテンツを表示したり、画面効果に使用したりします。 &lt;br&gt;設定の[すべてのボーダー]では正しく表示されない場合があります。  &lt;br&gt;[オーバースキャンエリアのみ]は、安定性と黒い境界線を隠すことの間の適切な妥協点を提供します。</translation>
     </message>
     <message>
         <source>Uses bilinear texture filtering when displaying the console&apos;s framebuffer to the screen. &lt;br&gt;Disabling filtering will producer a sharper, blockier/pixelated image. Enabling will smooth out the image. &lt;br&gt;The option will be less noticable the higher the resolution scale.</source>
@@ -2374,6 +2673,22 @@ This warning will only be shown once.</source>
     <message>
         <source>Integer Upscaling</source>
         <translation>整数アップスケーリング</translation>
+    </message>
+    <message>
+        <source>Stretch To Fill</source>
+        <translation>ストレッチで埋める</translation>
+    </message>
+    <message>
+        <source>Fills the window with the active display area, regardless of the aspect ratio.</source>
+        <translation>アスペクト比に関係なく、ウィンドウをアクティブな表示領域で埋めます。</translation>
+    </message>
+    <message>
+        <source>Internal Resolution Screenshots</source>
+        <translation>内部解像度のスクリーンショット</translation>
+    </message>
+    <message>
+        <source>Saves screenshots at internal render resolution and without postprocessing. If this option is disabled, the screenshots will be taken at the window&apos;s resolution. Internal resolution screenshots can be very large at high rendering scales.</source>
+        <translation>スクリーンショットを内部レンダリング解像度で後処理なしで保存します。このオプションが無効になっている場合、スクリーンショットはウィンドウの解像度で撮影されます。内部解像度のスクリーンショットは、レンダリングスケールが大きいと非常に大きくなる可能性があります。</translation>
     </message>
     <message>
         <source>Show Resolution</source>
@@ -2401,11 +2716,11 @@ This warning will only be shown once.</source>
     </message>
     <message>
         <source>Downsamples the rendered image prior to displaying it. Can improve overall image quality in mixed 2D/3D games, but should be disabled for pure 3D games. Only applies to the hardware renderers.</source>
-        <translation>レンダリングされた画像を表示する前にダウンサンプリングします。混合2D / 3Dゲームで全体的な画質を向上させることができますが、純粋な3Dゲームでは無効にする必要があります。ハードウェアレンダラーにのみ適用されます。</translation>
+        <translation>レンダリングされた画像を表示する前にダウンサンプリングします。混合2D / 3Dゲームで 全体的な画質を向上させることができますが、純粋な3Dゲームでは無効にする必要があります。 ハードウェアレンダラーにのみ適用されます。 </translation>
     </message>
     <message>
-        <source>Only Overscan Area</source>
-        <translation>オーバースキャンエリアのみ</translation>
+        <source>Optimal Frame Pacing</source>
+        <translation>最適なフレームペーシング</translation>
     </message>
     <message>
         <source>Shows the internal frame rate of the game in the top-right corner of the display.</source>
@@ -2428,6 +2743,10 @@ This warning will only be shown once.</source>
         <translation>スレッド化プレゼンテーション</translation>
     </message>
     <message>
+        <source>Fullscreen Mode</source>
+        <translation>フルスクリーンモード</translation>
+    </message>
+    <message>
         <source>If your system contains multiple GPUs or adapters, you can select which GPU you wish to use for the hardware renderers. &lt;br&gt;This option is only supported in Direct3D and Vulkan. OpenGL will always use the default device.</source>
         <translation>システムに複数のGPUまたはアダプターが含まれている場合は、ハードウェアレンダラーに使用するGPUを選択できます。 &lt;br&gt;このオプションは、Direct3DおよびVulkanでのみサポートされています。 OpenGLは常にデフォルトのデバイスを使用します。</translation>
     </message>
@@ -2445,11 +2764,15 @@ This warning will only be shown once.</source>
     </message>
     <message>
         <source>Checked</source>
-        <translation>チェック済</translation>
+        <translation>チェックする</translation>
     </message>
     <message>
         <source>Unchecked</source>
-        <translation>未チェック</translation>
+        <translation>チェックなし</translation>
+    </message>
+    <message>
+        <source>Chooses the fullscreen resolution and frequency.</source>
+        <translation>フルスクリーンの解像度と周波数を選択します。</translation>
     </message>
     <message>
         <source>Adapter:</source>
@@ -2480,6 +2803,10 @@ This warning will only be shown once.</source>
         <translation>アスペクト比 :</translation>
     </message>
     <message>
+        <source>Shows the resolution of the game in the top-right corner of the display.</source>
+        <translation>ディスプレイの右上隅にゲームの解像度を表示します。</translation>
+    </message>
+    <message>
         <source>Use Blit Swap Chain</source>
         <translation>ブリットでのスワップチェーンを使用</translation>
     </message>
@@ -2505,14 +2832,184 @@ This warning will only be shown once.</source>
     </message>
 </context>
 <context>
+    <name>EmulationSettingsWidget</name>
+    <message>
+        <source>Form</source>
+        <translation>形式</translation>
+    </message>
+    <message>
+        <source>Turbo Speed:</source>
+        <translation>ターボ速度:</translation>
+    </message>
+    <message>
+        <source>User Preference</source>
+        <translation>ユーザー設定</translation>
+    </message>
+    <message>
+        <source>Disabled</source>
+        <translation>使用しない</translation>
+    </message>
+    <message>
+        <source>Turbo Speed</source>
+        <translation>ターボ速度</translation>
+    </message>
+    <message>
+        <source>Rewind for %n frame(s), lasting %1 second(s) will require up to %2MB of RAM and %3MB of VRAM.</source>
+        <translation>%n フレーム巻き戻しが、%1 秒間続くと、最大 %2 MBのRAMと %3 MBのVRAMが必要になります。</translation>
+    </message>
+    <message>
+        <source>1 Frame</source>
+        <translation>1 フレーム</translation>
+    </message>
+    <message>
+        <source>2 Frames</source>
+        <translation>2 フレーム</translation>
+    </message>
+    <message>
+        <source>3 Frames</source>
+        <translation>3 フレーム</translation>
+    </message>
+    <message>
+        <source>4 Frames</source>
+        <translation>4 フレーム</translation>
+    </message>
+    <message>
+        <source>5 Frames</source>
+        <translation>5 フレーム</translation>
+    </message>
+    <message>
+        <source>6 Frames</source>
+        <translation>6 フレーム</translation>
+    </message>
+    <message>
+        <source>7 Frames</source>
+        <translation>7 フレーム</translation>
+    </message>
+    <message>
+        <source>8 Frames</source>
+        <translation>8 フレーム</translation>
+    </message>
+    <message>
+        <source>9 Frames</source>
+        <translation>9 フレーム</translation>
+    </message>
+    <message>
+        <source>10 Frames</source>
+        <translation>10 フレーム</translation>
+    </message>
+    <message>
+        <source>Speed Control</source>
+        <translation>速度調整</translation>
+    </message>
+    <message>
+        <source>Runahead:</source>
+        <translation>先行実行(Runahead):</translation>
+    </message>
+    <message>
+        <source>Rewind Save Frequency:</source>
+        <translation>巻き戻し保存頻度：</translation>
+    </message>
+    <message>
+        <source>Rewind is not enabled. Please note that enabling rewind may significantly increase system requirements.</source>
+        <translation>巻き戻しは、有効になっていません。
+巻き戻しを有効にすると、システム要件が大幅に増加する可能性があることに注意してください。</translation>
+    </message>
+    <message>
+        <source> Frames</source>
+        <translation> フレーム</translation>
+    </message>
+    <message>
+        <source>Enable Rewinding</source>
+        <translation>巻き戻しを有効</translation>
+    </message>
+    <message>
+        <source>&lt;b&gt;Enable Rewinding:&lt;/b&gt; Saves state periodically so you can rewind any mistakes while playing.&lt;br&gt; &lt;b&gt;Rewind Save Frequency:&lt;/b&gt; How often a rewind state will be created. Higher frequencies have greater system requirements.&lt;br&gt; &lt;b&gt;Rewind Buffer Size:&lt;/b&gt; How many saves will be kept for rewinding. Higher values have greater memory requirements.</source>
+        <translation>&lt;b&gt;巻き戻しを有効：&lt;/b&gt;状態を定期的に保存して、プレイ中のミスなどを巻き戻すことができるようにします。&lt;br&gt; &lt;b&gt;巻き戻し保存頻度：&lt;/b&gt;巻き戻し状態が作成される頻度。回数が多い(秒が短い)ほど、システム要件が大きくなります。&lt;br&gt; &lt;b&gt;巻き戻しバッファサイズ：&lt;/b&gt;巻き戻しのための保持されるフレーム数。値が大きいほど、メモリ要件が大きくなります。</translation>
+    </message>
+    <message>
+        <source>Rewind/Runahead</source>
+        <translation>巻き戻し/先行実行(Runahead)</translation>
+    </message>
+    <message>
+        <source>Sync To Host Refresh Rate</source>
+        <translation>ホストのリフレッシュレートに同期</translation>
+    </message>
+    <message>
+        <source>Emulation Speed:</source>
+        <translation>エミュレーション速度:</translation>
+    </message>
+    <message>
+        <source>Rewind Buffer Size:</source>
+        <translation>巻き戻しバッファサイズ:</translation>
+    </message>
+    <message>
+        <source> Seconds</source>
+        <translation> 秒</translation>
+    </message>
+    <message>
+        <source>Unchecked</source>
+        <translation>チェックなし</translation>
+    </message>
+    <message>
+        <source>Rewind is disabled because runahead is enabled. Runahead will significantly increase system requirements.</source>
+        <translation>先行実行が有効になっているため、巻き戻しは無効になっています。
+先行実行は、システム要件を大幅に増加させます。</translation>
+    </message>
+    <message>
+        <source>Sets the fast forward speed. This speed will be used when the fast forward hotkey is pressed/toggled.</source>
+        <translation>早送り速度を設定します。この速度は、ホットキーの早送りを押すか切り替え時に適用されます。</translation>
+    </message>
+    <message>
+        <source>Sets the turbo speed. This speed will be used when the turbo hotkey is pressed/toggled. Turboing will take priority over fast forwarding if both hotkeys are pressed/toggled.</source>
+        <translation>ターボ速度を設定します。この速度は、ホットキーのターボを押すか切り替え時に適用されます。 
+早送りとターボ、両方のホットキーが押された/切り替えられた場合、ターボを優先します。</translation>
+    </message>
+    <message>
+        <source>Adjusts the emulation speed so the console&apos;s refresh rate matches the host&apos;s refresh rate when both VSync and Audio Resampling settings are enabled. This results in the smoothest animations possible, at the cost of potentially increasing the emulation speed by less than 1%. Sync To Host Refresh Rate will not take effect if the console&apos;s refresh rate is too far from the host&apos;s refresh rate. Users with variable refresh rate displays should disable this option.</source>
+        <translation>VSyncとオーディオリサンプリングの両方の設定が有効になっている場合に、コンソールのリフレッシュレートがホストのリフレッシュレートと一致するように、エミュレーション速度を調整します。これにより、エミュレーション速度が1％未満増加する可能性がありますが、可能な限りスムーズなアニメーションが得られます。コンソールのリフレッシュレートがホストのリフレッシュレートから離れすぎている場合、[ホストのリフレッシュレートに同期]は有効になりません。リフレッシュレートの表示が可変のユーザーは、このオプションを無効にする必要があります。</translation>
+    </message>
+    <message>
+        <source>Sets the target emulation speed. It is not guaranteed that this speed will be reached, and if not, the emulator will run as fast as it can manage.</source>
+        <translation>エミュレーション目標速度を設定します。この速度に到達することは保証されていません。到達しない場合、エミュレーターは管理可能な速度で実行されます。</translation>
+    </message>
+    <message>
+        <source>Simulates the system ahead of time and rolls back/replays to reduce input lag. Very high system requirements.</source>
+        <translation>事前にシステムをシミュレートし、ロールバック/リプレイして入力ラグを低減します。非常に高いシステム要件が必要。</translation>
+    </message>
+    <message>
+        <source>Runahead</source>
+        <translation>先行実行</translation>
+    </message>
+    <message>
+        <source>Emulation Speed</source>
+        <translation>エミュレーション速度</translation>
+    </message>
+    <message>
+        <source>Rewinding</source>
+        <translation>巻き戻し</translation>
+    </message>
+    <message>
+        <source>TextLabel</source>
+        <translation>文字ラベル</translation>
+    </message>
+    <message>
+        <source>Fast Forward Speed:</source>
+        <translation>早送り速度:</translation>
+    </message>
+    <message>
+        <source>Fast Forward Speed</source>
+        <translation>早送り速度</translation>
+    </message>
+</context>
+<context>
     <name>EnhancementSettingsWidget</name>
     <message>
         <source>Form</source>
         <translation>形式</translation>
     </message>
     <message>
-        <source>Depth Buffer</source>
-        <translation>PGXP深度バッファ</translation>
+        <source>Depth Buffer (Low Compatibility)</source>
+        <translation>深度バッファ（低互換性）</translation>
     </message>
     <message>
         <source>Disabled</source>
@@ -2536,7 +3033,7 @@ This warning will only be shown once.</source>
     </message>
     <message>
         <source>Chroma Smoothing For 24-Bit Display</source>
-        <translation>24ビットディスプレイをクロマスムージング処理（FMVの色のむらを減らす）</translation>
+        <translation>24ビットディスプレイをクロマスムージング処理（ビデオ映像の色のむらを減らす）</translation>
     </message>
     <message>
         <source>Force NTSC Timings (60hz-on-PAL)</source>
@@ -2575,6 +3072,14 @@ This warning will only be shown once.</source>
         <translation>テクスチャの座標と色に遠近法で正しい補間を使用し、歪んだテクスチャをまっすぐにします。ジオメトリ補正を有効にする必要があります。</translation>
     </message>
     <message>
+        <source>Adds additional precision to PGXP data post-projection. May improve visuals in some games.</source>
+        <translation>投影後のPGXPデータに精度を追加します。一部のゲームでビジュアルが向上する場合があります。</translation>
+    </message>
+    <message>
+        <source>Uses PGXP for all instructions, not just memory operations. Required for PGXP to correct wobble in some games, but has a very high performance cost.</source>
+        <translation>メモリ操作だけでなく、すべての命令にPGXPを使用します。一部のゲームでPGXPがぐらつきを修正するために必要ですが、パフォーマンスコストが非常に高くなります。</translation>
+    </message>
+    <message>
         <source>Disable Interlacing (force progressive render/scan)</source>
         <translation>インターレース無効（プログレッシブレンダリング/スキャンを強制）</translation>
     </message>
@@ -2592,15 +3097,15 @@ This warning will only be shown once.</source>
     </message>
     <message>
         <source>Switches back to 4:3 display aspect ratio when displaying 24-bit content, usually FMVs.</source>
-        <translation>24ビットコンテンツ（通常はFMV）で表示すると、4：3のアスペクト比表示に戻ります。</translation>
+        <translation>24ビットコンテンツ（通常はビデオ映像）で表示すると、4：3のアスペクト比表示に戻ります。</translation>
     </message>
     <message>
         <source>Checked</source>
-        <translation>チェック済</translation>
+        <translation>チェックする</translation>
     </message>
     <message>
         <source>Unchecked</source>
-        <translation>未チェック</translation>
+        <translation>チェックなし</translation>
     </message>
     <message>
         <source>PGXP (Precision Geometry Transform Pipeline)</source>
@@ -2612,7 +3117,7 @@ This warning will only be shown once.</source>
     </message>
     <message>
         <source>Smooths out blockyness between colour transitions in 24-bit content, usually FMVs. Only applies to the hardware renderers.</source>
-        <translation>24ビットコンテンツ（通常はFMV）の色遷移間のブロックを滑らかにします。ハードウェアレンダラーにのみ適用されます。</translation>
+        <translation>24ビットコンテンツ（通常はビデオ映像）の色遷移間のブロックを滑らかにします。ハードウェアレンダラーにのみ適用されます。</translation>
     </message>
     <message>
         <source>Multisample Antialiasing</source>
@@ -2632,7 +3137,7 @@ This warning will only be shown once.</source>
     </message>
     <message>
         <source>Force 4:3 For 24-Bit Display (disable widescreen for FMVs)</source>
-        <translation>強制的に 4:3(24ビットディスプレイ)扱い (FMVのワイドスクリーンを無効)</translation>
+        <translation>強制的に 4:3(24ビットディスプレイ)扱い (ビデオ映像のワイドスクリーンを無効)</translation>
     </message>
     <message>
         <source>Scales the dither pattern to the resolution scale of the emulated GPU. This makes the dither pattern much less obvious at higher resolutions. &lt;br&gt;Usually safe to enable, and only supported by the hardware renderers.</source>
@@ -2643,8 +3148,16 @@ This warning will only be shown once.</source>
         <translation>ジオメトリ補正を有効にする</translation>
     </message>
     <message>
+        <source>Preserve Projection Precision</source>
+        <translation>投影精度を維持する</translation>
+    </message>
+    <message>
+        <source>CPU Mode (Very Slow)</source>
+        <translation>CPUモード（非常に遅い）</translation>
+    </message>
+    <message>
         <source>Chroma Smoothing For 24-Bit Display (reduce FMV color blockyness)</source>
-        <translation>24ビットディスプレイをクロマスムージング処理（FMVの色のむらを減らす）</translation>
+        <translation>24ビットディスプレイをクロマスムージング処理（ビデオ映像の色のむらを減らす）</translation>
     </message>
     <message>
         <source>Display Enhancements</source>
@@ -2690,6 +3203,10 @@ This warning will only be shown once.</source>
         <translation>エミュレータがフルスクリーンモードの場合、マウスポインタ/カーソルを非表示にします。</translation>
     </message>
     <message>
+        <source>Automatically loads and applies cheats on game start.</source>
+        <translation>ゲームの開始時にチートを自動的にロードして適用します。</translation>
+    </message>
+    <message>
         <source>Pauses the emulator when you minimize the window or switch to another application, and unpauses when you switch back.</source>
         <translation>ウィンドウを最小化するか、別のアプリケーションに切り替えるとエミュレーターを一時停止し、元に戻すと一時停止を解除します。</translation>
     </message>
@@ -2699,7 +3216,7 @@ This warning will only be shown once.</source>
     </message>
     <message>
         <source>Unlimited</source>
-        <translation>無制限</translation>
+        <translation>速度調整しない</translation>
     </message>
     <message>
         <source>Shows the game you are currently playing as part of your profile in Discord.</source>
@@ -2708,10 +3225,6 @@ This warning will only be shown once.</source>
     <message>
         <source>Automatically switches to fullscreen mode when a game is started.</source>
         <translation>ゲームが開始されると、自動的にフルスクリーンモードに切り替わります。</translation>
-    </message>
-    <message>
-        <source>Speed Control</source>
-        <translation>速度調整</translation>
     </message>
     <message>
         <source>Current Version:</source>
@@ -2734,10 +3247,6 @@ This warning will only be shown once.</source>
         <translation>その他</translation>
     </message>
     <message>
-        <source>Emulation Speed:</source>
-        <translation>エミュレーション速度:</translation>
-    </message>
-    <message>
         <source>Automatically saves the emulator state when powering down or exiting. You can then resume directly from where you left off next time.</source>
         <translation>電源を切ったり終了したりすると、エミュレータの状態が自動的に保存されます。その後、次回中断したところから直接再開できます。</translation>
     </message>
@@ -2758,16 +3267,12 @@ This warning will only be shown once.</source>
         <translation>フォーカスロスで一時停止にする</translation>
     </message>
     <message>
-        <source>Sets the fast forward (turbo) speed. This speed will be used when the fast forward hotkey is pressed/toggled.</source>
-        <translation>早送り（ターボ）速度を設定します。この速度は、早送りホットキーが押された/切り替えられたときに使用されます。</translation>
-    </message>
-    <message>
         <source>Checked</source>
-        <translation>チェック済</translation>
+        <translation>チェックする</translation>
     </message>
     <message>
         <source>Unchecked</source>
-        <translation>未チェック</translation>
+        <translation>チェックなし</translation>
     </message>
     <message>
         <source>Renders the display of the simulated console to the main window of the application, over the game list. If unchecked, the display will render in a separate window.</source>
@@ -2806,16 +3311,8 @@ This warning will only be shown once.</source>
         <translation>ホットキーが押されたときにエミュレータ/ゲームのシャットダウンを確認するプロンプトを表示するかどうかを決定します。</translation>
     </message>
     <message>
-        <source>Sets the target emulation speed. It is not guaranteed that this speed will be reached, and if not, the emulator will run as fast as it can manage.</source>
-        <translation>エミュレーション目標速度を設定します。この速度に到達することは保証されていません。到達しない場合、エミュレーターは管理可能な速度で実行されます。</translation>
-    </message>
-    <message>
         <source>When enabled, memory cards and controllers will be overwritten when save states are loaded. This can result in lost saves, and controller type mismatches. For deterministic save states, enable this option, otherwise leave disabled.</source>
         <translation>有効にすると、保存状態がロードされたときにメモリカードとコントローラが上書きされます。これにより、保存が失われ、コントローラータイプの不一致が発生する可能性があります。確定的な保存状態の場合は、このオプションを有効にします。それ以外の場合は無効のままにします。</translation>
-    </message>
-    <message>
-        <source>Emulation Speed</source>
-        <translation>エミュレーション速度</translation>
     </message>
     <message>
         <source>Confirm Power Off</source>
@@ -2824,6 +3321,14 @@ This warning will only be shown once.</source>
     <message>
         <source>Automatically Load Cheats</source>
         <translation>自動的にチートを読込む</translation>
+    </message>
+    <message>
+        <source>Enable Fullscreen UI</source>
+        <translation>フルスクリーンUIを有効にする</translation>
+    </message>
+    <message>
+        <source>Enables the fullscreen UI mode, suitable for controller operation which is used in the NoGUI frontend.</source>
+        <translation>NoGUIフロントエンドで使用されるコントローラー操作に適したフルスクリーンUIモードを有効にします。</translation>
     </message>
     <message>
         <source>%1% [%2 FPS (NTSC) / %3 FPS (PAL)]</source>
@@ -2846,12 +3351,20 @@ This warning will only be shown once.</source>
         <translation>自動更新</translation>
     </message>
     <message>
-        <source>Fast Forward Speed:</source>
-        <translation>早送り速度:</translation>
+        <source>latest</source>
+        <translation>最新版</translation>
     </message>
     <message>
-        <source>Fast Forward Speed</source>
-        <translation>早送り速度</translation>
+        <source>preview</source>
+        <translation>プレビュー版</translation>
+    </message>
+    <message>
+        <source>Enable Speed Limiter</source>
+        <translation>スピードリミッターを有効にする</translation>
+    </message>
+    <message>
+        <source>Increases the system timer resolution when emulation is started to provide more accurate frame pacing. May increase battery usage on laptops.</source>
+        <translation>エミュレーション開始時のシステムタイマーの解像度を上げて、より正確なフレームペーシングを提供します。ラップトップのバッテリー使用量が増える可能性があります。 </translation>
     </message>
 </context>
 <context>
@@ -2898,6 +3411,14 @@ This warning will only be shown once.</source>
     <message>
         <source>Right</source>
         <translation>→</translation>
+    </message>
+    <message>
+        <source>Locks the mouse cursor to the window, use for FPS games.</source>
+        <translation>FPSゲームで使用するウィンドウにマウスカーソルを固定します。</translation>
+    </message>
+    <message>
+        <source>Relative Mouse Mode</source>
+        <translation>相対マウスモード</translation>
     </message>
 </context>
 <context>
@@ -2997,7 +3518,7 @@ This warning will only be shown once.</source>
     </message>
     <message>
         <source>Recursive</source>
-        <translation>一つ一つに対して処理</translation>
+        <translation>再帰的処理</translation>
     </message>
 </context>
 <context>
@@ -3012,7 +3533,7 @@ This warning will only be shown once.</source>
     </message>
     <message>
         <source>Type:</source>
-        <translation>種類:</translation>
+        <translation>チート種類:</translation>
     </message>
     <message>
         <source>Cheat Code Editor</source>
@@ -3040,7 +3561,7 @@ This warning will only be shown once.</source>
     </message>
     <message>
         <source>Activation:</source>
-        <translation>アクティベーション:</translation>
+        <translation>適用方法:</translation>
     </message>
 </context>
 <context>
@@ -3133,12 +3654,16 @@ This warning will only be shown once.</source>
         <translation>ゲーム設定により強制的にPGXP頂点キャッシュが有効。</translation>
     </message>
     <message>
+        <source>Stopped rewinding.</source>
+        <translation>巻き戻しを停止しました。</translation>
+    </message>
+    <message>
         <source>No cheats are loaded.</source>
         <translation>チートはロードされません。</translation>
     </message>
     <message>
         <source>Started dumping audio to &apos;%s&apos;.</source>
-        <translation>オーディオの &apos;%s&apos;へのダンプを開始しました。</translation>
+        <translation>音声の &apos;%s&apos;へのダンプを開始しました。</translation>
     </message>
     <message>
         <source>Recompiler memory exceptions forced by game settings.</source>
@@ -3161,12 +3686,16 @@ This warning will only be shown once.</source>
         <translation>&apos;%s&apos;にステートセーブしました。</translation>
     </message>
     <message>
+        <source>Failed to open disc image &apos;%s&apos;.</source>
+        <translation>ディスクイメージ &apos;%s&apos;を開くことができませんでした。</translation>
+    </message>
+    <message>
         <source>PGXP CPU mode is incompatible with the recompiler, using Cached Interpreter instead.</source>
-        <translation>PGXP CPUモードは、代わりにキャッシュインタープリターを使用するリコンパイラーと互換性がありません。</translation>
+        <translation>PGXP CPUモードは、代わりにキャッシュインタープリタを使用します。再コンパイルと互換性がありません。</translation>
     </message>
     <message>
         <source>CPU interpreter forced by game settings.</source>
-        <translation>ゲーム設定によって強制的にCPU&#x3000;インタープリタが有効。</translation>
+        <translation>ゲーム設定によって強制的にCPU インタープリタが有効。</translation>
     </message>
     <message>
         <source>%u cheats are now active.</source>
@@ -3205,6 +3734,10 @@ This warning will only be shown once.</source>
         <translation>CPUクロック速度は %u%% (%u / %u)に設定されます。これにより、不安定になる可能性があります。</translation>
     </message>
     <message>
+        <source>Failed to read executable from disc. Achievements disabled.</source>
+        <translation>ディスクから実行可能ファイルを読み取れませんでした。実績が無効になっています。</translation>
+    </message>
+    <message>
         <source>Failed to load post-processing shader chain.</source>
         <translation>ポストプロセスシェーダーチェーンの読み込みに失敗しました。</translation>
     </message>
@@ -3214,11 +3747,19 @@ This warning will only be shown once.</source>
     </message>
     <message>
         <source>Screenshot file &apos;%s&apos; already exists.</source>
-        <translation>スクリーンショットは &apos;%s&apos; に保存されました。</translation>
+        <translation>スクリーンショット &apos;%s&apos; は既に存在します。</translation>
     </message>
     <message>
         <source>Resolution scale set to %ux (display %ux%u, VRAM %ux%u)</source>
         <translation>解像度スケールを %ux に設定（表示 %ux%u, VRAM %ux%u）</translation>
+    </message>
+    <message>
+        <source>Memory card at &apos;%s&apos; could not be read, formatting.</source>
+        <translation>メモリカード&apos;%s&apos;を読み取れず、フォーマットできませんでした。</translation>
+    </message>
+    <message>
+        <source>Turboing...</source>
+        <translation>ターボ中...</translation>
     </message>
     <message>
         <source>Memory card %u present in system but not in save state. Removing card.</source>
@@ -3230,7 +3771,7 @@ This warning will only be shown once.</source>
     </message>
     <message>
         <source>Failed to start dumping audio to &apos;%s&apos;.</source>
-        <translation>&apos;%s&apos; へのオーディオのダンプを開始できませんでした。</translation>
+        <translation>&apos;%s&apos; への音声ダンプを開始できませんでした。</translation>
     </message>
     <message>
         <source>Multisample anti-aliasing set to %ux.</source>
@@ -3338,7 +3879,7 @@ This warning will only be shown once.</source>
     </message>
     <message>
         <source>Failed to open CD image from save state: &apos;%s&apos;. Using existing image &apos;%s&apos;, this may result in instability.</source>
-        <translation>ステートセーブからCDイメージを開くことができませんでした: &apos;%s&apos;. 既存のCDイメージ&#x3000;&apos;%s&apos;を使用すると、不安定になる可能性があります。</translation>
+        <translation>ステートセーブからCDイメージを開くことができませんでした: &apos;%s&apos;. 既存のCDイメージ &apos;%s&apos;を使用すると、不安定になる可能性があります。</translation>
     </message>
     <message>
         <source>Failed to save memory card to &apos;%s&apos;</source>
@@ -3346,7 +3887,7 @@ This warning will only be shown once.</source>
     </message>
     <message>
         <source>WARNING: CPU overclock (%u%%) was different in save state (%u%%).</source>
-        <translation>警告：CPUオーバークロック (%u%%)は保存状態 (%u%%).で異なりました。</translation>
+        <translation>警告：CPUオーバークロック (%u%%)は保存状態 (%u%%)で異なりました。</translation>
     </message>
     <message>
         <source>PGXP is now disabled</source>
@@ -3358,11 +3899,11 @@ This warning will only be shown once.</source>
     </message>
     <message>
         <source>Stopped dumping audio.</source>
-        <translation>オーディオのダンプを停止しました。</translation>
+        <translation>音声ダンプを停止しました。</translation>
     </message>
     <message>
         <source>Adaptive downsampling is not supported with the current renderer, using box filter instead.</source>
-        <translation>アダプティブダウンサンプリングは、現在のレンダラーではサポートされておらず、代わりにボックスフィルターを使用します。</translation>
+        <translation>アダプティブダウンサンプリングは、現在のレンダラーではサポートされておらず、 代わりにボックスフィルターを使用しています。</translation>
     </message>
     <message>
         <source>Upscaling disabled by game settings.</source>
@@ -3417,6 +3958,10 @@ This warning will only be shown once.</source>
         <translation>チート %u を &apos;%s&apos; に保存しました</translation>
     </message>
     <message>
+        <source>Deleted cheat list &apos;%s&apos;.</source>
+        <translation>チートリスト &apos;%s&apos;を削除しました</translation>
+    </message>
+    <message>
         <source>CPU memory exceptions disabled, flushing all blocks.</source>
         <translation>CPUメモリ例外が無効になり、すべてのブロックがフラッシュされます。</translation>
     </message>
@@ -3427,6 +3972,10 @@ This warning will only be shown once.</source>
     <message>
         <source>Lost exclusive fullscreen.</source>
         <translation>排他的なフルスクリーンを解除。</translation>
+    </message>
+    <message>
+        <source>Stopped turboing.</source>
+        <translation>ターボを停止しました。</translation>
     </message>
     <message>
         <source>Loaded input profile from &apos;%s&apos;</source>
@@ -3441,8 +3990,20 @@ This warning will only be shown once.</source>
         <translation>PGXPテクスチャ補正はゲーム設定によって無効になっています。</translation>
     </message>
     <message>
+        <source>Rewinding...</source>
+        <translation>巻き戻し</translation>
+    </message>
+    <message>
+        <source>Inserted disc &apos;%s&apos; (%s).</source>
+        <translation>挿入したディスク &apos;%s&apos; (%s).</translation>
+    </message>
+    <message>
         <source>PGXP is now enabled.</source>
         <translation>PGXPが有効になりました。</translation>
+    </message>
+    <message>
+        <source>PGXP is now disabled.</source>
+        <translation>PGXPが無効になりました。</translation>
     </message>
     <message>
         <source>PGXP geometry correction disabled by game settings.</source>
@@ -3504,6 +4065,10 @@ This warning will only be shown once.</source>
         <translation>CPUダンプ(VRAMからコピー)</translation>
     </message>
     <message>
+        <source>Dump SPU RAM...</source>
+        <translation>SPU RAMダンプ...</translation>
+    </message>
+    <message>
         <source>Start &amp;Disc...</source>
         <translation>ディスク起動...(&amp;D)</translation>
     </message>
@@ -3541,7 +4106,7 @@ This warning will only be shown once.</source>
     </message>
     <message>
         <source>Dump Audio</source>
-        <translation>オーディオダンプ</translation>
+        <translation>音声ダンプ</translation>
     </message>
     <message>
         <source>Language changed. Please restart the application to apply.</source>
@@ -3604,6 +4169,10 @@ This warning will only be shown once.</source>
         <translation>ウィンドウサイズ(&amp;W)</translation>
     </message>
     <message>
+        <source>E&amp;mulation Settings...</source>
+        <translation>エミュレーション設定...(&amp;M)</translation>
+    </message>
+    <message>
         <source>Refresh &amp;Covers (Grid View)</source>
         <translation>カバーの更新(グリッドビュー)(&amp;C)</translation>
     </message>
@@ -3632,12 +4201,12 @@ This warning will only be shown once.</source>
         <translation>RAMダンプ...</translation>
     </message>
     <message>
-        <source>Disable Interlacing</source>
-        <translation>インターレースを無効</translation>
+        <source>Disable All Enhancements</source>
+        <translation>すべての拡張機能を無効</translation>
     </message>
     <message>
-        <source>All File Types (*.bin *.img *.iso *.cue *.chd *.exe *.psexe *.psf *.m3u);;Single-Track Raw Images (*.bin *.img *.iso);;Cue Sheets (*.cue);;MAME CHD Images (*.chd);;PlayStation Executables (*.exe *.psexe);;Portable Sound Format Files (*.psf);;Playlists (*.m3u)</source>
-        <translation>すべてのファイルタイプ (*.bin *.img *.cue *.chd *.exe *.psexe *.psf *.m3u);;シングルトラック Raw イメージ (*.bin *.img *.iso);;キューシート (*.cue);;MAME CHD イメージ (*.chd);;PlayStation 実行可能ファイル (*.exe *.psexe);;ポータブルサウンドフォーマットファイル (*.psf);;プレイリスト (*.m3u)</translation>
+        <source>Disable Interlacing</source>
+        <translation>インターレースを無効</translation>
     </message>
     <message>
         <source>Show Titles (Grid View)</source>
@@ -3660,12 +4229,20 @@ This warning will only be shown once.</source>
         <translation>ホスト表示の作成に失敗しました。</translation>
     </message>
     <message>
+        <source>All File Types (*.bin *.img *.iso *.cue *.chd *.exe *.psexe *.psf *.minipsf *.m3u);;Single-Track Raw Images (*.bin *.img *.iso);;Cue Sheets (*.cue);;MAME CHD Images (*.chd);;PlayStation Executables (*.exe *.psexe);;Portable Sound Format Files (*.psf *.minipsf);;Playlists (*.m3u)</source>
+        <translation>すべてのファイルタイプ (*.bin *.img *.iso *.cue *.chd *.exe *.psexe *.psf *.m3u);;シングルトラック Raw イメージ (*.bin *.img *.iso);;キューシート (*.cue);;MAME CHD イメージ (*.chd);;PlayStation 実行可能ファイル (*.exe *.psexe);;ポータブルサウンドフォーマットファイル (*.psf *.minipsf);;プレイリスト (*.m3u)</translation>
+    </message>
+    <message>
         <source>Memory &amp;Card Editor</source>
         <translation>メモリーカードエディタ(&amp;C)</translation>
     </message>
     <message>
         <source>Show CDROM State</source>
         <translation>CDROMの状態を表示</translation>
+    </message>
+    <message>
+        <source>Binary Files (*.bin)</source>
+        <translation>バイナリファイル (*.bin)</translation>
     </message>
     <message>
         <source>Load State</source>
@@ -3696,6 +4273,10 @@ This warning will only be shown once.</source>
         <translation>VRAMを表示</translation>
     </message>
     <message>
+        <source>Achievement Settings...</source>
+        <translation>Achievement 設定...</translation>
+    </message>
+    <message>
         <source>&amp;Post-Processing Settings...</source>
         <translation>ポストプロセス設定...(&amp;P)</translation>
     </message>
@@ -3710,6 +4291,10 @@ This warning will only be shown once.</source>
     <message>
         <source>&amp;Rescan All Games</source>
         <translation>すべてのゲームを再スキャン(&amp;R)</translation>
+    </message>
+    <message>
+        <source>Binary Files (*.bin);;PNG Images (*.png)</source>
+        <translation>バイナリファイル (*.bin);;PNG画像 (*.png)</translation>
     </message>
     <message>
         <source>Game &amp;Grid</source>
@@ -3734,6 +4319,10 @@ This warning will only be shown once.</source>
     <message>
         <source>From Game List...</source>
         <translation>ゲームリストから選択...</translation>
+    </message>
+    <message>
+        <source>Power Off &amp;Without Saving</source>
+        <translation>保存せずに電源オフ(&amp;W)</translation>
     </message>
     <message>
         <source>Select Cover Image</source>
@@ -3789,7 +4378,7 @@ This warning will only be shown once.</source>
     </message>
     <message>
         <source>Open Containing Directory...</source>
-        <translation>含むディレクトリを開く...</translation>
+        <translation>ファイルがある場所を開く...</translation>
     </message>
     <message>
         <source>%1x Scale</source>
@@ -3797,7 +4386,7 @@ This warning will only be shown once.</source>
     </message>
     <message>
         <source>Fast Boot</source>
-        <translation>高速起動</translation>
+        <translation>高速ブート</translation>
     </message>
     <message>
         <source>Memory Card Not Found</source>
@@ -3852,6 +4441,10 @@ This warning will only be shown once.</source>
         <translation>ツールバー(&amp;T)</translation>
     </message>
     <message>
+        <source>Lock Toolbar</source>
+        <translation>ツールバーを固定</translation>
+    </message>
+    <message>
         <source>Cheats...</source>
         <translation>チート...</translation>
     </message>
@@ -3877,7 +4470,7 @@ This warning will only be shown once.</source>
     </message>
     <message>
         <source>Remove Disc</source>
-        <translation>ディスクを削除</translation>
+        <translation>ディスク削除</translation>
     </message>
     <message>
         <source>Show DMA State</source>
@@ -3944,8 +4537,63 @@ This warning will only be shown once.</source>
         <translation>チートマネージャ(&amp;H)</translation>
     </message>
     <message>
+        <source>Dump VRAM...</source>
+        <translation>VRAMダンプ...</translation>
+    </message>
+    <message>
         <source>&amp;Hotkey Settings...</source>
         <translation>ホットキー設定...(&amp;H)</translation>
+    </message>
+</context>
+<context>
+    <name>AchievementLoginDialog</name>
+    <message>
+        <source>Login Error</source>
+        <translation>ログインエラー</translation>
+    </message>
+    <message>
+        <source>&amp;Login</source>
+        <translation>ログイン(&amp;L)</translation>
+    </message>
+    <message>
+        <source>User Name:</source>
+        <translation>ユーザー名:</translation>
+    </message>
+    <message>
+        <source>Login failed. Please check your username and password, and try again.</source>
+        <translation>ログインに失敗しました。ユーザー名とパスワードを確認して、もう一度お試しください。</translation>
+    </message>
+    <message>
+        <source>A user name and password must be provided.</source>
+        <translation>ユーザー名とパスワードを入力する必要があります。</translation>
+    </message>
+    <message>
+        <source>Logging in...</source>
+        <translation>登録...</translation>
+    </message>
+    <message>
+        <source>&amp;Cancel</source>
+        <translation>取消(&amp;C)</translation>
+    </message>
+    <message>
+        <source>Password:</source>
+        <translation>パスワード:</translation>
+    </message>
+    <message>
+        <source>RetroAchievements Login</source>
+        <translation>RetroAchievements ログイン</translation>
+    </message>
+    <message>
+        <source>Ready...</source>
+        <translation>準備中...</translation>
+    </message>
+    <message>
+        <source>Please enter user name and password for retroachievements.org below. Your password will not be saved in DuckStation, an access token will be generated and used instead.</source>
+        <translation>retroachievements.org のユーザー名とパスワードを入力してください。&#x3000;&#x3000;&#x3000;&#x3000;&#x3000;パスワードは、DuckStationに保存されずにアクセストークンが生成されて使用されます。</translation>
+    </message>
+    <message>
+        <source>Login failed.</source>
+        <translation>ログインに失敗しました。</translation>
     </message>
 </context>
 <context>
@@ -4004,7 +4652,7 @@ This warning will only be shown once.</source>
     </message>
     <message>
         <source>Force PGXP CPU Mode</source>
-        <translation>強制的に PGXP&#x3000;CPUモードを有効</translation>
+        <translation>強制的に PGXP CPUモードを有効</translation>
     </message>
     <message>
         <source>Force Interpreter</source>
@@ -4062,7 +4710,7 @@ URLは次のとおりです : %1</translation>
     </message>
     <message>
         <source>&lt;strong&gt;Audio Settings&lt;/strong&gt;&lt;hr&gt;These options control the audio output of the console. Mouse over an option for additional information.</source>
-        <translation>&lt;strong&gt;オーディオ設定&lt;/strong&gt;&lt;hr&gt;これらのオプションは、コンソールのオーディオ出力を制御します。追加情報については、オプションにマウスを合わせてください。</translation>
+        <translation>&lt;strong&gt;音声設定&lt;/strong&gt;&lt;hr&gt;これらのオプションは、コンソールの音声出力を制御します。追加情報については、オプションにマウスを合わせてください。</translation>
     </message>
     <message>
         <source>Recommended Value</source>
@@ -4073,8 +4721,12 @@ URLは次のとおりです : %1</translation>
         <translation>&lt;strong&gt;一般設定&lt;/strong&gt;&lt;hr&gt;これらのオプションは、エミュレータの外観と動作を制御します。&lt;br&gt; &lt;br&gt;追加情報については、オプションにマウスを合わせてください。</translation>
     </message>
     <message>
+        <source>Emulation Settings</source>
+        <translation>エミュレーション設定</translation>
+    </message>
+    <message>
         <source>&lt;strong&gt;Hotkey Settings&lt;/strong&gt;&lt;hr&gt;Binding a hotkey allows you to trigger events such as a resetting or taking screenshots at the press of a key/controller button. Hotkey titles are self-explanatory. Clicking a binding will start a countdown, in which case you should press the key or controller button/axis you wish to bind. If no button  is pressed and the timer lapses, the binding will be unchanged. To clear a binding, right-click the button. To  bind multiple buttons, hold Shift and click the button.</source>
-        <translation>&lt;strong&gt;ホットキー設定&lt;/strong&gt;&lt;hr&gt;ホットキーを割り当てすると、キー/コントローラーボタンを押すだけでリセットやスクリーンショットの撮影などのイベントをトリガーできます。ホットキーのタイトルは一目瞭然です。バインディングをクリックするとカウントダウンが開始されます。その場合、バインドするキーまたはコントローラーボタン/軸を押す必要があります。ボタンが押されずにタイマーが経過した場合、バインディングは変更されません。バインディングをクリアするには、ボタンを右クリックします。複数のボタンをバインドするには、Shiftキーを押しながらボタンをクリックします。</translation>
+        <translation>&lt;strong&gt;ホットキー設定&lt;/strong&gt;&lt;hr&gt;ホットキーを割り当てすると、キー/コントローラーボタンを押すだけでリセットやスクリーンショットの撮影などのイベントを実行できます。ホットキーの項目は一目瞭然です。項目の右の枠をクリックするとカウントダウンが開始されます。その場合、割り当てるキーまたはコントローラーボタン/軸を押す必要があります。ボタンが押されずにタイマーが経過した場合、割り当ては変更されません。割り当てをクリアするには、ボタンを右クリックします。複数のボタンを割り当てるには、Shiftキーを押しながら枠をクリックします。</translation>
     </message>
     <message>
         <source>&lt;strong&gt;Advanced Settings&lt;/strong&gt;&lt;hr&gt;These options control logging and internal behavior of the emulator. Mouse over an option for additional information.</source>
@@ -4093,6 +4745,10 @@ URLは次のとおりです : %1</translation>
         <translation>コントローラ設定</translation>
     </message>
     <message>
+        <source>Achievement Settings</source>
+        <translation>Achievement設定</translation>
+    </message>
+    <message>
         <source>Console Settings</source>
         <translation>コンソール設定</translation>
     </message>
@@ -4103,6 +4759,10 @@ URLは次のとおりです : %1</translation>
     <message>
         <source>Hotkey Settings</source>
         <translation>ホットキー設定</translation>
+    </message>
+    <message>
+        <source>This DuckStation build was not compiled with RetroAchievements support.</source>
+        <translation>このDuckStationビルドは、RetroAchievementsを使用できるようにコンパイルされていません。</translation>
     </message>
     <message>
         <source>Post-Processing Settings</source>
@@ -4150,6 +4810,77 @@ URLは次のとおりです : %1</translation>
     </message>
 </context>
 <context>
+    <name>System</name>
+    <message>
+        <source>Failed to load %s BIOS.</source>
+        <translation>BIOS %s の読み込みに失敗しました。</translation>
+    </message>
+    <message>
+        <source>Per-game memory card cannot be used for slot %u as the running game has no title. Using shared card instead.</source>
+        <translation>実行中のゲームにはタイトルがないため、ゲームごとのメモリカードをスロット %u に使用することはできません。代わりに共有カードを使用します。</translation>
+    </message>
+    <message>
+        <source>Removing current media from playlist, removing media from CD-ROM.</source>
+        <translation>プレイリストから現在のメディアを削除し、CD-ROMからメディアを削除します。</translation>
+    </message>
+    <message>
+        <source>Save state is incompatible: maximum version is %u but state is version %u.</source>
+        <translation>ステートセーブに互換性がありません。最大バージョンは %u ですが、ステートセーブはバージョン %u です。</translation>
+    </message>
+    <message>
+        <source>Save state is incompatible: minimum version is %u but state is version %u.</source>
+        <translation>ステートセーブに互換性がありません。最小バージョンは %u ですが、ステートセーブはバージョン %u です。</translation>
+    </message>
+    <message>
+        <source>You are attempting to run a libcrypt protected game without an SBI file:
+
+%s: %s
+
+The game will likely not run properly.
+
+Please check the README for instructions on how to add an SBI file.
+
+Do you wish to continue?</source>
+        <translation>SBIファイルなしでlibcryptで保護されたゲームを実行しようとしています。
+
+％s：％s
+
+ゲームは正しく実行されない可能性があります。
+
+SBIファイルを追加する方法については、READMEを確認してください。
+
+続行しますか？</translation>
+    </message>
+    <message>
+        <source>Memory card path for slot %u is missing, using default.</source>
+        <translation>メモリカードパスのスロット %u がありません。デフォルトを使用しました。</translation>
+    </message>
+    <message>
+        <source>Game changed, reloading memory cards.</source>
+        <translation>ゲームが変更され、メモリカードがリロードされました。</translation>
+    </message>
+    <message>
+        <source>Failed to open CD image from save state: &apos;%s&apos;.</source>
+        <translation>ステートセーブからCDイメージを開くことができませんでした: &apos;%s&apos;。</translation>
+    </message>
+    <message>
+        <source>Changing current media from playlist, replacing current media.</source>
+        <translation>プレイリストから現在のメディアを変更し、現在のメディアを置き換えます。</translation>
+    </message>
+    <message>
+        <source>Failed to acquire host display.</source>
+        <translation>ホストディスプレイの取得に失敗しました。</translation>
+    </message>
+    <message>
+        <source>Per-game memory card cannot be used for slot %u as the running game has no code. Using shared card instead.</source>
+        <translation>実行中のゲームにはコードがないため、ゲームごとのメモリカードをスロット %u に使用することはできません。代わりに共有カードを使用します。</translation>
+    </message>
+    <message>
+        <source>System failed to boot. The log may contain more information.</source>
+        <translation>システムの起動に失敗しました。ログに、より多くの情報が含まれている場合があります。</translation>
+    </message>
+</context>
+<context>
     <name>Hotkeys</name>
     <message>
         <source>Reset System</source>
@@ -4160,12 +4891,16 @@ URLは次のとおりです : %1</translation>
         <translation>音声</translation>
     </message>
     <message>
+        <source>Turbo</source>
+        <translation>ターボ</translation>
+    </message>
+    <message>
         <source>Toggle Fullscreen</source>
         <translation>フルスクリーンの切り替え</translation>
     </message>
     <message>
         <source>Toggle PGXP</source>
-        <translation>PGXPを切り替え</translation>
+        <translation>PGXPの切り替え</translation>
     </message>
     <message>
         <source>Toggle Mute</source>
@@ -4192,6 +4927,10 @@ URLは次のとおりです : %1</translation>
         <translation>ポーズの切り替え</translation>
     </message>
     <message>
+        <source>Toggle Turbo</source>
+        <translation>ターボ速度切り替え</translation>
+    </message>
+    <message>
         <source>Toggle Software Rendering</source>
         <translation>ソフトウェアレンダリングの切り替え</translation>
     </message>
@@ -4214,6 +4953,14 @@ URLは次のとおりです : %1</translation>
     <message>
         <source>Toggle Fast Forward</source>
         <translation>早送りの切り替え</translation>
+    </message>
+    <message>
+        <source>Rewind</source>
+        <translation>巻き戻し</translation>
+    </message>
+    <message>
+        <source>Open Quick Menu</source>
+        <translation>クイックメニューを開く</translation>
     </message>
     <message>
         <source>Reload Post Processing Shaders</source>
@@ -4421,7 +5168,7 @@ URLは次のとおりです : %1</translation>
     </message>
     <message>
         <source>Toggle CD Audio Mute</source>
-        <translation>CDオーディオ有り無しの切り替え</translation>
+        <translation>CD音声有り無しの切り替え</translation>
     </message>
     <message>
         <source>Save To Selected Slot</source>
@@ -4437,6 +5184,10 @@ URLは次のとおりです : %1</translation>
     <message>
         <source>Push Button/Axis... [%1]</source>
         <translation>ボタン/軸 を押す... [%1]</translation>
+    </message>
+    <message>
+        <source>Close</source>
+        <translation>閉じる</translation>
     </message>
     <message>
         <source>Bindings for %1 %2</source>
@@ -4471,7 +5222,7 @@ URLは次のとおりです : %1</translation>
     </message>
     <message>
         <source>%1 bindings</source>
-        <translation>%1 バインディング</translation>
+        <translation>%1 割り当て</translation>
     </message>
 </context>
 <context>
@@ -4558,6 +5309,29 @@ URLは次のとおりです : %1</translation>
     </message>
 </context>
 <context>
+    <name>DebuggerCodeModel</name>
+    <message>
+        <source>Bytes</source>
+        <translation>バイト</translation>
+    </message>
+    <message>
+        <source>&lt;invalid&gt;</source>
+        <translation>&lt;無効&gt;</translation>
+    </message>
+    <message>
+        <source>Address</source>
+        <translation>アドレス</translation>
+    </message>
+    <message>
+        <source>Instruction</source>
+        <translation>説明</translation>
+    </message>
+    <message>
+        <source>Comment</source>
+        <translation>コメント</translation>
+    </message>
+</context>
+<context>
     <name>PostProcessingShaderConfigDialog</name>
     <message>
         <source>Close</source>
@@ -4611,6 +5385,32 @@ URLは次のとおりです : %1</translation>
     </message>
 </context>
 <context>
+    <name>DebuggerRegistersModel</name>
+    <message>
+        <source>Value</source>
+        <translation>値</translation>
+    </message>
+    <message>
+        <source>Register</source>
+        <translation>登録</translation>
+    </message>
+</context>
+<context>
+    <name>DebuggerStackModel</name>
+    <message>
+        <source>Value</source>
+        <translation>値</translation>
+    </message>
+    <message>
+        <source>&lt;invalid&gt;</source>
+        <translation>&lt;無効&gt;</translation>
+    </message>
+    <message>
+        <source>Address</source>
+        <translation>アドレス</translation>
+    </message>
+</context>
+<context>
     <name>AutoUpdaterDialog</name>
     <message>
         <source>Current Version: %1 (%2)</source>
@@ -4642,7 +5442,7 @@ URLは次のとおりです : %1</translation>
     </message>
     <message>
         <source>No updates are currently available. Please try again later.</source>
-        <translation>現在利用可能な更新はありません。後でもう一度やり直してください。</translation>
+        <translation>現在利用可能な更新はありません。後でもう一度行ってください。</translation>
     </message>
     <message>
         <source>&lt;h2&gt;Settings Warning&lt;/h2&gt;&lt;p&gt;Installing this update will reset your program configuration. Please note that you will have to reconfigure your settings after this update.&lt;/p&gt;</source>
@@ -4716,7 +5516,26 @@ URLは次のとおりです : %1</translation>
     </message>
     <message>
         <source>Adaptive (Preserve 3D/Smooth 2D)</source>
-        <translation>アダプティブ（3Dを保持/スムーズな2D）</translation>
+        <translation>アダプティブ（3Dを保持/スムーズ2D）</translation>
+    </message>
+</context>
+<context>
+    <name>MultitapMode</name>
+    <message>
+        <source>Disabled</source>
+        <translation>使用しない</translation>
+    </message>
+    <message>
+        <source>Enable on Port 2 Only</source>
+        <translation>ポート2のみ有効にする</translation>
+    </message>
+    <message>
+        <source>Enable on Port 1 Only</source>
+        <translation>ポート1のみ有効にする</translation>
+    </message>
+    <message>
+        <source>Enable on Ports 1 and 2</source>
+        <translation>ポート1および2で有効にする</translation>
     </message>
 </context>
 <context>
@@ -4761,6 +5580,10 @@ URLは次のとおりです : %1</translation>
         <translation>グローバルセーブ %1 (%2)</translation>
     </message>
     <message>
+        <source>Game not loaded or no RetroAchievements available.</source>
+        <translation>ゲームが読み込まれていないか、RetroAchievementsが利用できません。</translation>
+    </message>
+    <message>
         <source>Resume</source>
         <translation>再開</translation>
     </message>
@@ -4782,7 +5605,7 @@ URLは次のとおりです : %1</translation>
     </message>
     <message>
         <source>Confirm Save State Deletion</source>
-        <translation>ステートセーブの削除を確認する</translation>
+        <translation>ステートセーブの削除する時は確認する</translation>
     </message>
     <message>
         <source>&amp;Apply Cheats</source>
@@ -4795,6 +5618,22 @@ The saves will not be recoverable.</source>
         <translation>%1 のすべてのステートセーブを削除してもよろしいですか？
 
 元に戻すことはできません。</translation>
+    </message>
+    <message>
+        <source>Game ID: %1
+Game Title: %2
+Game Developer: %3
+Game Publisher: %4
+Achievements: %5 (%6 points)
+
+</source>
+        <translation>ゲームID:%1
+ゲームタイトル:%2
+開発元:%3
+販売元:%4
+Achievements:%5 (%6点)
+
+</translation>
     </message>
 </context>
 <context>
@@ -4827,7 +5666,7 @@ The saves will not be recoverable.</source>
         <translation>キャッシュされたインタープリタ（高速）</translation>
     </message>
     <message>
-        <source>Intepreter (Slowest)</source>
+        <source>Interpreter (Slowest)</source>
         <translation>インタープリタ（最も遅い）</translation>
     </message>
 </context>
@@ -4863,65 +5702,10 @@ The saves will not be recoverable.</source>
     </message>
 </context>
 <context>
-    <name>System</name>
-    <message>
-        <source>Per-game memory card cannot be used for slot %u as the running game has no title. Using shared card instead.</source>
-        <translation>実行中のゲームにはタイトルがないため、ゲームごとのメモリカードをスロット %u に使用することはできません。代わりに共有カードを使用します。</translation>
-    </message>
-    <message>
-        <source>Removing current media from playlist, removing media from CD-ROM.</source>
-        <translation>プレイリストから現在のメディアを削除し、CD-ROMからメディアを削除します。</translation>
-    </message>
-    <message>
-        <source>Save state is incompatible: maximum version is %u but state is version %u.</source>
-        <translation>ステートセーブに互換性がありません。最小バージョンは %u ですが、ステートセーブはバージョン %u です。</translation>
-    </message>
-    <message>
-        <source>Save state is incompatible: minimum version is %u but state is version %u.</source>
-        <translation>ステートセーブに互換性がありません。最小バージョンは %u ですが、ステートセーブはバージョン %u です。</translation>
-    </message>
-    <message>
-        <source>You are attempting to run a libcrypt protected game without a SBI file:
-
-%s: %s
-
-The game will likely not run properly.
-
-Please check the README for instructions on how to add a SBI file.</source>
-        <translation>SBIファイルなしでlibcryptで保護されたゲームを実行しようとしています。
-
-％s：％s
-
-ゲームは正しく実行されない可能性があります。
-
-SBIファイルを追加する方法については、READMEを確認してください。</translation>
-    </message>
-    <message>
-        <source>Memory card path for slot %u is missing, using default.</source>
-        <translation>メモリカードパスのスロット %u がありません。デフォルトを使用しました。</translation>
-    </message>
-    <message>
-        <source>Game changed, reloading memory cards.</source>
-        <translation>ゲームが変更され、メモリカードがリロードされました。</translation>
-    </message>
-    <message>
-        <source>Failed to open CD image from save state: &apos;%s&apos;.</source>
-        <translation>ステートセーブからCDイメージを開くことができませんでした: &apos;%s&apos;。</translation>
-    </message>
-    <message>
-        <source>Changing current media from playlist, replacing current media.</source>
-        <translation>プレイリストから現在のメディアを変更し、現在のメディアを置き換えます。</translation>
-    </message>
-    <message>
-        <source>Per-game memory card cannot be used for slot %u as the running game has no code. Using shared card instead.</source>
-        <translation>実行中のゲームにはコードがないため、ゲームごとのメモリカードをスロット %u に使用することはできません。代わりに共有カードを使用します。</translation>
-    </message>
-</context>
-<context>
     <name>GameListCompatibilityRating</name>
     <message>
         <source>Graphical/Audio Issues</source>
-        <translation>グラフィカル/オーディオの問題</translation>
+        <translation>グラフィカル/音声の問題</translation>
     </message>
     <message>
         <source>No Issues</source>
@@ -4942,17 +5726,6 @@ SBIファイルを追加する方法については、READMEを確認してく�
     <message>
         <source>Unknown</source>
         <translation>不明</translation>
-    </message>
-</context>
-<context>
-    <name>PlaystationMouse</name>
-    <message>
-        <source>Locks the mouse cursor to the window, use for FPS games.</source>
-        <translation>FPSゲームで使用するウィンドウにマウスカーソルを固定します。</translation>
-    </message>
-    <message>
-        <source>Relative Mouse Mode</source>
-        <translation>相対マウスモード</translation>
     </message>
 </context>
 <context>
@@ -4998,7 +5771,7 @@ SBIファイルを追加する方法については、READMEを確認してく�
     </message>
     <message>
         <source>Checked</source>
-        <translation>チェック済</translation>
+        <translation>チェックする</translation>
     </message>
     <message>
         <source>All Memory Card Types (*.mcd *.mcr *.mc)</source>
@@ -5044,11 +5817,11 @@ SBIファイルを追加する方法については、READMEを確認してく�
     </message>
     <message>
         <source>Manual</source>
-        <translation>マニュアル</translation>
+        <translation>手動</translation>
     </message>
     <message>
         <source>Automatic (Frame End)</source>
-        <translation>自動（フレーム終了）</translation>
+        <translation>自動 (Frame End)</translation>
     </message>
 </context>
 <context>
@@ -5106,8 +5879,43 @@ SBIファイルを追加する方法については、READMEを確認してく�
         <translation>はい(&amp;Y)</translation>
     </message>
     <message>
+        <source>Cancel</source>
+        <translation>キャンセル</translation>
+    </message>
+    <message>
         <source>Close</source>
         <translation>閉じる</translation>
+    </message>
+</context>
+<context>
+    <name>QLineEdit</name>
+    <message>
+        <source>&amp;Undo</source>
+        <translation>元に戻す(&amp;U)</translation>
+    </message>
+    <message>
+        <source>&amp;Redo</source>
+        <translation>やり直す(&amp;R)</translation>
+    </message>
+    <message>
+        <source>Cu&amp;t</source>
+        <translation>切り取り(&amp;T)</translation>
+    </message>
+    <message>
+        <source>&amp;Copy</source>
+        <translation>コピー(&amp;C)</translation>
+    </message>
+    <message>
+        <source>&amp;Paste</source>
+        <translation>貼り付け(&amp;P)</translation>
+    </message>
+    <message>
+        <source>Delete</source>
+        <translation>削除</translation>
+    </message>
+    <message>
+        <source>Select All</source>
+        <translation>すべて選択</translation>
     </message>
 </context>
 </TS>

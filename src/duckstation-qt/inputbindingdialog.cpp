@@ -20,6 +20,7 @@ InputBindingDialog::InputBindingDialog(QtHostInterface* host_interface, std::str
   m_ui.setupUi(this);
   m_ui.title->setText(
     tr("Bindings for %1 %2").arg(QString::fromStdString(m_section_name)).arg(QString::fromStdString(m_key_name)));
+  m_ui.buttonBox->button(QDialogButtonBox::Close)->setText(tr("Close"));
 
   connect(m_ui.addBinding, &QPushButton::clicked, this, &InputBindingDialog::onAddBindingButtonClicked);
   connect(m_ui.removeBinding, &QPushButton::clicked, this, &InputBindingDialog::onRemoveBindingButtonClicked);
@@ -46,7 +47,8 @@ bool InputBindingDialog::eventFilter(QObject* watched, QEvent* event)
   }
   else if (event_type == QEvent::KeyPress)
   {
-    QString binding = QtUtils::KeyEventToString(static_cast<QKeyEvent*>(event));
+    const QKeyEvent* key_event = static_cast<const QKeyEvent*>(event);
+    const QString binding(QtUtils::KeyEventToString(key_event->key(), key_event->modifiers()));
     if (!binding.isEmpty())
       m_new_binding_value = QStringLiteral("Keyboard/%1").arg(binding).toStdString();
 

@@ -10,7 +10,6 @@ add_subdirectory(xxhash)
 add_subdirectory(rapidjson)
 add_subdirectory(glslang)
 add_subdirectory(vulkan-loader)
-
 if(NOT BUILD_LIBRETRO_CORE)
   add_subdirectory(googletest)
   add_subdirectory(cubeb)
@@ -19,16 +18,19 @@ if(NOT BUILD_LIBRETRO_CORE)
   add_subdirectory(tinyxml2)
 endif()
 
+set(LIBSAMPLERATE_ENABLE_SINC_BEST_CONVERTER OFF)
+add_subdirectory(libsamplerate)
+
 if(ENABLE_DISCORD_PRESENCE)
   add_subdirectory(discord-rpc)
 endif()
 
-if(BUILD_SDL_FRONTEND)
-  add_subdirectory(nativefiledialog)
-endif()
-
 if(BUILD_LIBRETRO_CORE)
   add_subdirectory(libretro-common)
+endif()
+
+if(ENABLE_CHEEVOS)
+  add_subdirectory(rcheevos)
 endif()
 
 if(${CPU_ARCH} STREQUAL "aarch32" OR ${CPU_ARCH} STREQUAL "aarch64")

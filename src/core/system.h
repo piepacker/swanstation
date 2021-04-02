@@ -66,17 +66,25 @@ bool IsPsfFileName(const char* path);
 /// Returns true if the filename is a M3U Playlist we can handle.
 bool IsM3UFileName(const char* path);
 
+/// Returns true if the filename is one we can load.
+bool IsLoadableFilename(const char* path);
+
 /// Parses an M3U playlist, returning the entries.
 std::vector<std::string> ParseM3UFile(const char* path);
 
 /// Returns the preferred console type for a disc.
 ConsoleRegion GetConsoleRegionForDiscRegion(DiscRegion region);
 
-std::string GetGameCodeForImage(CDImage* cdi);
-std::string GetGameCodeForPath(const char* image_path);
+std::string GetExecutableNameForImage(CDImage* cdi);
+bool ReadExecutableFromImage(CDImage* cdi, std::string* out_executable_name, std::vector<u8>* out_executable_data);
+
+std::string GetGameCodeForImage(CDImage* cdi, bool fallback_to_hash);
+std::string GetGameCodeForPath(const char* image_path, bool fallback_to_hash);
 DiscRegion GetRegionForCode(std::string_view code);
 DiscRegion GetRegionFromSystemArea(CDImage* cdi);
 DiscRegion GetRegionForImage(CDImage* cdi);
+DiscRegion GetRegionForExe(const char* path);
+DiscRegion GetRegionForPsf(const char* path);
 std::optional<DiscRegion> GetRegionForPath(const char* image_path);
 std::string_view GetTitleForPath(const char* path);
 
@@ -86,6 +94,9 @@ bool IsRunning();
 bool IsPaused();
 bool IsShutdown();
 bool IsValid();
+
+bool IsStartupCancelled();
+void CancelPendingStartup();
 
 ConsoleRegion GetRegion();
 bool IsPALRegion();
@@ -119,6 +130,10 @@ ALWAYS_INLINE_RELEASE TickCount UnscaleTicksToOverclock(TickCount ticks, TickCou
 TickCount GetMaxSliceTicks();
 void UpdateOverclock();
 
+/// Injects a PS-EXE into memory at its specified load location. If patch_loader is set, the BIOS will be patched to
+/// direct execution to this executable.
+bool InjectEXEFromBuffer(const void* buffer, u32 buffer_size, bool patch_loader = true);
+
 u32 GetFrameNumber();
 u32 GetInternalFrameNumber();
 void FrameDone();
@@ -147,8 +162,10 @@ bool RecreateGPU(GPURenderer renderer, bool update_display = true);
 
 void SingleStepCPU();
 void RunFrame();
+void RunFrames();
 
 /// Sets target emulation speed.
+float GetTargetSpeed();
 void SetTargetSpeed(float speed);
 
 /// Adjusts the throttle frequency, i.e. how many times we should sleep per second.
@@ -170,11 +187,19 @@ void UpdateControllers();
 void UpdateControllerSettings();
 void ResetControllers();
 void UpdateMemoryCards();
+void UpdateMultitaps();
 
 /// Dumps RAM to a file.
 bool DumpRAM(const char* filename);
 
+/// Dumps video RAM to a file.
+bool DumpVRAM(const char* filename);
+
+/// Dumps sound RAM to a file.
+bool DumpSPURAM(const char* filename);
+
 bool HasMedia();
+std::string GetMediaFileName();
 bool InsertMedia(const char* path);
 void RemoveMedia();
 
@@ -186,6 +211,9 @@ u32 GetMediaPlaylistCount();
 
 /// Returns the current image from the media/disc playlist.
 u32 GetMediaPlaylistIndex();
+
+/// Returns the index of the specified path in the playlist, or UINT32_MAX if it does not exist.
+u32 GetMediaPlaylistIndexForPath(const std::string& path);
 
 /// Returns the path to the specified playlist index.
 const std::string& GetMediaPlaylistPath(u32 index);
@@ -214,5 +242,15 @@ void ApplyCheatCode(const CheatCode& code);
 
 /// Sets or clears the provided cheat list, applying every frame.
 void SetCheatList(std::unique_ptr<CheatList> cheats);
+
+//////////////////////////////////////////////////////////////////////////
+// Memory Save States (Rewind and Runahead)
+//////////////////////////////////////////////////////////////////////////
+void CalculateRewindMemoryUsage(u32 num_saves, u64* ram_usage, u64* vram_usage);
+void ClearMemorySaveStates();
+void UpdateMemorySaveStateSettings();
+bool LoadRewindState(u32 skip_saves = 0, bool consume_state = true);
+void SetRewinding(bool enabled);
+void SetRunaheadReplayFlag();
 
 } // namespace System

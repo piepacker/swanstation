@@ -91,18 +91,27 @@ bool PlayStationMouse::Transfer(const u8 data_in, u8* data_out)
   {
     case TransferState::Idle:
     {
-      // ack when sent 0x01, send ID for 0x42
+      *data_out = 0xFF;
+
+      if (data_in == 0x01)
+      {
+        m_transfer_state = TransferState::Ready;
+        return true;
+      }
+      return false;
+    }
+
+    case TransferState::Ready:
+    {
       if (data_in == 0x42)
       {
         *data_out = Truncate8(ID);
         m_transfer_state = TransferState::IDMSB;
         return true;
       }
-      else
-      {
-        *data_out = 0xFF;
-        return (data_in == 0x01);
-      }
+
+      *data_out = 0xFF;
+      return false;
     }
 
     case TransferState::IDMSB:
@@ -212,8 +221,8 @@ u32 PlayStationMouse::StaticGetVibrationMotorCount()
 Controller::SettingList PlayStationMouse::StaticGetSettings()
 {
   static constexpr std::array<SettingInfo, 1> settings = {{
-    {SettingInfo::Type::Boolean, "RelativeMouseMode", TRANSLATABLE("PlaystationMouse", "Relative Mouse Mode"),
-     TRANSLATABLE("PlaystationMouse", "Locks the mouse cursor to the window, use for FPS games.")},
+    {SettingInfo::Type::Boolean, "RelativeMouseMode", TRANSLATABLE("PlayStationMouse", "Relative Mouse Mode"),
+     TRANSLATABLE("PlayStationMouse", "Locks the mouse cursor to the window, use for FPS games."), "false"},
   }};
 
   return SettingList(settings.begin(), settings.end());

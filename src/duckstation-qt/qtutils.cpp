@@ -67,9 +67,22 @@ ALWAYS_INLINE_RELEASE static void ResizeColumnsForView(T* view, const std::initi
                                view->verticalScrollBarPolicy() == Qt::ScrollBarAlwaysOn) ?
                                 view->verticalScrollBar()->width() :
                                 0;
-  const int flex_width = std::max(view->contentsRect().width() - total_width - scrollbar_width, 1);
-
+  int num_flex_items = 0;
   int column_index = 0;
+  for (const int spec_width : widths)
+  {
+    if (spec_width < 0 && !view->isColumnHidden(column_index))
+      num_flex_items++;
+
+    column_index++;
+  }
+
+  const int flex_width =
+    (num_flex_items > 0) ?
+      std::max((view->contentsRect().width() - total_width - scrollbar_width) / num_flex_items, 1) :
+      0;
+
+  column_index = 0;
   for (const int spec_width : widths)
   {
     if (view->isColumnHidden(column_index))
@@ -565,15 +578,13 @@ std::optional<int> GetKeyIdForIdentifier(const QString& key_identifier)
   return std::nullopt;
 }
 
-QString KeyEventToString(const QKeyEvent* ke)
+QString KeyEventToString(int key, Qt::KeyboardModifiers mods)
 {
-  const int key = ke->key();
   QString key_name = GetKeyIdentifier(key);
   if (key_name.isEmpty())
     return {};
 
   QString ret;
-  const Qt::KeyboardModifiers mods = ke->modifiers();
   for (const QtKeyModifierEntry& mod : s_qt_key_modifiers)
   {
     if (mods & mod.mod && key != mod.key)
@@ -615,11 +626,8 @@ std::optional<int> ParseKeyString(const QString& key_str)
   return ret;
 }
 
-int KeyEventToInt(const QKeyEvent* ke)
+int KeyEventToInt(int key, Qt::KeyboardModifiers mods)
 {
-  const Qt::KeyboardModifiers mods = ke->modifiers();
-  const int key = ke->key();
-
   int val = key;
   if (mods != 0)
   {
@@ -750,9 +758,9 @@ std::optional<unsigned> PromptForAddress(QWidget* parent, const QString& title, 
     address = address_str.midRef(2).toUInt(&ok, 16);
   else
     address = address_str.toUInt(&ok, 16);
-  if ( code == true )
-    address = address & 0xFFFFFFFC; //disassembly address should be divisible by 4 so make sure
-  
+  if (code)
+    address = address & 0xFFFFFFFC; // disassembly address should be divisible by 4 so make sure
+
   if (!ok)
   {
     QMessageBox::critical(

@@ -16,6 +16,7 @@
 #include "host_display.h"
 #include "pgxp.h"
 #include "save_state_version.h"
+#include "spu.h"
 #include "system.h"
 #include "texture_replacements.h"
 #include <cmath>
@@ -23,6 +24,11 @@
 #include <cwchar>
 #include <stdlib.h>
 Log_SetChannel(HostInterface);
+
+#ifdef _WIN32
+#include "common/windows_headers.h"
+#include <dwmapi.h>
+#endif
 
 HostInterface* g_host_interface;
 
@@ -63,15 +69,19 @@ void HostInterface::CreateAudioStream()
 
   m_audio_stream = CreateAudioStream(g_settings.audio_backend);
 
-  if (!m_audio_stream || !m_audio_stream->Reconfigure(AUDIO_SAMPLE_RATE, AUDIO_CHANNELS, g_settings.audio_buffer_size))
+  if (!m_audio_stream ||
+      !m_audio_stream->Reconfigure(AUDIO_SAMPLE_RATE, AUDIO_SAMPLE_RATE, AUDIO_CHANNELS, g_settings.audio_buffer_size))
   {
     ReportFormattedError("Failed to create or configure audio stream, falling back to null output.");
     m_audio_stream.reset();
     m_audio_stream = AudioStream::CreateNullAudioStream();
-    m_audio_stream->Reconfigure(AUDIO_SAMPLE_RATE, AUDIO_CHANNELS, g_settings.audio_buffer_size);
+    m_audio_stream->Reconfigure(AUDIO_SAMPLE_RATE, AUDIO_SAMPLE_RATE, AUDIO_CHANNELS, g_settings.audio_buffer_size);
   }
 
   m_audio_stream->SetOutputVolume(GetAudioOutputVolume());
+
+  if (System::IsValid())
+    g_spu.SetAudioStream(m_audio_stream.get());
 }
 
 s32 HostInterface::GetAudioOutputVolume() const
@@ -91,7 +101,7 @@ bool HostInterface::BootSystem(const SystemBootParameters& parameters)
 
   if (!AcquireHostDisplay())
   {
-    ReportFormattedError("Failed to acquire host display");
+    ReportFormattedError(g_host_interface->TranslateString("System", "Failed to acquire host display."));
     OnSystemDestroyed();
     return false;
   }
@@ -99,13 +109,19 @@ bool HostInterface::BootSystem(const SystemBootParameters& parameters)
   // set host display settings
   m_display->SetDisplayLinearFiltering(g_settings.display_linear_filtering);
   m_display->SetDisplayIntegerScaling(g_settings.display_integer_scaling);
+  m_display->SetDisplayStretch(g_settings.display_stretch);
 
   // create the audio stream. this will never fail, since we'll just fall back to null
   CreateAudioStream();
 
   if (!System::Boot(parameters))
   {
-    ReportFormattedError("System failed to boot. The log may contain more information.");
+    if (!System::IsStartupCancelled())
+    {
+      ReportFormattedError(
+        g_host_interface->TranslateString("System", "System failed to boot. The log may contain more information."));
+    }
+
     OnSystemDestroyed();
     m_audio_stream.reset();
     ReleaseHostDisplay();
@@ -124,11 +140,6 @@ void HostInterface::ResetSystem()
   System::Reset();
   System::ResetPerformanceCounters();
   AddOSDMessage(TranslateStdString("OSDMessage", "System reset."));
-}
-
-void HostInterface::PowerOffSystem()
-{
-  DestroySystem();
 }
 
 void HostInterface::PauseSystem(bool paused)
@@ -157,7 +168,6 @@ void HostInterface::DestroySystem()
   UpdateSoftwareCursor();
   ReleaseHostDisplay();
   OnSystemDestroyed();
-  OnRunningGameChanged();
 }
 
 void HostInterface::ReportError(const char* message)
@@ -177,7 +187,7 @@ void HostInterface::ReportDebuggerMessage(const char* message)
 
 bool HostInterface::ConfirmMessage(const char* message)
 {
-  Log_WarningPrintf("ConfirmMessage(\"%s\") -> Yes");
+  Log_WarningPrintf("ConfirmMessage(\"%s\") -> Yes", message);
   return true;
 }
 
@@ -305,7 +315,7 @@ std::optional<std::vector<u8>> HostInterface::FindBIOSImageInDirectory(ConsoleRe
 
   for (const FILESYSTEM_FIND_DATA& fd : results)
   {
-    if (fd.Size != BIOS::BIOS_SIZE && fd.Size != BIOS::BIOS_SIZE_PS2)
+    if (fd.Size != BIOS::BIOS_SIZE && fd.Size != BIOS::BIOS_SIZE_PS2 && fd.Size != BIOS::BIOS_SIZE_PS3)
     {
       Log_WarningPrintf("Skipping '%s': incorrect size", fd.FileName.c_str());
       continue;
@@ -370,7 +380,7 @@ HostInterface::FindBIOSImagesInDirectory(const char* directory)
 
   for (FILESYSTEM_FIND_DATA& fd : files)
   {
-    if (fd.Size < BIOS::BIOS_SIZE || fd.Size > BIOS::BIOS_SIZE_PS2)
+    if (fd.Size != BIOS::BIOS_SIZE && fd.Size != BIOS::BIOS_SIZE_PS2 && fd.Size != BIOS::BIOS_SIZE_PS3)
       continue;
 
     std::string full_path(
@@ -456,7 +466,10 @@ void HostInterface::OnSystemPerformanceCountersUpdated() {}
 
 void HostInterface::OnSystemStateSaved(bool global, s32 slot) {}
 
-void HostInterface::OnRunningGameChanged() {}
+void HostInterface::OnRunningGameChanged(const std::string& path, CDImage* image, const std::string& game_code,
+                                         const std::string& game_title)
+{
+}
 
 void HostInterface::OnControllerTypeChanged(u32 slot) {}
 
@@ -471,15 +484,23 @@ void HostInterface::SetDefaultSettings(SettingsInterface& si)
 
   si.SetFloatValue("Main", "EmulationSpeed", 1.0f);
   si.SetFloatValue("Main", "FastForwardSpeed", 0.0f);
+  si.SetFloatValue("Main", "TurboSpeed", 0.0f);
+  si.SetBoolValue("Main", "SyncToHostRefreshRate", false);
   si.SetBoolValue("Main", "IncreaseTimerResolution", true);
   si.SetBoolValue("Main", "StartPaused", false);
   si.SetBoolValue("Main", "StartFullscreen", false);
   si.SetBoolValue("Main", "PauseOnFocusLoss", false);
+  si.SetBoolValue("Main", "PauseOnMenu", true);
   si.SetBoolValue("Main", "SaveStateOnExit", true);
   si.SetBoolValue("Main", "ConfirmPowerOff", true);
   si.SetBoolValue("Main", "LoadDevicesFromSaveStates", false);
   si.SetBoolValue("Main", "ApplyGameSettings", true);
+  si.SetBoolValue("Main", "AutoLoadCheats", true);
   si.SetBoolValue("Main", "DisableAllEnhancements", false);
+  si.SetBoolValue("Main", "RewindEnable", false);
+  si.SetFloatValue("Main", "RewindFrequency", 10.0f);
+  si.SetIntValue("Main", "RewindSaveSlots", 10);
+  si.SetFloatValue("Main", "RunaheadFrameCount", 0);
 
   si.SetStringValue("CPU", "ExecutionMode", Settings::GetCPUExecutionModeName(Settings::DEFAULT_CPU_EXECUTION_MODE));
   si.SetBoolValue("CPU", "RecompilerMemoryExceptions", false);
@@ -497,7 +518,7 @@ void HostInterface::SetDefaultSettings(SettingsInterface& si)
   si.SetBoolValue("GPU", "ScaledDithering", true);
   si.SetStringValue("GPU", "TextureFilter", Settings::GetTextureFilterName(Settings::DEFAULT_GPU_TEXTURE_FILTER));
   si.SetStringValue("GPU", "DownsampleMode", Settings::GetDownsampleModeName(Settings::DEFAULT_GPU_DOWNSAMPLE_MODE));
-  si.SetBoolValue("GPU", "DisableInterlacing", false);
+  si.SetBoolValue("GPU", "DisableInterlacing", true);
   si.SetBoolValue("GPU", "ForceNTSCTimings", false);
   si.SetBoolValue("GPU", "WidescreenHack", false);
   si.SetBoolValue("GPU", "ChromaSmoothing24Bit", false);
@@ -521,6 +542,7 @@ void HostInterface::SetDefaultSettings(SettingsInterface& si)
   si.SetBoolValue("Display", "Force4_3For24Bit", false);
   si.SetBoolValue("Display", "LinearFiltering", true);
   si.SetBoolValue("Display", "IntegerScaling", false);
+  si.SetBoolValue("Display", "Stretch", false);
   si.SetBoolValue("Display", "PostProcessing", false);
   si.SetBoolValue("Display", "ShowOSDMessages", true);
   si.SetBoolValue("Display", "ShowFPS", false);
@@ -529,6 +551,7 @@ void HostInterface::SetDefaultSettings(SettingsInterface& si)
   si.SetBoolValue("Display", "ShowResolution", false);
   si.SetBoolValue("Display", "Fullscreen", false);
   si.SetBoolValue("Display", "VSync", true);
+  si.SetBoolValue("Display", "DisplayAllFrames", false);
   si.SetStringValue("Display", "PostProcessChain", "");
   si.SetFloatValue("Display", "MaxFPS", 0.0f);
 
@@ -542,6 +565,7 @@ void HostInterface::SetDefaultSettings(SettingsInterface& si)
   si.SetIntValue("Audio", "OutputVolume", 100);
   si.SetIntValue("Audio", "FastForwardVolume", 100);
   si.SetIntValue("Audio", "BufferSize", DEFAULT_AUDIO_BUFFER_SIZE);
+  si.SetBoolValue("Audio", "Resampling", true);
   si.SetIntValue("Audio", "OutputMuted", false);
   si.SetBoolValue("Audio", "Sync", true);
   si.SetBoolValue("Audio", "DumpOnBoot", false);
@@ -554,7 +578,12 @@ void HostInterface::SetDefaultSettings(SettingsInterface& si)
   si.SetBoolValue("BIOS", "PatchFastBoot", false);
 
   si.SetStringValue("Controller1", "Type", Settings::GetControllerTypeName(Settings::DEFAULT_CONTROLLER_1_TYPE));
-  si.SetStringValue("Controller2", "Type", Settings::GetControllerTypeName(Settings::DEFAULT_CONTROLLER_2_TYPE));
+
+  for (u32 i = 1; i < NUM_CONTROLLER_AND_CARD_PORTS; i++)
+  {
+    si.SetStringValue(TinyString::FromFormat("Controller%u", i + 1u), "Type",
+                      Settings::GetControllerTypeName(Settings::DEFAULT_CONTROLLER_2_TYPE));
+  }
 
   si.SetStringValue("MemoryCards", "Card1Type", Settings::GetMemoryCardTypeName(Settings::DEFAULT_MEMORY_CARD_1_TYPE));
   si.SetStringValue("MemoryCards", "Card1Path", "memcards" FS_OSPATH_SEPARATOR_STR "shared_card_1.mcd");
@@ -562,9 +591,11 @@ void HostInterface::SetDefaultSettings(SettingsInterface& si)
   si.SetStringValue("MemoryCards", "Card2Path", "memcards" FS_OSPATH_SEPARATOR_STR "shared_card_2.mcd");
   si.SetBoolValue("MemoryCards", "UsePlaylistTitle", true);
 
+  si.SetStringValue("ControllerPorts", "MultitapMode", Settings::GetMultitapModeName(Settings::DEFAULT_MULTITAP_MODE));
+
   si.SetStringValue("Logging", "LogLevel", Settings::GetLogLevelName(Settings::DEFAULT_LOG_LEVEL));
   si.SetStringValue("Logging", "LogFilter", "");
-  si.SetBoolValue("Logging", "LogToConsole", false);
+  si.SetBoolValue("Logging", "LogToConsole", Settings::DEFAULT_LOG_TO_CONSOLE);
   si.SetBoolValue("Logging", "LogToDebug", false);
   si.SetBoolValue("Logging", "LogToWindow", false);
   si.SetBoolValue("Logging", "LogToFile", false);
@@ -594,6 +625,7 @@ void HostInterface::FixIncompatibleSettings(bool display_osd_messages)
 {
   if (g_settings.disable_all_enhancements)
   {
+    Log_WarningPrintf("All enhancements disabled by config setting.");
     g_settings.cpu_overclock_enable = false;
     g_settings.cpu_overclock_active = false;
     g_settings.gpu_resolution_scale = 1;
@@ -614,6 +646,18 @@ void HostInterface::FixIncompatibleSettings(bool display_osd_messages)
     g_settings.bios_patch_tty_enable = false;
   }
 
+  if (g_settings.display_integer_scaling && g_settings.display_linear_filtering)
+  {
+    Log_WarningPrintf("Disabling linear filter due to integer upscaling.");
+    g_settings.display_linear_filtering = false;
+  }
+
+  if (g_settings.display_integer_scaling && g_settings.display_stretch)
+  {
+    Log_WarningPrintf("Disabling stretch due to integer upscaling.");
+    g_settings.display_stretch = false;
+  }
+
   if (g_settings.gpu_pgxp_enable)
   {
     if (g_settings.gpu_renderer == GPURenderer::Software)
@@ -625,17 +669,6 @@ void HostInterface::FixIncompatibleSettings(bool display_osd_messages)
       }
       g_settings.gpu_pgxp_enable = false;
     }
-    else if (g_settings.gpu_pgxp_cpu && g_settings.cpu_execution_mode == CPUExecutionMode::Recompiler)
-    {
-      if (display_osd_messages)
-      {
-        AddOSDMessage(
-          TranslateStdString("OSDMessage",
-                             "PGXP CPU mode is incompatible with the recompiler, using Cached Interpreter instead."),
-          10.0f);
-      }
-      g_settings.cpu_execution_mode = CPUExecutionMode::CachedInterpreter;
-    }
   }
 
 #ifndef WITH_MMAP_FASTMEM
@@ -645,6 +678,27 @@ void HostInterface::FixIncompatibleSettings(bool display_osd_messages)
     g_settings.cpu_fastmem_mode = CPUFastmemMode::LUT;
   }
 #endif
+
+  // rewinding causes issues with mmap fastmem, so just use LUT
+  if ((g_settings.rewind_enable || g_settings.IsRunaheadEnabled()) && g_settings.IsUsingFastmem() &&
+      g_settings.cpu_fastmem_mode == CPUFastmemMode::MMap)
+  {
+    Log_WarningPrintf("Disabling mmap fastmem due to rewind being enabled");
+    g_settings.cpu_fastmem_mode = CPUFastmemMode::LUT;
+  }
+
+  // code compilation is too slow with runahead, use the recompiler
+  if (g_settings.IsRunaheadEnabled() && g_settings.IsUsingCodeCache())
+  {
+    Log_WarningPrintf("Code cache/recompiler disabled due to runahead");
+    g_settings.cpu_execution_mode = CPUExecutionMode::Interpreter;
+  }
+
+  if (g_settings.IsRunaheadEnabled() && g_settings.rewind_enable)
+  {
+    Log_WarningPrintf("Rewind disabled due to runahead being enabled");
+    g_settings.rewind_enable = false;
+  }
 }
 
 void HostInterface::SaveSettings(SettingsInterface& si)
@@ -666,6 +720,8 @@ void HostInterface::CheckForSettingsChanges(const Settings& old_settings)
 
   if (System::IsValid())
   {
+    System::ClearMemorySaveStates();
+
     if (g_settings.cpu_overclock_active != old_settings.cpu_overclock_active ||
         (g_settings.cpu_overclock_active &&
          (g_settings.cpu_overclock_numerator != old_settings.cpu_overclock_numerator ||
@@ -745,7 +801,9 @@ void HostInterface::CheckForSettingsChanges(const Settings& old_settings)
         g_settings.display_active_start_offset != old_settings.display_active_start_offset ||
         g_settings.display_active_end_offset != old_settings.display_active_end_offset ||
         g_settings.display_line_start_offset != old_settings.display_line_start_offset ||
-        g_settings.display_line_end_offset != old_settings.display_line_end_offset)
+        g_settings.display_line_end_offset != old_settings.display_line_end_offset ||
+        g_settings.rewind_enable != old_settings.rewind_enable ||
+        g_settings.runahead_frames != old_settings.runahead_frames)
     {
       if (g_settings.IsUsingCodeCache())
         CPU::CodeCache::Reinitialize();
@@ -754,7 +812,8 @@ void HostInterface::CheckForSettingsChanges(const Settings& old_settings)
     }
 
     if (g_settings.gpu_pgxp_enable != old_settings.gpu_pgxp_enable ||
-        (g_settings.gpu_pgxp_enable && g_settings.gpu_pgxp_culling != old_settings.gpu_pgxp_culling))
+        (g_settings.gpu_pgxp_enable && (g_settings.gpu_pgxp_culling != old_settings.gpu_pgxp_culling ||
+                                        g_settings.gpu_pgxp_cpu != old_settings.gpu_pgxp_cpu)))
     {
       if (g_settings.IsUsingCodeCache())
       {
@@ -781,6 +840,14 @@ void HostInterface::CheckForSettingsChanges(const Settings& old_settings)
          System::HasMediaPlaylist()))
     {
       System::UpdateMemoryCards();
+    }
+
+    if (g_settings.rewind_enable != old_settings.rewind_enable ||
+        g_settings.rewind_save_frequency != old_settings.rewind_save_frequency ||
+        g_settings.rewind_save_slots != old_settings.rewind_save_slots ||
+        g_settings.runahead_frames != old_settings.runahead_frames)
+    {
+      System::UpdateMemorySaveStateSettings();
     }
 
     if (g_settings.texture_replacements.enable_vram_write_replacements !=
@@ -817,17 +884,26 @@ void HostInterface::CheckForSettingsChanges(const Settings& old_settings)
     }
   }
 
-  if (m_display && g_settings.display_linear_filtering != old_settings.display_linear_filtering)
-    m_display->SetDisplayLinearFiltering(g_settings.display_linear_filtering);
+  if (g_settings.multitap_mode != old_settings.multitap_mode)
+    System::UpdateMultitaps();
 
-  if (m_display && g_settings.display_integer_scaling != old_settings.display_integer_scaling)
-    m_display->SetDisplayIntegerScaling(g_settings.display_integer_scaling);
+  if (m_display)
+  {
+    if (g_settings.display_linear_filtering != old_settings.display_linear_filtering)
+      m_display->SetDisplayLinearFiltering(g_settings.display_linear_filtering);
+
+    if (g_settings.display_integer_scaling != old_settings.display_integer_scaling)
+      m_display->SetDisplayIntegerScaling(g_settings.display_integer_scaling);
+
+    if (g_settings.display_stretch != old_settings.display_stretch)
+      m_display->SetDisplayStretch(g_settings.display_stretch);
+  }
 }
 
 void HostInterface::SetUserDirectoryToProgramDirectory()
 {
-  const std::string program_path = FileSystem::GetProgramPath();
-  const std::string program_directory = FileSystem::GetPathDirectory(program_path.c_str());
+  const std::string program_path(FileSystem::GetProgramPath());
+  const std::string program_directory(FileSystem::GetPathDirectory(program_path.c_str()));
   m_user_directory = program_directory;
 }
 
@@ -916,14 +992,88 @@ float HostInterface::GetFloatSettingValue(const char* section, const char* key, 
   return float_value.value_or(default_value);
 }
 
-TinyString HostInterface::TranslateString(const char* context, const char* str) const
+TinyString HostInterface::TranslateString(const char* context, const char* str,
+                                          const char* disambiguation /*= nullptr*/, int n /*= -1*/) const
 {
-  return str;
+  TinyString result(str);
+  if (n >= 0)
+  {
+    const std::string number = std::to_string(n);
+    result.Replace("%n", number.c_str());
+    result.Replace("%Ln", number.c_str());
+  }
+  return result;
 }
 
-std::string HostInterface::TranslateStdString(const char* context, const char* str) const
+std::string HostInterface::TranslateStdString(const char* context, const char* str,
+                                              const char* disambiguation /*= nullptr*/, int n /*= -1*/) const
 {
-  return str;
+  std::string result(str);
+  if (n >= 0)
+  {
+    const std::string number = std::to_string(n);
+    // Made to mimick Qt's behaviour
+    // https://github.com/qt/qtbase/blob/255459250d450286a8c5c492dab3f6d3652171c9/src/corelib/kernel/qcoreapplication.cpp#L2099
+    size_t percent_pos = 0;
+    size_t len = 0;
+    while ((percent_pos = result.find('%', percent_pos + len)) != std::string::npos)
+    {
+      len = 1;
+      if (percent_pos + len == result.length())
+        break;
+      if (result[percent_pos + len] == 'L')
+      {
+        ++len;
+        if (percent_pos + len == result.length())
+          break;
+      }
+      if (result[percent_pos + len] == 'n')
+      {
+        ++len;
+        result.replace(percent_pos, len, number);
+        len = number.length();
+      }
+    }
+  }
+
+  return result;
+}
+
+bool HostInterface::GetMainDisplayRefreshRate(float* refresh_rate)
+{
+#ifdef _WIN32
+  static HMODULE dwm_module = nullptr;
+  static HRESULT(STDAPICALLTYPE * get_timing_info)(HWND hwnd, DWM_TIMING_INFO * pTimingInfo) = nullptr;
+  static bool load_tried = false;
+  if (!load_tried)
+  {
+    load_tried = true;
+    dwm_module = LoadLibrary("dwmapi.dll");
+    if (dwm_module)
+    {
+      std::atexit([]() {
+        FreeLibrary(dwm_module);
+        dwm_module = nullptr;
+      });
+      get_timing_info =
+        reinterpret_cast<decltype(get_timing_info)>(GetProcAddress(dwm_module, "DwmGetCompositionTimingInfo"));
+    }
+  }
+
+  DWM_TIMING_INFO ti = {};
+  ti.cbSize = sizeof(ti);
+  HRESULT hr = get_timing_info(nullptr, &ti);
+  if (SUCCEEDED(hr))
+  {
+    if (ti.rateRefresh.uiNumerator == 0 || ti.rateRefresh.uiDenominator == 0)
+      return false;
+
+    *refresh_rate = static_cast<float>(ti.rateRefresh.uiNumerator) / static_cast<float>(ti.rateRefresh.uiDenominator);
+    return true;
+  }
+#endif
+
+  return false;
 }
 
 void HostInterface::ToggleSoftwareRendering()
@@ -952,6 +1102,7 @@ void HostInterface::ModifyResolutionScale(s32 increment)
     g_gpu->RestoreGraphicsAPIState();
     g_gpu->UpdateSettings();
     g_gpu->ResetGraphicsAPIState();
+    System::ClearMemorySaveStates();
   }
 }
 

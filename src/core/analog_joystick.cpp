@@ -83,6 +83,9 @@ void AnalogJoystick::SetAxisState(s32 axis_code, float value)
 
 void AnalogJoystick::SetAxisState(Axis axis, u8 value)
 {
+  if (m_axis_state[static_cast<u8>(axis)] != value)
+    System::SetRunaheadReplayFlag();
+
   m_axis_state[static_cast<u8>(axis)] = value;
 }
 
@@ -96,10 +99,22 @@ void AnalogJoystick::SetButtonState(Button button, bool pressed)
     return;
   }
 
+  const u16 bit = u16(1) << static_cast<u8>(button);
+
   if (pressed)
-    m_button_state &= ~(u16(1) << static_cast<u8>(button));
+  {
+    if (m_button_state & bit)
+      System::SetRunaheadReplayFlag();
+
+    m_button_state &= ~bit;
+  }
   else
-    m_button_state |= (u16(1) << static_cast<u8>(button));
+  {
+    if (!(m_button_state & bit))
+      System::SetRunaheadReplayFlag();
+
+    m_button_state |= bit;
+  }
 }
 
 void AnalogJoystick::SetButtonState(s32 button_code, bool pressed)
@@ -113,6 +128,12 @@ void AnalogJoystick::SetButtonState(s32 button_code, bool pressed)
 u32 AnalogJoystick::GetButtonStateBits() const
 {
   return m_button_state ^ 0xFFFF;
+}
+
+std::optional<u32> AnalogJoystick::GetAnalogInputBytes() const
+{
+  return m_axis_state[static_cast<size_t>(Axis::LeftY)] << 24 | m_axis_state[static_cast<size_t>(Axis::LeftX)] << 16 |
+         m_axis_state[static_cast<size_t>(Axis::RightY)] << 8 | m_axis_state[static_cast<size_t>(Axis::RightX)];
 }
 
 void AnalogJoystick::ResetTransferState()
@@ -146,18 +167,27 @@ bool AnalogJoystick::Transfer(const u8 data_in, u8* data_out)
   {
     case TransferState::Idle:
     {
-      // ack when sent 0x01, send ID for 0x42
+      *data_out = 0xFF;
+
+      if (data_in == 0x01)
+      {
+        m_transfer_state = TransferState::Ready;
+        return true;
+      }
+      return false;
+    }
+
+    case TransferState::Ready:
+    {
       if (data_in == 0x42)
       {
         *data_out = Truncate8(GetID());
         m_transfer_state = TransferState::IDMSB;
         return true;
       }
-      else
-      {
-        *data_out = 0xFF;
-        return (data_in == 0x01);
-      }
+
+      *data_out = 0xFF;
+      return false;
     }
 
     case TransferState::IDMSB:

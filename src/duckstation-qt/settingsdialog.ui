@@ -82,6 +82,15 @@
      </item>
      <item>
       <property name="text">
+       <string>Emulation Settings</string>
+      </property>
+      <property name="icon">
+       <iconset resource="resources/resources.qrc">
+        <normaloff>:/icons/applications-other.png</normaloff>:/icons/applications-other.png</iconset>
+      </property>
+     </item>
+     <item>
+      <property name="text">
        <string>Game List Settings</string>
       </property>
       <property name="icon">
@@ -150,6 +159,15 @@
       <property name="icon">
        <iconset resource="resources/resources.qrc">
         <normaloff>:/icons/audio-card.png</normaloff>:/icons/audio-card.png</iconset>
+      </property>
+     </item>
+     <item>
+      <property name="text">
+       <string>Achievement Settings</string>
+      </property>
+      <property name="icon">
+       <iconset resource="resources/resources.qrc">
+        <normaloff>:/icons/trophy.png</normaloff>:/icons/trophy.png</iconset>
       </property>
      </item>
      <item>

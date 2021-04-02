@@ -361,7 +361,7 @@ void UpdateFastmemViews(CPUFastmemMode mode, bool isolate_cache)
           u8* page_address = map_address + (i * HOST_PAGE_SIZE);
           if (!m_memory_arena.SetPageProtection(page_address, HOST_PAGE_SIZE, true, false, false))
           {
-            Log_ErrorPrintf("Failed to write-protect code page at %p");
+            Log_ErrorPrintf("Failed to write-protect code page at %p", page_address);
             return;
           }
         }
@@ -504,7 +504,7 @@ void SetCodePageFastmemProtection(u32 page_index, bool writable)
       if (!m_memory_arena.SetPageProtection(page_address, HOST_PAGE_SIZE, true, writable, false))
       {
         Log_ErrorPrintf("Failed to %s code page %u (0x%08X) @ %p", writable ? "unprotect" : "protect", page_index,
-                        page_index * HOST_PAGE_SIZE, page_address);
+                        page_index * static_cast<u32>(HOST_PAGE_SIZE), page_address);
       }
     }
 
@@ -799,7 +799,7 @@ ALWAYS_INLINE static TickCount DoBIOSAccess(u32 offset, u32& value)
 }
 
 template<MemoryAccessType type, MemoryAccessSize size>
-ALWAYS_INLINE static TickCount DoEXP1Access(u32 offset, u32& value)
+static TickCount DoEXP1Access(u32 offset, u32& value)
 {
   if constexpr (type == MemoryAccessType::Read)
   {
@@ -851,7 +851,7 @@ ALWAYS_INLINE static TickCount DoEXP1Access(u32 offset, u32& value)
 }
 
 template<MemoryAccessType type, MemoryAccessSize size>
-ALWAYS_INLINE static TickCount DoEXP2Access(u32 offset, u32& value)
+static TickCount DoEXP2Access(u32 offset, u32& value)
 {
   if constexpr (type == MemoryAccessType::Read)
   {
@@ -875,7 +875,7 @@ ALWAYS_INLINE static TickCount DoEXP2Access(u32 offset, u32& value)
   }
   else
   {
-    if (offset == 0x23)
+    if (offset == 0x23 || offset == 0x80)
     {
       if (value == '\r')
       {
@@ -919,7 +919,7 @@ ALWAYS_INLINE static TickCount DoEXP3Access(u32 offset, u32& value)
 {
   if constexpr (type == MemoryAccessType::Read)
   {
-    Log_WarningPrintf("EXP3 read: 0x%08X -> 0x%08X", EXP3_BASE | offset);
+    Log_WarningPrintf("EXP3 read: 0x%08X -> 0x%08X", offset, EXP3_BASE | offset);
     value = UINT32_C(0xFFFFFFFF);
 
     return 0;
@@ -1421,8 +1421,6 @@ ALWAYS_INLINE_RELEASE static void WriteICache(VirtualMemoryAddress address, u32 
 static void WriteCacheControl(u32 value)
 {
   Log_DevPrintf("Cache control <- 0x%08X", value);
-
-  CacheControl changed_bits{g_state.cache_control.bits ^ value};
   g_state.cache_control.bits = value;
 }
 

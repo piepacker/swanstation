@@ -17,7 +17,8 @@ public:
   ~GPU_HW_OpenGL() override;
 
   bool Initialize(HostDisplay* host_display) override;
-  void Reset() override;
+  void Reset(bool clear_vram) override;
+  bool DoState(StateWrapper& sw, HostDisplayTexture** host_texture, bool update_display) override;
 
   void ResetGraphicsAPIState() override;
   void RestoreGraphicsAPIState() override;
@@ -57,6 +58,8 @@ private:
   void SetCapabilities(HostDisplay* host_display);
   bool CreateFramebuffer();
   void ClearFramebuffer();
+  void CopyFramebufferForState(GLenum target, GLuint src_texture, u32 src_fbo, u32 src_x, u32 src_y, GLuint dst_texture,
+                               u32 dst_fbo, u32 dst_x, u32 dst_y, u32 width, u32 height);
 
   bool CreateVertexBuffer();
   bool CreateUniformBuffer();
@@ -84,6 +87,7 @@ private:
   GLuint m_vram_fbo_id = 0;
   GLuint m_vao_id = 0;
   GLuint m_attributeless_vao_id = 0;
+  GLuint m_state_copy_fbo_id = 0;
 
   std::unique_ptr<GL::StreamBuffer> m_uniform_stream_buffer;
 
@@ -100,10 +104,9 @@ private:
   GL::Program m_vram_update_depth_program;
 
   u32 m_uniform_buffer_alignment = 1;
-  u32 m_max_texture_buffer_size = 0;
+  u32 m_texture_stream_buffer_size = 0;
 
-  bool m_supports_texture_buffer = false;
-  bool m_supports_geometry_shaders = false;
+  bool m_use_texture_buffer_for_vram_writes = false;
   bool m_use_ssbo_for_vram_writes = false;
 
   GLenum m_current_depth_test = 0;

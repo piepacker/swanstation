@@ -5,6 +5,7 @@
 #include "common/log.h"
 #include "common/string_util.h"
 #include "common/timer.h"
+#include "host_interface.h"
 #include "stb_image.h"
 #include "stb_image_resize.h"
 #include "stb_image_write.h"
@@ -85,6 +86,11 @@ bool HostDisplay::SetDisplayPixels(HostDisplayPixelFormat format, u32 width, u32
   return true;
 }
 
+bool HostDisplay::GetHostRefreshRate(float* refresh_rate)
+{
+  return g_host_interface->GetMainDisplayRefreshRate(refresh_rate);
+}
+
 void HostDisplay::SetSoftwareCursor(std::unique_ptr<HostDisplayTexture> texture, float scale /*= 1.0f*/)
 {
   m_cursor_texture = std::move(texture);
@@ -93,7 +99,8 @@ void HostDisplay::SetSoftwareCursor(std::unique_ptr<HostDisplayTexture> texture,
 
 bool HostDisplay::SetSoftwareCursor(const void* pixels, u32 width, u32 height, u32 stride, float scale /*= 1.0f*/)
 {
-  std::unique_ptr<HostDisplayTexture> tex = CreateTexture(width, height, pixels, stride, false);
+  std::unique_ptr<HostDisplayTexture> tex =
+    CreateTexture(width, height, 1, 1, 1, HostDisplayPixelFormat::RGBA8, pixels, stride, false);
   if (!tex)
     return false;
 
@@ -118,8 +125,9 @@ bool HostDisplay::SetSoftwareCursor(const char* path, float scale /*= 1.0f*/)
     return false;
   }
 
-  std::unique_ptr<HostDisplayTexture> tex = CreateTexture(static_cast<u32>(width), static_cast<u32>(height), pixel_data,
-                                                          sizeof(u32) * static_cast<u32>(width), false);
+  std::unique_ptr<HostDisplayTexture> tex =
+    CreateTexture(static_cast<u32>(width), static_cast<u32>(height), 1, 1, 1, HostDisplayPixelFormat::RGBA8, pixel_data,
+                  sizeof(u32) * static_cast<u32>(width), false);
   stbi_image_free(pixel_data);
   if (!tex)
     return false;
@@ -140,9 +148,11 @@ void HostDisplay::CalculateDrawRect(s32 window_width, s32 window_height, float* 
                                     float* out_top_padding, float* out_scale, float* out_x_scale,
                                     bool apply_aspect_ratio /* = true */) const
 {
+  const float window_ratio = static_cast<float>(window_width) / static_cast<float>(window_height);
+  const float display_aspect_ratio = m_display_stretch ? window_ratio : m_display_aspect_ratio;
   const float x_scale =
     apply_aspect_ratio ?
-      (m_display_aspect_ratio / (static_cast<float>(m_display_width) / static_cast<float>(m_display_height))) :
+      (display_aspect_ratio / (static_cast<float>(m_display_width) / static_cast<float>(m_display_height))) :
       1.0f;
   const float display_width = static_cast<float>(m_display_width) * x_scale;
   const float display_height = static_cast<float>(m_display_height);
@@ -154,8 +164,6 @@ void HostDisplay::CalculateDrawRect(s32 window_width, s32 window_height, float* 
     *out_x_scale = x_scale;
 
   // now fit it within the window
-  const float window_ratio = static_cast<float>(window_width) / static_cast<float>(window_height);
-
   float scale;
   if ((display_width / display_height) >= window_ratio)
   {
@@ -175,8 +183,8 @@ void HostDisplay::CalculateDrawRect(s32 window_width, s32 window_height, float* 
     {
       switch (m_display_alignment)
       {
-        case Alignment::LeftOrTop:
-          *out_top_padding = 0.0f;
+        case Alignment::RightOrBottom:
+          *out_top_padding = std::max<float>(static_cast<float>(window_height) - (display_height * scale), 0.0f);
           break;
 
         case Alignment::Center:
@@ -184,8 +192,9 @@ void HostDisplay::CalculateDrawRect(s32 window_width, s32 window_height, float* 
             std::max<float>((static_cast<float>(window_height) - (display_height * scale)) / 2.0f, 0.0f);
           break;
 
-        case Alignment::RightOrBottom:
-          *out_top_padding = std::max<float>(static_cast<float>(window_height) - (display_height * scale), 0.0f);
+        case Alignment::LeftOrTop:
+        default:
+          *out_top_padding = 0.0f;
           break;
       }
     }
@@ -201,8 +210,8 @@ void HostDisplay::CalculateDrawRect(s32 window_width, s32 window_height, float* 
     {
       switch (m_display_alignment)
       {
-        case Alignment::LeftOrTop:
-          *out_left_padding = 0.0f;
+        case Alignment::RightOrBottom:
+          *out_left_padding = std::max<float>(static_cast<float>(window_width) - (display_width * scale), 0.0f);
           break;
 
         case Alignment::Center:
@@ -210,8 +219,9 @@ void HostDisplay::CalculateDrawRect(s32 window_width, s32 window_height, float* 
             std::max<float>((static_cast<float>(window_width) - (display_width * scale)) / 2.0f, 0.0f);
           break;
 
-        case Alignment::RightOrBottom:
-          *out_left_padding = std::max<float>(static_cast<float>(window_width) - (display_width * scale), 0.0f);
+        case Alignment::LeftOrTop:
+        default:
+          *out_left_padding = 0.0f;
           break;
       }
     }
@@ -601,5 +611,42 @@ bool HostDisplay::WriteDisplayTextureToBuffer(std::vector<u32>* buffer, u32 resi
     *buffer = texture_data;
   }
 
+  return true;
+}
+
+bool HostDisplay::WriteScreenshotToFile(std::string filename, bool compress_on_thread /*= false*/)
+{
+  const u32 width = m_window_info.surface_width;
+  const u32 height = m_window_info.surface_height;
+  if (width == 0 || height == 0)
+    return false;
+
+  std::vector<u32> pixels;
+  u32 pixels_stride;
+  HostDisplayPixelFormat pixels_format;
+  if (!RenderScreenshot(width, height, &pixels, &pixels_stride, &pixels_format))
+  {
+    Log_ErrorPrintf("Failed to render %ux%u screenshot", width, height);
+    return false;
+  }
+
+  auto fp = FileSystem::OpenManagedCFile(filename.c_str(), "wb");
+  if (!fp)
+  {
+    Log_ErrorPrintf("Can't open file '%s': errno %d", filename.c_str(), errno);
+    return false;
+  }
+
+  const RenderAPI api = GetRenderAPI();
+  const bool flip_y = (api == RenderAPI::OpenGL || api == RenderAPI::OpenGLES);
+  if (!compress_on_thread)
+  {
+    return CompressAndWriteTextureToFile(width, height, std::move(filename), std::move(fp), true, flip_y, width, height,
+                                         std::move(pixels), pixels_stride, pixels_format);
+  }
+
+  std::thread compress_thread(CompressAndWriteTextureToFile, width, height, std::move(filename), std::move(fp), true,
+                              flip_y, width, height, std::move(pixels), pixels_stride, pixels_format);
+  compress_thread.detach();
   return true;
 }

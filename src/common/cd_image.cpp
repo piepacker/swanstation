@@ -14,7 +14,7 @@ u32 CDImage::GetBytesPerSector(TrackMode mode)
   return sizes[static_cast<u32>(mode)];
 }
 
-std::unique_ptr<CDImage> CDImage::Open(const char* filename)
+std::unique_ptr<CDImage> CDImage::Open(const char* filename, Common::Error* error)
 {
   const char* extension = std::strrchr(filename, '.');
   if (!extension)
@@ -31,16 +31,28 @@ std::unique_ptr<CDImage> CDImage::Open(const char* filename)
 
   if (CASE_COMPARE(extension, ".cue") == 0)
   {
-    return OpenCueSheetImage(filename);
+    return OpenCueSheetImage(filename, error);
   }
   else if (CASE_COMPARE(extension, ".bin") == 0 || CASE_COMPARE(extension, ".img") == 0 ||
            CASE_COMPARE(extension, ".iso") == 0)
   {
-    return OpenBinImage(filename);
+    return OpenBinImage(filename, error);
   }
   else if (CASE_COMPARE(extension, ".chd") == 0)
   {
-    return OpenCHDImage(filename);
+    return OpenCHDImage(filename, error);
+  }
+  else if (CASE_COMPARE(extension, ".ecm") == 0)
+  {
+    return OpenEcmImage(filename, error);
+  }
+  else if (CASE_COMPARE(extension, ".mds") == 0)
+  {
+    return OpenMdsImage(filename, error);
+  }
+  else if (CASE_COMPARE(extension, ".pbp") == 0)
+  {
+    return OpenPBPImage(filename, error);
   }
 
 #undef CASE_COMPARE
@@ -197,10 +209,6 @@ u32 CDImage::Read(ReadMode read_mode, u32 sector_count, void* buffer)
         UnreachableCode();
         break;
     }
-
-    m_position_on_disc++;
-    m_position_in_index++;
-    m_position_in_track++;
   }
 
   return sectors_read;

@@ -497,25 +497,28 @@ bool SDLControllerInterface::HandleJoystickHatEvent(const SDL_JoyHatEvent* event
 
   bool processed = false;
 
-  if (const ButtonCallback& cb = it->hat_button_mapping[event->hat][0]; cb)
+  if (event->hat < it->hat_button_mapping.size())
   {
-    cb(event->value & SDL_HAT_UP);
-    processed = true;
-  }
-  if (const ButtonCallback& cb = it->hat_button_mapping[event->hat][1]; cb)
-  {
-    cb(event->value & SDL_HAT_RIGHT);
-    processed = true;
-  }
-  if (const ButtonCallback& cb = it->hat_button_mapping[event->hat][2]; cb)
-  {
-    cb(event->value & SDL_HAT_DOWN);
-    processed = true;
-  }
-  if (const ButtonCallback& cb = it->hat_button_mapping[event->hat][3]; cb)
-  {
-    cb(event->value & SDL_HAT_LEFT);
-    processed = true;
+    if (const ButtonCallback& cb = it->hat_button_mapping[event->hat][0]; cb)
+    {
+      cb(event->value & SDL_HAT_UP);
+      processed = true;
+    }
+    if (const ButtonCallback& cb = it->hat_button_mapping[event->hat][1]; cb)
+    {
+      cb(event->value & SDL_HAT_RIGHT);
+      processed = true;
+    }
+    if (const ButtonCallback& cb = it->hat_button_mapping[event->hat][2]; cb)
+    {
+      cb(event->value & SDL_HAT_DOWN);
+      processed = true;
+    }
+    if (const ButtonCallback& cb = it->hat_button_mapping[event->hat][3]; cb)
+    {
+      cb(event->value & SDL_HAT_LEFT);
+      processed = true;
+    }
   }
 
   return processed;
@@ -594,7 +597,7 @@ bool SDLControllerInterface::BindControllerHatToButton(int controller_index, int
     return false;
 
   // We need 4 entries per hat_number
-  if (it->hat_button_mapping.size() < hat_number + 1)
+  if (static_cast<int>(it->hat_button_mapping.size()) < hat_number + 1)
     it->hat_button_mapping.resize(hat_number + 1);
 
   it->hat_button_mapping[hat_number][index] = std::move(callback);
@@ -673,9 +676,36 @@ bool SDLControllerInterface::HandleControllerButtonEvent(const SDL_ControllerBut
   if (it == m_controllers.end())
     return false;
 
+  static constexpr std::array<FrontendCommon::ControllerNavigationButton, SDL_CONTROLLER_BUTTON_MAX>
+    nav_button_mapping = {{
+      FrontendCommon::ControllerNavigationButton::Activate,      // SDL_CONTROLLER_BUTTON_A
+      FrontendCommon::ControllerNavigationButton::Cancel,        // SDL_CONTROLLER_BUTTON_B
+      FrontendCommon::ControllerNavigationButton::Count,         // SDL_CONTROLLER_BUTTON_X
+      FrontendCommon::ControllerNavigationButton::Count,         // SDL_CONTROLLER_BUTTON_Y
+      FrontendCommon::ControllerNavigationButton::Count,         // SDL_CONTROLLER_BUTTON_BACK
+      FrontendCommon::ControllerNavigationButton::Count,         // SDL_CONTROLLER_BUTTON_GUIDE
+      FrontendCommon::ControllerNavigationButton::Count,         // SDL_CONTROLLER_BUTTON_START
+      FrontendCommon::ControllerNavigationButton::Count,         // SDL_CONTROLLER_BUTTON_LEFTSTICK
+      FrontendCommon::ControllerNavigationButton::Count,         // SDL_CONTROLLER_BUTTON_RIGHTSTICK
+      FrontendCommon::ControllerNavigationButton::LeftShoulder,  // SDL_CONTROLLER_BUTTON_LEFTSHOULDER
+      FrontendCommon::ControllerNavigationButton::RightShoulder, // SDL_CONTROLLER_BUTTON_RIGHTSHOULDER
+      FrontendCommon::ControllerNavigationButton::DPadUp,        // SDL_CONTROLLER_BUTTON_DPAD_UP
+      FrontendCommon::ControllerNavigationButton::DPadDown,      // SDL_CONTROLLER_BUTTON_DPAD_DOWN
+      FrontendCommon::ControllerNavigationButton::DPadLeft,      // SDL_CONTROLLER_BUTTON_DPAD_LEFT
+      FrontendCommon::ControllerNavigationButton::DPadRight,     // SDL_CONTROLLER_BUTTON_DPAD_RIGHT
+    }};
+
   const bool pressed = (ev->state == SDL_PRESSED);
   if (DoEventHook(Hook::Type::Button, it->player_id, ev->button, pressed ? 1.0f : 0.0f))
     return true;
+
+  if (ev->button < nav_button_mapping.size() &&
+      nav_button_mapping[ev->button] != FrontendCommon::ControllerNavigationButton::Count &&
+      m_host_interface->SetControllerNavigationButtonState(nav_button_mapping[ev->button], pressed))
+  {
+    // UI consumed the event
+    return true;
+  }
 
   const ButtonCallback& cb = it->button_mapping[ev->button];
   if (cb)
@@ -710,7 +740,7 @@ void SDLControllerInterface::SetControllerRumbleStrength(int controller_index, c
     return;
 
   // we'll update before this duration is elapsed
-  static constexpr u32 DURATION = 1000;
+  static constexpr u32 DURATION = 65535; // SDL_MAX_RUMBLE_DURATION_MS
 
 #if SDL_VERSION_ATLEAST(2, 0, 9)
   if (it->use_game_controller_rumble)

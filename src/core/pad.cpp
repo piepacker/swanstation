@@ -5,6 +5,7 @@
 #include "host_interface.h"
 #include "interrupt_controller.h"
 #include "memory_card.h"
+#include "multitap.h"
 #include "system.h"
 Log_SetChannel(Pad);
 
@@ -17,7 +18,9 @@ Pad::~Pad() = default;
 void Pad::Initialize()
 {
   m_transfer_event = TimingEvents::CreateTimingEvent(
-    "Pad Serial Transfer", 1, 1, std::bind(&Pad::TransferEvent, this, std::placeholders::_2), false);
+    "Pad Serial Transfer", 1, 1,
+    [](void* param, TickCount ticks, TickCount ticks_late) { static_cast<Pad*>(param)->TransferEvent(ticks_late); },
+    this, false);
   Reset();
 }
 
@@ -25,7 +28,7 @@ void Pad::Shutdown()
 {
   m_transfer_event.reset();
 
-  for (u32 i = 0; i < NUM_SLOTS; i++)
+  for (u32 i = 0; i < NUM_CONTROLLER_AND_CARD_PORTS; i++)
   {
     m_controllers[i].reset();
     m_memory_cards[i].reset();
@@ -36,7 +39,7 @@ void Pad::Reset()
 {
   SoftReset();
 
-  for (u32 i = 0; i < NUM_SLOTS; i++)
+  for (u32 i = 0; i < NUM_CONTROLLER_AND_CARD_PORTS; i++)
   {
     if (m_controllers[i])
       m_controllers[i]->Reset();
@@ -44,113 +47,119 @@ void Pad::Reset()
     if (m_memory_cards[i])
       m_memory_cards[i]->Reset();
   }
+
+  for (u32 i = 0; i < NUM_MULTITAPS; i++)
+    m_multitaps[i].Reset();
 }
 
-bool Pad::DoState(StateWrapper& sw)
+bool Pad::DoStateController(StateWrapper& sw, u32 i)
 {
-  for (u32 i = 0; i < NUM_SLOTS; i++)
-  {
-    ControllerType controller_type = m_controllers[i] ? m_controllers[i]->GetType() : ControllerType::None;
-    ControllerType state_controller_type = controller_type;
-    sw.Do(&state_controller_type);
+  ControllerType controller_type = m_controllers[i] ? m_controllers[i]->GetType() : ControllerType::None;
+  ControllerType state_controller_type = controller_type;
 
+  sw.Do(&state_controller_type);
+
+  if (controller_type != state_controller_type)
+  {
+    Assert(sw.GetMode() == StateWrapper::Mode::Read);
+
+    // UI notification portion is separated from emulation portion (intentional condition check redundancy)
     if (g_settings.load_devices_from_save_states)
     {
-      if (controller_type != state_controller_type)
-      {
-        if (g_settings.load_devices_from_save_states)
-        {
-          g_host_interface->AddFormattedOSDMessage(
-            10.0f,
-            g_host_interface->TranslateString(
-              "OSDMessage", "Save state contains controller type %s in port %u, but %s is used. Switching."),
-            Settings::GetControllerTypeName(state_controller_type), i + 1u,
-            Settings::GetControllerTypeName(controller_type));
-
-          m_controllers[i].reset();
-          if (state_controller_type != ControllerType::None)
-          {
-            m_controllers[i] = Controller::Create(state_controller_type, i);
-            if (!sw.DoMarker("Controller") || !m_controllers[i]->DoState(sw, false))
-              return false;
-          }
-        }
-        else
-        {
-          g_host_interface->AddFormattedOSDMessage(
-            10.0f,
-            g_host_interface->TranslateString("OSDMessage", "Ignoring mismatched controller type %s in port %u."),
-            Settings::GetControllerTypeName(state_controller_type), i + 1u);
-
-          // we still need to read the save state controller state
-          if (state_controller_type != ControllerType::None)
-          {
-            std::unique_ptr<Controller> dummy_controller = Controller::Create(state_controller_type, i);
-            if (dummy_controller)
-            {
-              if (!sw.DoMarker("Controller") || !dummy_controller->DoState(sw, true))
-                return false;
-            }
-          }
-        }
-      }
-      else
-      {
-        if (m_controllers[i])
-        {
-          if (!sw.DoMarker("Controller") || !m_controllers[i]->DoState(sw, true))
-            return false;
-        }
-      }
+      g_host_interface->AddFormattedOSDMessage(
+        10.0f,
+        g_host_interface->TranslateString(
+          "OSDMessage", "Save state contains controller type %s in port %u, but %s is used. Switching."),
+        Settings::GetControllerTypeName(state_controller_type), i + 1u,
+        Settings::GetControllerTypeName(controller_type)
+      );
     }
     else
     {
-      if (state_controller_type != ControllerType::None)
-      {
-        if (controller_type != state_controller_type)
-        {
-          g_host_interface->AddFormattedOSDMessage(
-            10.0f,
-            g_host_interface->TranslateString("OSDMessage", "Ignoring mismatched controller type %s in port %u."),
-            Settings::GetControllerTypeName(state_controller_type), i + 1u);
-
-          // we still need to read the save state controller state
-          std::unique_ptr<Controller> dummy_controller = Controller::Create(state_controller_type, i);
-          if (dummy_controller)
-          {
-            if (!sw.DoMarker("Controller") || !dummy_controller->DoState(sw, true))
-              return false;
-          }
-        }
-        else
-        {
-          // we still need to load some things from the state, e.g. configuration mode, analog mode
-          if (m_controllers[i])
-          {
-            if (!sw.DoMarker("Controller") || !m_controllers[i]->DoState(sw, false))
-              return false;
-          }
-        }
-      }
+      g_host_interface->AddFormattedOSDMessage(
+        10.0f,
+        g_host_interface->TranslateString("OSDMessage", "Ignoring mismatched controller type %s in port %u."),
+        Settings::GetControllerTypeName(state_controller_type), i + 1u
+      );
     }
 
-    bool card_present = static_cast<bool>(m_memory_cards[i]);
-    sw.Do(&card_present);
+    // dev-friendly untranslated console log.
+    Log_DevPrintf("Controller type mismatch in slot %u: state=%s(%u) ui=%s(%u) load_from_state=%s",
+      i + 1u,
+      Settings::GetControllerTypeName(state_controller_type), state_controller_type,
+      Settings::GetControllerTypeName(controller_type), controller_type,
+      g_settings.load_devices_from_save_states ? "yes" : "no"
+    );
 
-    if (sw.IsReading() && card_present && !g_settings.load_devices_from_save_states)
+    if (g_settings.load_devices_from_save_states)
     {
-      Log_WarningPrintf("Skipping loading memory card %u from save state.", i + 1u);
+      m_controllers[i].reset();
+      if (state_controller_type != ControllerType::None)
+        m_controllers[i] = Controller::Create(state_controller_type, i);
+    }
+    else
+    {
+      // mismatched controller states prevents us from loading the state into the user's preferred controller.
+      // just doing a reset here is a little dodgy. If there's an active xfer on the state-saved controller
+      // then who knows what might happen as the rest of the packet streams in. (possibly the SIO xfer will
+      // timeout and the controller will just correct itself on the next frame's read attempt -- after all on
+      // physical HW removing a controller is allowed and could happen in the middle of SIO comms)
 
-      std::unique_ptr<MemoryCard> card_from_state = std::make_unique<MemoryCard>();
-      if (!sw.DoMarker("MemoryCard") || !card_from_state->DoState(sw))
+      if (m_controllers[i])
+        m_controllers[i]->Reset();
+    }
+  }
+
+  // we still need to read/write the save state controller state even if the controller does not exist.
+  // the marker is only expected for valid controller types.
+  if (state_controller_type == ControllerType::None)
+    return true;
+
+  if (!sw.DoMarker("Controller"))
+    return false;
+
+  if (auto& controller = m_controllers[i]; controller && controller->GetType() == state_controller_type)
+    return controller->DoState(sw, g_settings.load_devices_from_save_states);
+  else if (auto dummy = Controller::Create(state_controller_type, i); dummy)
+    return dummy->DoState(sw, g_settings.load_devices_from_save_states);
+
+  return true;
+}
+
+bool Pad::DoStateMemcard(StateWrapper& sw, u32 i)
+{
+    bool card_present_in_state = static_cast<bool>(m_memory_cards[i]);
+
+    sw.Do(&card_present_in_state);
+
+    MemoryCard* card_ptr = m_memory_cards[i].get();
+    std::unique_ptr<MemoryCard> card_from_state;
+
+    if (card_present_in_state)
+    {
+      if (sw.IsReading() && !g_settings.load_devices_from_save_states)
+      {
+        // load memcard into a temporary: If the card datas match, take the one from the savestate
+        // since it has other useful non-data state information. Otherwise take the user's card
+        // and perform a re-plugging.
+
+        card_from_state = std::make_unique<MemoryCard>();
+        card_ptr = card_from_state.get();
+      }
+    
+      if (!sw.DoMarker("MemoryCard") || !card_ptr->DoState(sw))
         return false;
+    }
 
-      // does the content of the memory card match?
+    if (sw.IsWriting())
+      return true;    // all done as far as writes concerned.
+
+    if (card_from_state)
+    {
       if (m_memory_cards[i])
       {
         if (m_memory_cards[i]->GetData() == card_from_state->GetData())
         {
-          Log_DevPrintf("Using memory card %u state from save state", i);
           card_from_state->SetFilename(m_memory_cards[i]->GetFilename());
           m_memory_cards[i] = std::move(card_from_state);
         }
@@ -160,8 +169,16 @@ bool Pad::DoState(StateWrapper& sw)
             20.0f,
             g_host_interface->TranslateString(
               "OSDMessage", "Memory card %u from save state does match current card data. Simulating replugging."),
-            i + 1u);
+            i + 1u
+          );
 
+          // this is a potentially serious issue - some games cache info from memcards and jumping around
+          // with savestates can lead to card corruption on the next save attempts (and may not be obvious
+          // until much later). One workaround is to forcibly eject the card for 30+ frames, long enough
+          // for the game to decide it was removed and purge its cache. Once implemented, this could be
+          // described as deferred re-plugging in the log.
+
+          Log_WarningPrintf("Memory card %u data mismatch. Using current data via instant-replugging.", i + 1u);
           m_memory_cards[i]->Reset();
         }
       }
@@ -169,36 +186,79 @@ bool Pad::DoState(StateWrapper& sw)
       {
         g_host_interface->AddFormattedOSDMessage(
           20.0f,
-          g_host_interface->TranslateString("OSDMessage",
-                                            "Memory card %u present in save state but not in system. Ignoring card."),
-          i + 1u);
+          g_host_interface->TranslateString(
+            "OSDMessage", "Memory card %u present in save state but not in system. Ignoring card."),
+          i + 1u
+        );
       }
 
-      continue;
+      return true;
     }
 
-    if (card_present && !m_memory_cards[i])
+    if (card_present_in_state && !m_memory_cards[i])
     {
       g_host_interface->AddFormattedOSDMessage(
         20.0f,
         g_host_interface->TranslateString(
           "OSDMessage", "Memory card %u present in save state but not in system. Creating temporary card."),
-        i + 1u);
+        i + 1u
+      );
       m_memory_cards[i] = MemoryCard::Create();
     }
-    else if (!card_present && m_memory_cards[i])
+    else if (!card_present_in_state && m_memory_cards[i])
     {
       g_host_interface->AddFormattedOSDMessage(
         20.0f,
-        g_host_interface->TranslateString("OSDMessage",
-                                          "Memory card %u present in system but not in save state. Removing card."),
-        i + 1u);
+        g_host_interface->TranslateString(
+          "OSDMessage", "Memory card %u present in system but not in save state. Removing card."),
+        i + 1u
+      );
       m_memory_cards[i].reset();
     }
 
-    if (m_memory_cards[i])
+    return true;
+}
+
+bool Pad::DoState(StateWrapper& sw)
+{
+  for (u32 i = 0; i < NUM_CONTROLLER_AND_CARD_PORTS; i++)
+  {
+    if ((sw.GetVersion() < 50) && (i >= 2))
     {
-      if (!sw.DoMarker("MemoryCard") || !m_memory_cards[i]->DoState(sw))
+      // loading from old savestate which only had max 2 controllers.
+      // honoring load_devices_from_save_states in this case seems debatable, but might as well...
+      if (m_controllers[i])
+      {
+        if (g_settings.load_devices_from_save_states)
+          m_controllers[i].reset();
+        else
+          m_controllers[i]->Reset();
+      }
+
+      if (m_memory_cards[i])
+      {
+        if (g_settings.load_devices_from_save_states)
+            m_memory_cards[i].reset();
+          else
+            m_memory_cards[i]->Reset();
+      }
+
+      // ... and make sure to skip trying to read controller_type / card_present flags which don't exist in old states.
+      continue;
+    }
+
+    if (!DoStateController(sw, i))
+      return false;
+
+    if (!DoStateMemcard(sw, i))
+      return false;
+  }
+
+  if (sw.GetVersion() >= 50)
+  {
+    for (u32 i = 0; i < NUM_MULTITAPS; i++)
+    {
+      if (!m_multitaps[i].DoState(sw))
         return false;
     }
   }
@@ -407,8 +467,9 @@ void Pad::DoTransfer(TickCount ticks_late)
 {
   Log_DebugPrintf("Transferring slot %d", m_JOY_CTRL.SLOT.GetValue());
 
-  Controller* const controller = m_controllers[m_JOY_CTRL.SLOT].get();
-  MemoryCard* const memory_card = m_memory_cards[m_JOY_CTRL.SLOT].get();
+  const u8 device_index = m_multitaps[0].IsEnabled() ? 4u : m_JOY_CTRL.SLOT;
+  Controller* const controller = m_controllers[device_index].get();
+  MemoryCard* const memory_card = m_memory_cards[device_index].get();
 
   // set rx?
   m_JOY_CTRL.RXEN = true;
@@ -422,6 +483,17 @@ void Pad::DoTransfer(TickCount ticks_late)
   {
     case ActiveDevice::None:
     {
+      if (m_multitaps[m_JOY_CTRL.SLOT].IsEnabled())
+      {
+        if ((ack = m_multitaps[m_JOY_CTRL.SLOT].Transfer(data_out, &data_in)) == true)
+        {
+          Log_TracePrintf("Active device set to tap %d, sent 0x%02X, received 0x%02X",
+                          static_cast<int>(m_JOY_CTRL.SLOT), data_out, data_in);
+          m_active_device = ActiveDevice::Multitap;
+        }
+      }
+      else
+      {
       if (!controller || (ack = controller->Transfer(data_out, &data_in)) == false)
       {
         if (!memory_card || (ack = memory_card->Transfer(data_out, &data_in)) == false)
@@ -442,6 +514,7 @@ void Pad::DoTransfer(TickCount ticks_late)
         Log_TracePrintf("Transfer to controller, data_out=0x%02X, data_in=0x%02X", data_out, data_in);
         m_active_device = ActiveDevice::Controller;
       }
+    }
     }
     break;
 
@@ -464,6 +537,17 @@ void Pad::DoTransfer(TickCount ticks_late)
       }
     }
     break;
+
+    case ActiveDevice::Multitap:
+    {
+      if (m_multitaps[m_JOY_CTRL.SLOT].IsEnabled())
+      {
+        ack = m_multitaps[m_JOY_CTRL.SLOT].Transfer(data_out, &data_in);
+        Log_TracePrintf("Transfer tap %d, sent 0x%02X, received 0x%02X, acked: %s", static_cast<int>(m_JOY_CTRL.SLOT),
+                        data_out, data_in, ack ? "true" : "false");
+  }
+    }
+    break;
   }
 
   m_receive_buffer = data_in;
@@ -477,7 +561,11 @@ void Pad::DoTransfer(TickCount ticks_late)
   }
   else
   {
-    const TickCount ack_timer = GetACKTicks(m_active_device == ActiveDevice::MemoryCard);
+    const bool memcard_transfer =
+      m_active_device == ActiveDevice::MemoryCard ||
+      (m_active_device == ActiveDevice::Multitap && m_multitaps[m_JOY_CTRL.SLOT].IsReadingMemoryCard());
+
+    const TickCount ack_timer = GetACKTicks(memcard_transfer);
     Log_DebugPrintf("Delaying ACK for %d ticks", ack_timer);
     m_state = State::WaitingForACK;
     m_transfer_event->SetPeriodAndSchedule(ack_timer);
@@ -515,13 +603,16 @@ void Pad::EndTransfer()
 
 void Pad::ResetDeviceTransferState()
 {
-  for (u32 i = 0; i < NUM_SLOTS; i++)
+  for (u32 i = 0; i < NUM_CONTROLLER_AND_CARD_PORTS; i++)
   {
     if (m_controllers[i])
       m_controllers[i]->ResetTransferState();
     if (m_memory_cards[i])
       m_memory_cards[i]->ResetTransferState();
-
-    m_active_device = ActiveDevice::None;
   }
+
+  for (u32 i = 0; i < NUM_MULTITAPS; i++)
+    m_multitaps[i].ResetTransferState();
+
+  m_active_device = ActiveDevice::None;
 }

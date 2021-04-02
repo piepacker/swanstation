@@ -18,7 +18,9 @@ Timers::~Timers() = default;
 void Timers::Initialize()
 {
   m_sysclk_event = TimingEvents::CreateTimingEvent(
-    "Timer SysClk Interrupt", 1, 1, std::bind(&Timers::AddSysClkTicks, this, std::placeholders::_1), false);
+    "Timer SysClk Interrupt", 1, 1,
+    [](void* param, TickCount ticks, TickCount ticks_late) { static_cast<Timers*>(param)->AddSysClkTicks(ticks); },
+    this, false);
   Reset();
 }
 
@@ -127,20 +129,21 @@ void Timers::AddTicks(u32 timer, TickCount count)
   CounterState& cs = m_states[timer];
   const u32 old_counter = cs.counter;
   cs.counter += static_cast<u32>(count);
+  CheckForIRQ(timer, old_counter);
+}
+
+void Timers::CheckForIRQ(u32 timer, u32 old_counter)
+{
+  CounterState& cs = m_states[timer];
 
   bool interrupt_request = false;
-  if (cs.counter >= cs.target && old_counter < cs.target)
+  if (cs.counter >= cs.target && (old_counter < cs.target || cs.target == 0))
   {
     interrupt_request |= cs.mode.irq_at_target;
     cs.mode.reached_target = true;
 
-    if (cs.mode.reset_at_target)
-    {
-      if (cs.target > 0)
-        cs.counter %= cs.target;
-      else
-        cs.counter = 0;
-    }
+    if (cs.mode.reset_at_target && cs.target > 0)
+      cs.counter %= cs.target;
   }
   if (cs.counter >= 0xFFFF)
   {
@@ -237,7 +240,7 @@ u32 Timers::ReadRegister(u32 offset)
       return cs.target;
 
     default:
-      Log_ErrorPrintf("Read unknown register in timer %u (offset 0x%02X)", offset);
+      Log_ErrorPrintf("Read unknown register in timer %u (offset 0x%02X)", timer_index, offset);
       return UINT32_C(0xFFFFFFFF);
   }
 }
@@ -263,12 +266,15 @@ void Timers::WriteRegister(u32 offset, u32 value)
 
   m_sysclk_event->InvokeEarly();
 
+  // Strictly speaking these IRQ checks should probably happen on the next tick.
   switch (port_offset)
   {
     case 0x00:
     {
+      const u32 old_counter = cs.counter;
       Log_DebugPrintf("Timer %u write counter %u", timer_index, value);
       cs.counter = value & u32(0xFFFF);
+      CheckForIRQ(timer_index, old_counter);
       if (timer_index == 2 || !cs.external_counting_enabled)
         UpdateSysClkEvent();
     }
@@ -285,6 +291,7 @@ void Timers::WriteRegister(u32 offset, u32 value)
       cs.irq_done = false;
 
       UpdateCountingEnabled(cs);
+      CheckForIRQ(timer_index, cs.counter);
       UpdateIRQ(timer_index);
       UpdateSysClkEvent();
     }
@@ -294,13 +301,14 @@ void Timers::WriteRegister(u32 offset, u32 value)
     {
       Log_DebugPrintf("Timer %u write target 0x%04X", timer_index, ZeroExtend32(Truncate16(value)));
       cs.target = value & u32(0xFFFF);
+      CheckForIRQ(timer_index, cs.counter);
       if (timer_index == 2 || !cs.external_counting_enabled)
         UpdateSysClkEvent();
     }
     break;
 
     default:
-      Log_ErrorPrintf("Write unknown register in timer %u (offset 0x%02X, value 0x%X)", offset, value);
+      Log_ErrorPrintf("Write unknown register in timer %u (offset 0x%02X, value 0x%X)", timer_index, offset, value);
       break;
   }
 }
@@ -347,41 +355,41 @@ void Timers::UpdateIRQ(u32 index)
 
 TickCount Timers::GetTicksUntilNextInterrupt() const
 {
-  TickCount min_ticks = std::numeric_limits<TickCount>::max();
+  TickCount min_ticks = System::GetMaxSliceTicks();
   for (u32 i = 0; i < NUM_TIMERS; i++)
   {
     const CounterState& cs = m_states[i];
     if (!cs.counting_enabled || (i < 2 && cs.external_counting_enabled) ||
-        (!cs.mode.irq_at_target && !cs.mode.irq_on_overflow))
+        (!cs.mode.irq_at_target && !cs.mode.irq_on_overflow && (cs.mode.irq_repeat || !cs.irq_done)))
     {
       continue;
     }
 
-    TickCount min_ticks_for_this_timer = std::numeric_limits<TickCount>::max();
-    if (cs.mode.irq_at_target && cs.counter < cs.target)
-      min_ticks_for_this_timer = static_cast<TickCount>(cs.target - cs.counter);
-    if (cs.mode.irq_on_overflow && cs.counter < cs.target)
-      min_ticks_for_this_timer = std::min(min_ticks_for_this_timer, static_cast<TickCount>(0xFFFF - cs.counter));
+    if (cs.mode.irq_at_target)
+    {
+      TickCount ticks = (cs.counter <= cs.target) ? static_cast<TickCount>(cs.target - cs.counter) :
+                                                    static_cast<TickCount>((0xFFFFu - cs.counter) + cs.target);
+      if (cs.external_counting_enabled) // sysclk/8 for timer 2
+        ticks *= 8;
 
-    if (cs.external_counting_enabled) // sysclk/8 for timer 2
-      min_ticks_for_this_timer = std::max<TickCount>(1, System::ScaleTicksToOverclock(min_ticks_for_this_timer * 8));
-    else
-      min_ticks_for_this_timer = std::max<TickCount>(1, System::ScaleTicksToOverclock(min_ticks_for_this_timer));
+      min_ticks = std::min(min_ticks, ticks);
+    }
+    if (cs.mode.irq_on_overflow)
+    {
+      TickCount ticks = static_cast<TickCount>(0xFFFFu - cs.counter);
+      if (cs.external_counting_enabled) // sysclk/8 for timer 2
+        ticks *= 8;
 
-    min_ticks = std::min(min_ticks, min_ticks_for_this_timer);
+      min_ticks = std::min(min_ticks, ticks);
+    }
   }
 
-  return min_ticks;
+  return System::ScaleTicksToOverclock(std::max<TickCount>(1, min_ticks));
 }
 
 void Timers::UpdateSysClkEvent()
 {
-  // Still update once every 100ms. If we get polled we'll execute sooner.
-  const TickCount ticks = GetTicksUntilNextInterrupt();
-  if (ticks == std::numeric_limits<TickCount>::max())
-    m_sysclk_event->Schedule(System::GetMaxSliceTicks());
-  else
-    m_sysclk_event->Schedule(ticks);
+  m_sysclk_event->Schedule(GetTicksUntilNextInterrupt());
 }
 
 void Timers::DrawDebugStateWindow()
@@ -400,7 +408,7 @@ void Timers::DrawDebugStateWindow()
   const float framebuffer_scale = ImGui::GetIO().DisplayFramebufferScale.x;
 
   ImGui::SetNextWindowSize(ImVec2(800.0f * framebuffer_scale, 100.0f * framebuffer_scale), ImGuiCond_FirstUseEver);
-  if (!ImGui::Begin("Timer State", &g_settings.debugging.show_timers_state))
+  if (!ImGui::Begin("Timer State", nullptr))
   {
     ImGui::End();
     return;

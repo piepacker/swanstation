@@ -75,11 +75,17 @@ bool GPU_SW::Initialize(HostDisplay* host_display)
   return true;
 }
 
-void GPU_SW::Reset()
+bool GPU_SW::DoState(StateWrapper& sw, HostDisplayTexture** host_texture, bool update_display)
 {
-  GPU::Reset();
+  // ignore the host texture for software mode, since we want to save vram here
+  return GPU::DoState(sw, nullptr, update_display);
+}
 
-  m_backend.Reset();
+void GPU_SW::Reset(bool clear_vram)
+{
+  GPU::Reset(clear_vram);
+
+  m_backend.Reset(clear_vram);
 }
 
 void GPU_SW::UpdateSettings()
@@ -109,30 +115,16 @@ ALWAYS_INLINE u16 VRAM16ToOutput<HostDisplayPixelFormat::RGB565, u16>(u16 value)
 template<>
 ALWAYS_INLINE u32 VRAM16ToOutput<HostDisplayPixelFormat::RGBA8, u32>(u16 value)
 {
-  u8 r = Truncate8(value & 31);
-  u8 g = Truncate8((value >> 5) & 31);
-  u8 b = Truncate8((value >> 10) & 31);
-
-  // 00012345 -> 1234545
-  b = (b << 3) | (b & 0b111);
-  g = (g << 3) | (g & 0b111);
-  r = (r << 3) | (r & 0b111);
-
-  return ZeroExtend32(r) | (ZeroExtend32(g) << 8) | (ZeroExtend32(b) << 16) | (0xFF000000u);
+  return VRAMRGBA5551ToRGBA8888(value);
 }
 
 template<>
 ALWAYS_INLINE u32 VRAM16ToOutput<HostDisplayPixelFormat::BGRA8, u32>(u16 value)
 {
-  u8 r = Truncate8(value & 31);
-  u8 g = Truncate8((value >> 5) & 31);
-  u8 b = Truncate8((value >> 10) & 31);
-
-  // 00012345 -> 1234545
-  b = (b << 3) | (b & 0b111);
-  g = (g << 3) | (g & 0b111);
-  r = (r << 3) | (r & 0b111);
-
+  const u32 value32 = ZeroExtend32(value);
+  const u32 r = VRAMConvert5To8(value32 & 31u);
+  const u32 g = VRAMConvert5To8((value32 >> 5) & 31u);
+  const u32 b = VRAMConvert5To8((value32 >> 10) & 31u);
   return ZeroExtend32(b) | (ZeroExtend32(g) << 8) | (ZeroExtend32(r) << 16) | (0xFF000000u);
 }
 
@@ -249,7 +241,7 @@ void GPU_SW::CopyOut15Bit(u32 src_x, u32 src_y, u32 width, u32 height, u32 field
   }
   else
   {
-    dst_stride = Common::AlignUpPow2<u32>(width * sizeof(OutputPixelType), 4);
+    dst_stride = GPU_MAX_DISPLAY_WIDTH * sizeof(OutputPixelType);
     dst_ptr = m_display_texture_buffer.data() + (field != 0 ? dst_stride : 0);
   }
 
@@ -576,7 +568,6 @@ void GPU_SW::DispatchRenderCommand()
   }
 
   const GPURenderCommand rc{m_render_command.bits};
-  const bool dithering_enable = rc.IsDitheringEnabled() && m_GPUSTAT.dither_enable;
 
   switch (rc.primitive)
   {

@@ -52,7 +52,6 @@ public:
   virtual void Shutdown();
 
   virtual bool BootSystem(const SystemBootParameters& parameters);
-  virtual void PowerOffSystem();
   virtual void PauseSystem(bool paused);
   virtual void ResetSystem();
   virtual void DestroySystem();
@@ -115,9 +114,18 @@ public:
   /// Returns a float setting from the configuration.
   virtual float GetFloatSettingValue(const char* section, const char* key, float default_value = 0.0f);
 
+  /// Returns a string list from the configuration.
+  virtual std::vector<std::string> GetSettingStringList(const char* section, const char* key) = 0;
+
   /// Translates a string to the current language.
-  virtual TinyString TranslateString(const char* context, const char* str) const;
-  virtual std::string TranslateStdString(const char* context, const char* str) const;
+  virtual TinyString TranslateString(const char* context, const char* str, const char* disambiguation = nullptr,
+                                     int n = -1) const;
+  virtual std::string TranslateStdString(const char* context, const char* str, const char* disambiguation = nullptr,
+                                         int n = -1) const;
+
+  /// Returns the refresh rate for the "main" display. Use when it's not possible to query the graphics API for the
+  /// refresh rate of the monitor the window is running in.
+  virtual bool GetMainDisplayRefreshRate(float* refresh_rate);
 
   /// Returns the path to the directory to search for BIOS images.
   virtual std::string GetBIOSDirectory();
@@ -139,7 +147,8 @@ public:
   /// This is the APK for Android builds, or the program directory for standalone builds.
   virtual std::unique_ptr<ByteStream> OpenPackageFile(const char* path, u32 flags) = 0;
 
-  virtual void OnRunningGameChanged();
+  virtual void OnRunningGameChanged(const std::string& path, CDImage* image, const std::string& game_code,
+                                    const std::string& game_title);
   virtual void OnSystemPerformanceCountersUpdated();
 
 protected:
@@ -156,9 +165,6 @@ protected:
 
   /// Restores all settings to defaults.
   virtual void SetDefaultSettings(SettingsInterface& si);
-
-  /// Performs the initial load of settings. Should call CheckSettings() and LoadSettings(SettingsInterface&).
-  virtual void LoadSettings() = 0;
 
   /// Loads settings to m_settings and any frontend-specific parameters.
   virtual void LoadSettings(SettingsInterface& si);

@@ -67,6 +67,8 @@ add_library(core
     memory_card.h
     memory_card_image.cpp
     memory_card_image.h
+    multitap.cpp
+    multitap.h
     namco_guncon.cpp
     namco_guncon.h
     negcon.cpp
@@ -84,6 +86,7 @@ add_library(core
     save_state_version.h
     settings.cpp
     settings.h
+    shader_cache_version.h
     shadergen.cpp
     shadergen.h
     sio.cpp
@@ -116,6 +119,11 @@ target_include_directories(core PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/..")
 target_link_libraries(core PUBLIC Threads::Threads common zlib vulkan-loader)
 target_link_libraries(core PRIVATE glad stb xxhash)
 
+if(NOT BUILD_LIBRETRO_CORE)
+  target_link_libraries(core PRIVATE imgui)
+  target_compile_definitions(core PRIVATE "WITH_IMGUI=1")
+endif()
+
 if(WIN32)
   target_sources(core PRIVATE
     gpu_hw_d3d11.cpp
@@ -147,9 +155,4 @@ elseif(${CPU_ARCH} STREQUAL "aarch64")
   message("Building AArch64 recompiler")
 else()
   message("Not building recompiler")
-endif()
-
-if(NOT BUILD_LIBRETRO_CORE)
-  target_link_libraries(core PRIVATE imgui)
-  target_compile_definitions(core PRIVATE "WITH_IMGUI=1")
 endif()

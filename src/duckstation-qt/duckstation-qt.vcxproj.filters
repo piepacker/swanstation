@@ -75,6 +75,12 @@
     <ClCompile Include="$(IntDir)moc_debuggermodels.cpp" />
     <ClCompile Include="$(IntDir)moc_memoryviewwidget.cpp" />
     <ClCompile Include="$(IntDir)moc_debuggerwindow.cpp" />
+    <ClCompile Include="emulationsettingswidget.cpp" />
+    <ClCompile Include="$(IntDir)moc_emulationsettingswidget.cpp" />
+    <ClCompile Include="achievementsettingswidget.cpp" />
+    <ClCompile Include="$(IntDir)moc_achievementsettingswidget.cpp" />
+    <ClCompile Include="$(IntDir)moc_achievementslogindialog.cpp" />
+    <ClCompile Include="achievementlogindialog.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="qtutils.h" />
@@ -126,6 +132,9 @@
     <QtMoc Include="debuggermodels.h" />
     <QtMoc Include="debuggerwindow.h" />
     <QtMoc Include="memoryviewwidget.h" />
+    <QtMoc Include="emulationsettingswidget.h" />
+    <QtMoc Include="achievementsettingswidget.h" />
+    <QtMoc Include="achievementlogindialog.h" />
   </ItemGroup>
   <ItemGroup>
     <QtUi Include="consolesettingswidget.ui" />
@@ -147,6 +156,9 @@
     <QtUi Include="memorycardeditordialog.ui" />
     <QtUi Include="cheatmanagerdialog.ui" />
     <QtUi Include="cheatcodeeditordialog.ui" />
+    <QtUi Include="emulationsettingswidget.ui" />
+    <QtUi Include="achievementsettingswidget.ui" />
+    <QtUi Include="achievementlogindialog.ui" />
   </ItemGroup>
   <ItemGroup>
     <Natvis Include="qt5.natvis" />
@@ -167,6 +179,9 @@
   </ItemGroup>
   <ItemGroup>
     <QtTs Include="translations\duckstation-qt_de.ts">
+      <Filter>translations</Filter>
+    </QtTs>
+	<QtTs Include="translations\duckstation-qt_en.ts">
       <Filter>translations</Filter>
     </QtTs>
     <QtTs Include="translations\duckstation-qt_es.ts">

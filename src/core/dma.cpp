@@ -9,6 +9,7 @@
 #include "gpu.h"
 #include "interrupt_controller.h"
 #include "mdec.h"
+#include "pad.h"
 #include "spu.h"
 #include "system.h"
 #ifdef WITH_IMGUI
@@ -28,8 +29,10 @@ void DMA::Initialize()
   m_halt_ticks = g_settings.dma_halt_ticks;
 
   m_transfer_buffer.resize(32);
-  m_unhalt_event = TimingEvents::CreateTimingEvent("DMA Transfer Unhalt", 1, m_max_slice_ticks,
-                                                   std::bind(&DMA::UnhaltTransfer, this, std::placeholders::_1), false);
+  m_unhalt_event = TimingEvents::CreateTimingEvent(
+    "DMA Transfer Unhalt", 1, m_max_slice_ticks,
+    [](void* param, TickCount ticks, TickCount ticks_late) { static_cast<DMA*>(param)->UnhaltTransfer(ticks); }, this,
+    false);
 
   Reset();
 }
@@ -157,6 +160,12 @@ void DMA::WriteRegister(u32 offset, u32 value)
 
       case 0x08:
       {
+        // HACK: Due to running DMA in slices, we can't wait for the current halt time to finish before running the
+        // first block of a new channel. This affects games like FF8, where they kick a SPU transfer while a GPU
+        // transfer is happening, and the SPU transfer gets delayed until the GPU transfer unhalts and finishes, and
+        // breaks the interrupt.
+        const bool ignore_halt = !state.channel_control.enable_busy && (value & (1u << 24));
+
         state.channel_control.bits = (state.channel_control.bits & ~ChannelState::ChannelControl::WRITE_MASK) |
                                      (value & ChannelState::ChannelControl::WRITE_MASK);
         Log_TracePrintf("DMA channel %u channel control <- 0x%08X", channel_index, state.channel_control.bits);
@@ -165,7 +174,7 @@ void DMA::WriteRegister(u32 offset, u32 value)
         if (static_cast<Channel>(channel_index) == Channel::OTC)
           SetRequest(static_cast<Channel>(channel_index), state.channel_control.start_trigger);
 
-        if (CanTransferChannel(static_cast<Channel>(channel_index)))
+        if (CanTransferChannel(static_cast<Channel>(channel_index), ignore_halt))
           TransferChannel(static_cast<Channel>(channel_index));
         return;
       }
@@ -185,7 +194,7 @@ void DMA::WriteRegister(u32 offset, u32 value)
 
         for (u32 i = 0; i < NUM_CHANNELS; i++)
         {
-          if (CanTransferChannel(static_cast<Channel>(i)))
+          if (CanTransferChannel(static_cast<Channel>(i), false))
           {
             if (!TransferChannel(static_cast<Channel>(i)))
               break;
@@ -219,11 +228,11 @@ void DMA::SetRequest(Channel channel, bool request)
     return;
 
   cs.request = request;
-  if (CanTransferChannel(channel))
+  if (CanTransferChannel(channel, false))
     TransferChannel(channel);
 }
 
-bool DMA::CanTransferChannel(Channel channel) const
+bool DMA::CanTransferChannel(Channel channel, bool ignore_halt) const
 {
   if (!m_DPCR.GetMasterEnable(channel))
     return false;
@@ -232,7 +241,7 @@ bool DMA::CanTransferChannel(Channel channel) const
   if (!cs.channel_control.enable_busy)
     return false;
 
-  if (cs.channel_control.sync_mode != SyncMode::Manual && IsTransferHalted())
+  if (cs.channel_control.sync_mode != SyncMode::Manual && (IsTransferHalted() && !ignore_halt))
     return false;
 
   return cs.request;
@@ -251,6 +260,34 @@ void DMA::UpdateIRQ()
     Log_TracePrintf("Firing DMA master interrupt");
     g_interrupt_controller.InterruptRequest(InterruptController::IRQ::DMA);
   }
+}
+
+// Plenty of games seem to suffer from this issue where they have a linked list DMA going while polling the
+// controller. Using a too-large slice size will result in the serial timing being off, and the game thinking
+// the controller is disconnected. So we don't hurt performance too much for the general case, we reduce this
+// to equal CPU and DMA time when the controller is transferring, but otherwise leave it at the higher size.
+enum : u32
+{
+  SLICE_SIZE_WHEN_TRANSMITTING_PAD = 100,
+  HALT_TICKS_WHEN_TRANSMITTING_PAD = 100
+};
+
+TickCount DMA::GetTransferSliceTicks() const
+{
+#ifdef _DEBUG
+  if (g_pad.IsTransmitting())
+  {
+    Log_DebugPrintf("DMA transfer while transmitting pad - using lower slice size of %u vs %u",
+                    SLICE_SIZE_WHEN_TRANSMITTING_PAD, m_max_slice_ticks);
+  }
+#endif
+
+  return g_pad.IsTransmitting() ? SLICE_SIZE_WHEN_TRANSMITTING_PAD : m_max_slice_ticks;
+}
+
+TickCount DMA::GetTransferHaltTicks() const
+{
+  return g_pad.IsTransmitting() ? HALT_TICKS_WHEN_TRANSMITTING_PAD : m_halt_ticks;
 }
 
 bool DMA::TransferChannel(Channel channel)
@@ -294,7 +331,7 @@ bool DMA::TransferChannel(Channel channel)
                       current_address & ADDRESS_MASK);
 
       u8* ram_pointer = Bus::g_ram;
-      TickCount remaining_ticks = m_max_slice_ticks;
+      TickCount remaining_ticks = GetTransferSliceTicks();
       while (cs.request && remaining_ticks > 0)
       {
         u32 header;
@@ -330,7 +367,7 @@ bool DMA::TransferChannel(Channel channel)
       if (cs.request)
       {
         // stall the transfer for a bit if we ran for too long
-        HaltTransfer(m_halt_ticks);
+        HaltTransfer(GetTransferHaltTicks());
         return false;
       }
       else
@@ -350,7 +387,7 @@ bool DMA::TransferChannel(Channel channel)
 
       const u32 block_size = cs.block_control.request.GetBlockSize();
       u32 blocks_remaining = cs.block_control.request.GetBlockCount();
-      TickCount ticks_remaining = m_max_slice_ticks;
+      TickCount ticks_remaining = GetTransferSliceTicks();
 
       if (copy_to_device)
       {
@@ -391,7 +428,7 @@ bool DMA::TransferChannel(Channel channel)
         {
           // we got halted
           if (!m_unhalt_event->IsActive())
-            HaltTransfer(m_halt_ticks);
+            HaltTransfer(GetTransferHaltTicks());
 
           return false;
         }
@@ -422,6 +459,8 @@ void DMA::HaltTransfer(TickCount duration)
 {
   m_halt_ticks_remaining += duration;
   Log_DebugPrintf("Halting DMA for %d ticks", m_halt_ticks_remaining);
+  if (m_unhalt_event->IsActive())
+    return;
 
   DebugAssert(!m_unhalt_event->IsActive());
   m_unhalt_event->SetIntervalAndSchedule(m_halt_ticks_remaining);
@@ -437,7 +476,7 @@ void DMA::UnhaltTransfer(TickCount ticks)
   // Main thing is that OTC happens after GPU, because otherwise it'll wipe out the LL.
   for (u32 i = 0; i < NUM_CHANNELS; i++)
   {
-    if (CanTransferChannel(static_cast<Channel>(i)))
+    if (CanTransferChannel(static_cast<Channel>(i), false))
     {
       if (!TransferChannel(static_cast<Channel>(i)))
         return;
@@ -586,7 +625,7 @@ void DMA::DrawDebugStateWindow()
   const float framebuffer_scale = ImGui::GetIO().DisplayFramebufferScale.x;
 
   ImGui::SetNextWindowSize(ImVec2(850.0f * framebuffer_scale, 250.0f * framebuffer_scale), ImGuiCond_FirstUseEver);
-  if (!ImGui::Begin("DMA State", &g_settings.debugging.show_dma_state))
+  if (!ImGui::Begin("DMA State", nullptr))
   {
     ImGui::End();
     return;

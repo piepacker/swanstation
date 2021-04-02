@@ -38,6 +38,12 @@ static T GetVariable(const char* section, const char* key, DefaultValueType defa
   }
 }
 
+bool LibretroSettingsInterface::Save()
+{
+  Log_WarningPrintf("Save not implemented");
+  return true;
+}
+
 void LibretroSettingsInterface::Clear()
 {
   Log_WarningPrintf("Clear not implemented");

@@ -11,17 +11,23 @@ Log_SetChannel(GL::Context);
 
 #if defined(WIN32) && !defined(_M_ARM64)
 #include "context_wgl.h"
-#elif defined(__APPLE__) && !defined(LIBERTRO)
+#elif defined(__APPLE__) && !defined(LIBRETRO)
 #include "context_agl.h"
 #endif
 
 #ifdef USE_EGL
-#if defined(USE_X11) || defined(USE_WAYLAND)
-#if defined(USE_X11)
-#include "context_egl_x11.h"
-#endif
+#if defined(USE_WAYLAND) || defined(USE_GBM) || defined(USE_FBDEV) || defined(USE_X11)
 #if defined(USE_WAYLAND)
 #include "context_egl_wayland.h"
+#endif
+#if defined(USE_GBM)
+#include "context_egl_gbm.h"
+#endif
+#if defined(USE_FBDEV)
+#include "context_egl_fbdev.h"
+#endif
+#if defined(USE_X11)
+#include "context_egl_x11.h"
 #endif
 #elif defined(ANDROID)
 #include "context_egl_android.h"
@@ -49,9 +55,25 @@ static bool ShouldPreferESContext()
 #endif
 }
 
+static void DisableBrokenExtensions(const char* gl_vendor, const char* gl_renderer)
+{
+  if (std::strstr(gl_vendor, "ARM"))
+  {
+    // GL_{EXT,OES}_copy_image seem to be implemented on the CPU in the Mali drivers...
+    Log_VerbosePrintf("Mali driver detected, disabling GL_{EXT,OES}_copy_image");
+    GLAD_GL_EXT_copy_image = 0;
+    GLAD_GL_OES_copy_image = 0;
+  }
+}
+
 Context::Context(const WindowInfo& wi) : m_wi(wi) {}
 
 Context::~Context() = default;
+
+std::vector<Context::FullscreenModeInfo> Context::EnumerateFullscreenModes()
+{
+  return {};
+}
 
 std::unique_ptr<GL::Context> Context::Create(const WindowInfo& wi, const Version* versions_to_try,
                                              size_t num_versions_to_try)
@@ -105,6 +127,16 @@ std::unique_ptr<GL::Context> Context::Create(const WindowInfo& wi, const Version
     context = ContextEGLWayland::Create(wi, versions_to_try, num_versions_to_try);
 #endif
 
+#if defined(USE_GBM)
+  if (wi.type == WindowInfo::Type::Display)
+    context = ContextEGLGBM::Create(wi, versions_to_try, num_versions_to_try);
+#endif
+
+#if defined(USE_FBDEV)
+  if (wi.type == WindowInfo::Type::Display)
+    context = ContextEGLFBDev::Create(wi, versions_to_try, num_versions_to_try);
+#endif
+
   if (!context)
     return nullptr;
 
@@ -140,6 +172,8 @@ std::unique_ptr<GL::Context> Context::Create(const WindowInfo& wi, const Version
   Log_InfoPrintf("GL_RENDERER: %s", gl_renderer);
   Log_InfoPrintf("GL_VERSION: %s", gl_version);
   Log_InfoPrintf("GL_SHADING_LANGUAGE_VERSION: %s", gl_shading_language_version);
+
+  DisableBrokenExtensions(gl_vendor, gl_renderer);
 
   return context;
 }

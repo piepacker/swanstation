@@ -577,6 +577,7 @@ bool ImGui_ImplVulkan_CreateFontsTexture(VkCommandBuffer command_buffer)
 
     // Store our identifier
     io.Fonts->TexID = (ImTextureID)(intptr_t)&g_FontTexture;
+    io.Fonts->ClearTexData();
 
     return true;
 }
@@ -816,10 +817,6 @@ bool    ImGui_ImplVulkan_Init(ImGui_ImplVulkan_InitInfo* info, VkRenderPass rend
 void ImGui_ImplVulkan_Shutdown()
 {
     ImGui_ImplVulkan_DestroyDeviceObjects();
-}
-
-void ImGui_ImplVulkan_NewFrame()
-{
 }
 
 void ImGui_ImplVulkan_SetMinImageCount(uint32_t min_image_count)

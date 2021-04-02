@@ -8,7 +8,7 @@ GPU_HW_ShaderGen::GPU_HW_ShaderGen(HostDisplay::RenderAPI render_api, u32 resolu
                                    GPUTextureFilter texture_filtering, bool uv_limits, bool pgxp_depth,
                                    bool supports_dual_source_blend)
   : ShaderGen(render_api, supports_dual_source_blend), m_resolution_scale(resolution_scale),
-    m_multisamples(multisamples), m_true_color(true_color), m_per_sample_shading(per_sample_shading),
+    m_multisamples(multisamples), m_per_sample_shading(per_sample_shading), m_true_color(true_color),
     m_scaled_dithering(scaled_dithering), m_texture_filter(texture_filtering), m_uv_limits(uv_limits),
     m_pgxp_depth(pgxp_depth)
 {
@@ -97,8 +97,6 @@ std::string GPU_HW_ShaderGen::GenerateBatchVertexShader(bool textured)
     CONSTANT float POS_EPSILON = 0.00001;
   #endif
 #endif
-
-CONSTANT float TEX_EPSILON = 0.00001;
 )";
 
   if (textured)
@@ -159,10 +157,8 @@ CONSTANT float TEX_EPSILON = 0.00001;
 
   v_col0 = a_col0;
   #if TEXTURED
-    // Fudge the texture coordinates by half a pixel in screen-space.
-    // This fixes the rounding/interpolation error on NVIDIA GPUs with shared edges between triangles.
-    v_tex0 = float2(float((a_texcoord & 0xFFFFu) * RESOLUTION_SCALE) + TEX_EPSILON,
-                    float((a_texcoord >> 16) * RESOLUTION_SCALE) + TEX_EPSILON);
+    v_tex0 = float2(float((a_texcoord & 0xFFFFu) * RESOLUTION_SCALE),
+                    float((a_texcoord >> 16) * RESOLUTION_SCALE));
 
     // base_x,base_y,palette_x,palette_y
     v_texpage.x = (a_texpage & 15u) * 64u * RESOLUTION_SCALE;
@@ -943,12 +939,12 @@ float4 SampleFromVRAM(uint4 texpage, float2 coords)
         o_col0 = float4(color, oalpha);
         o_col1 = float4(0.0, 0.0, 0.0, u_dst_alpha_factor / ialpha);
       #else
-        o_col0 = float4(color, u_dst_alpha_factor / ialpha);
+        o_col0 = float4(color, oalpha);
       #endif
 
-#if !PGXP_DEPTH
-      o_depth = oalpha * v_pos.z;
-#endif
+      #if !PGXP_DEPTH
+        o_depth = oalpha * v_pos.z;
+      #endif
     }
     else
     {
@@ -956,24 +952,16 @@ float4 SampleFromVRAM(uint4 texpage, float2 coords)
         discard;
       #endif
 
-      #if TRANSPARENCY_ONLY_OPAQUE
-        // We don't output the second color here because it's not used (except for filtering).
+      #if USE_DUAL_SOURCE
         o_col0 = float4(color, oalpha);
-        #if USE_DUAL_SOURCE
-          o_col1 = float4(0.0, 0.0, 0.0, 1.0 - ialpha);
-        #endif
+        o_col1 = float4(0.0, 0.0, 0.0, 1.0 - ialpha);
       #else
-        #if USE_DUAL_SOURCE
-          o_col0 = float4(color, oalpha);
-          o_col1 = float4(0.0, 0.0, 0.0, 1.0 - ialpha);
-        #else
-          o_col0 = float4(color, 1.0 - ialpha);
-        #endif
+        o_col0 = float4(color, oalpha);
       #endif
 
-#if !PGXP_DEPTH
-      o_depth = oalpha * v_pos.z;
-#endif
+      #if !PGXP_DEPTH
+        o_depth = oalpha * v_pos.z;
+      #endif
     }
   #else
     // Non-transparency won't enable blending so we can write the mask here regardless.
@@ -983,9 +971,9 @@ float4 SampleFromVRAM(uint4 texpage, float2 coords)
       o_col1 = float4(0.0, 0.0, 0.0, 1.0 - ialpha);
     #endif
 
-#if !PGXP_DEPTH
-    o_depth = oalpha * v_pos.z;
-#endif
+    #if !PGXP_DEPTH
+      o_depth = oalpha * v_pos.z;
+    #endif
   #endif
 }
 )";
@@ -1223,7 +1211,7 @@ std::string GPU_HW_ShaderGen::GenerateVRAMWriteFragmentShader(bool use_ssbo)
     else if (m_use_glsl_binding_layout)
       ss << ", binding = 0";
 
-    ss << ") buffer SSBO {\n";
+    ss << ") readonly restrict buffer SSBO {\n";
     ss << "  uint ssbo_data[];\n";
     ss << "};\n\n";
 
@@ -1347,7 +1335,7 @@ std::string GPU_HW_ShaderGen::GenerateAdaptiveDownsampleMipFragmentShader(bool f
   WriteHeader(ss);
   WriteCommonFunctions(ss);
   DeclareTexture(ss, "samp0", 0, false);
-  DeclareUniformBuffer(ss, { "float2 u_uv_min", "float2 u_uv_max", "float2 u_rcp_resolution" }, true);
+  DeclareUniformBuffer(ss, {"float2 u_uv_min", "float2 u_uv_max", "float2 u_rcp_resolution"}, true);
   DefineMacro(ss, "FIRST_PASS", first_pass);
 
   // mipmap_energy.glsl ported from parallel-rsx.
@@ -1406,7 +1394,8 @@ std::string GPU_HW_ShaderGen::GenerateAdaptiveDownsampleBlurFragmentShader()
   WriteHeader(ss);
   WriteCommonFunctions(ss);
   DeclareTexture(ss, "samp0", 0, false);
-  DeclareUniformBuffer(ss, {"float2 u_uv_min", "float2 u_uv_max", "float2 u_rcp_resolution", "float sample_level"}, true);
+  DeclareUniformBuffer(ss, {"float2 u_uv_min", "float2 u_uv_max", "float2 u_rcp_resolution", "float sample_level"},
+                       true);
 
   // mipmap_blur.glsl ported from parallel-rsx.
   DeclareFragmentEntryPoint(ss, 0, 1, {}, false, 1, false, false, false, false);

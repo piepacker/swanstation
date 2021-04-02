@@ -1,10 +1,8 @@
 #include "audiosettingswidget.h"
 #include "common/audio_stream.h"
-#include "common/log.h"
 #include "settingsdialog.h"
 #include "settingwidgetbinder.h"
 #include <cmath>
-Log_SetChannel(AudioSettingsWidget);
 
 AudioSettingsWidget::AudioSettingsWidget(QtHostInterface* host_interface, QWidget* parent, SettingsDialog* dialog)
   : QWidget(parent), m_host_interface(host_interface)
@@ -24,6 +22,7 @@ AudioSettingsWidget::AudioSettingsWidget(QtHostInterface* host_interface, QWidge
   SettingWidgetBinder::BindWidgetToIntSetting(m_host_interface, m_ui.bufferSize, "Audio", "BufferSize");
   SettingWidgetBinder::BindWidgetToBoolSetting(m_host_interface, m_ui.startDumpingOnBoot, "Audio", "DumpOnBoot");
   SettingWidgetBinder::BindWidgetToBoolSetting(m_host_interface, m_ui.muteCDAudio, "CDROM", "MuteCDAudio");
+  SettingWidgetBinder::BindWidgetToBoolSetting(m_host_interface, m_ui.resampling, "Audio", "Resampling", true);
 
   m_ui.volume->setValue(m_host_interface->GetIntSettingValue("Audio", "OutputVolume", 100));
   m_ui.fastForwardVolume->setValue(m_host_interface->GetIntSettingValue("Audio", "FastForwardVolume", 100));
@@ -55,16 +54,19 @@ AudioSettingsWidget::AudioSettingsWidget(QtHostInterface* host_interface, QWidge
   dialog->registerWidgetHelp(
     m_ui.startDumpingOnBoot, tr("Start Dumping On Boot"), tr("Unchecked"),
     tr("Start dumping audio to file as soon as the emulator is started. Mainly useful as a debug option."));
-  dialog->registerWidgetHelp(m_ui.volume, tr("Output Volume"), "100",
-                             tr("Controls the volume of the audio played on the host. Values are in percentage."));
-  dialog->registerWidgetHelp(
-    m_ui.fastForwardVolume, tr("Fast Forward Volume"), "100",
-    tr("Controls the volume of the audio played on the host when fast forwarding. Values are in percentage."));
+  dialog->registerWidgetHelp(m_ui.volume, tr("Output Volume"), "100%",
+                             tr("Controls the volume of the audio played on the host."));
+  dialog->registerWidgetHelp(m_ui.fastForwardVolume, tr("Fast Forward Volume"), "100%",
+                             tr("Controls the volume of the audio played on the host when fast forwarding."));
   dialog->registerWidgetHelp(m_ui.muted, tr("Mute All Sound"), tr("Unchecked"),
                              tr("Prevents the emulator from producing any audible sound."));
   dialog->registerWidgetHelp(m_ui.muteCDAudio, tr("Mute CD Audio"), tr("Unchecked"),
                              tr("Forcibly mutes both CD-DA and XA audio from the CD-ROM. Can be used to disable "
                                 "background music in some games."));
+  dialog->registerWidgetHelp(
+    m_ui.resampling, tr("Resampling"), tr("Checked"),
+    tr("When running outside of 100% speed, resamples audio from the target speed instead of dropping frames. Produces "
+       "much nicer fast forward/slowdown audio at a small cost to performance."));
 }
 
 AudioSettingsWidget::~AudioSettingsWidget() = default;
@@ -81,8 +83,8 @@ void AudioSettingsWidget::updateBufferingLabel()
   }
 
   const float max_latency = AudioStream::GetMaxLatency(HostInterface::AUDIO_SAMPLE_RATE, actual_buffer_size);
-  m_ui.bufferingLabel->setText(
-    tr("Maximum latency: %1 frames (%2ms)").arg(actual_buffer_size).arg(max_latency * 1000.0f, 0, 'f', 2));
+  m_ui.bufferingLabel->setText(tr("Maximum Latency: %n frames (%1ms)", "", actual_buffer_size)
+                                 .arg(static_cast<double>(max_latency) * 1000.0, 0, 'f', 2));
 }
 
 void AudioSettingsWidget::updateVolumeLabel()
@@ -94,8 +96,7 @@ void AudioSettingsWidget::updateVolumeLabel()
 void AudioSettingsWidget::onOutputVolumeChanged(int new_value)
 {
   m_host_interface->SetIntSettingValue("Audio", "OutputVolume", new_value);
-  if (!m_ui.muted->isChecked() && !QtHostInterface::GetInstance()->IsFastForwardEnabled())
-    m_host_interface->setAudioOutputVolume(new_value, m_ui.fastForwardVolume->value());
+  m_host_interface->setAudioOutputVolume(new_value, m_ui.fastForwardVolume->value());
 
   updateVolumeLabel();
 }
@@ -103,8 +104,7 @@ void AudioSettingsWidget::onOutputVolumeChanged(int new_value)
 void AudioSettingsWidget::onFastForwardVolumeChanged(int new_value)
 {
   m_host_interface->SetIntSettingValue("Audio", "FastForwardVolume", new_value);
-  if (!m_ui.muted->isChecked() && QtHostInterface::GetInstance()->IsFastForwardEnabled())
-    m_host_interface->setAudioOutputVolume(m_ui.volume->value(), new_value);
+  m_host_interface->setAudioOutputVolume(m_ui.volume->value(), new_value);
 
   updateVolumeLabel();
 }

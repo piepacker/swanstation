@@ -2,6 +2,7 @@
 #include "common/assert.h"
 #include "common/log.h"
 #include <cstdio>
+#include <cstring>
 #include <glad.h>
 Log_SetChannel(ShaderGen);
 
@@ -16,6 +17,14 @@ ShaderGen::ShaderGen(HostDisplay::RenderAPI render_api, bool supports_dual_sourc
 
     m_use_glsl_interface_blocks = (IsVulkan() || GLAD_GL_ES_VERSION_3_2 || GLAD_GL_VERSION_3_2);
     m_use_glsl_binding_layout = (IsVulkan() || UseGLSLBindingLayout());
+
+    if (m_render_api == HostDisplay::RenderAPI::OpenGL)
+    {
+      // SSAA with interface blocks is broken on AMD's OpenGL driver.
+      const char* gl_vendor = reinterpret_cast<const char*>(glGetString(GL_VENDOR));
+      if (std::strcmp(gl_vendor, "ATI Technologies Inc.") == 0)
+        m_use_glsl_interface_blocks = false;
+    }
   }
 }
 
@@ -23,7 +32,7 @@ ShaderGen::~ShaderGen() = default;
 
 bool ShaderGen::UseGLSLBindingLayout()
 {
-  return (GLAD_GL_ES_VERSION_3_1 || GLAD_GL_VERSION_4_2 ||
+  return (GLAD_GL_ES_VERSION_3_1 || GLAD_GL_VERSION_4_3 ||
           (GLAD_GL_ARB_explicit_attrib_location && GLAD_GL_ARB_explicit_uniform_location &&
            GLAD_GL_ARB_shading_language_420pack));
 }
@@ -340,7 +349,7 @@ void ShaderGen::DeclareVertexEntryPoint(
       for (u32 i = 0; i < num_texcoord_outputs; i++)
         ss << "  " << qualifier << "float2 v_tex" << i << ";\n";
 
-      for (const auto [qualifiers, name] : additional_outputs)
+      for (const auto &[qualifiers, name] : additional_outputs)
       {
         const char* qualifier_to_use = (std::strlen(qualifiers) > 0) ? qualifiers : qualifier;
         ss << "  " << qualifier_to_use << " " << name << ";\n";
@@ -357,7 +366,7 @@ void ShaderGen::DeclareVertexEntryPoint(
       for (u32 i = 0; i < num_texcoord_outputs; i++)
         ss << qualifier << "out float2 v_tex" << i << ";\n";
 
-      for (const auto [qualifiers, name] : additional_outputs)
+      for (const auto &[qualifiers, name] : additional_outputs)
       {
         const char* qualifier_to_use = (std::strlen(qualifiers) > 0) ? qualifiers : qualifier;
         ss << qualifier_to_use << " out " << name << ";\n";
@@ -399,7 +408,7 @@ void ShaderGen::DeclareVertexEntryPoint(
       ss << "  " << qualifier << "out float2 v_tex" << i << " : TEXCOORD" << i << ",\n";
 
     u32 additional_counter = num_texcoord_outputs;
-    for (const auto [qualifiers, name] : additional_outputs)
+    for (const auto &[qualifiers, name] : additional_outputs)
     {
       const char* qualifier_to_use = (std::strlen(qualifiers) > 0) ? qualifiers : qualifier;
       ss << "  " << qualifier_to_use << " out " << name << " : TEXCOORD" << additional_counter << ",\n";
@@ -433,7 +442,7 @@ void ShaderGen::DeclareFragmentEntryPoint(
       for (u32 i = 0; i < num_texcoord_inputs; i++)
         ss << "  " << qualifier << "float2 v_tex" << i << ";\n";
 
-      for (const auto [qualifiers, name] : additional_inputs)
+      for (const auto &[qualifiers, name] : additional_inputs)
       {
         const char* qualifier_to_use = (std::strlen(qualifiers) > 0) ? qualifiers : qualifier;
         ss << "  " << qualifier_to_use << " " << name << ";\n";
@@ -450,7 +459,7 @@ void ShaderGen::DeclareFragmentEntryPoint(
       for (u32 i = 0; i < num_texcoord_inputs; i++)
         ss << qualifier << "in float2 v_tex" << i << ";\n";
 
-      for (const auto [qualifiers, name] : additional_inputs)
+      for (const auto &[qualifiers, name] : additional_inputs)
       {
         const char* qualifier_to_use = (std::strlen(qualifiers) > 0) ? qualifiers : qualifier;
         ss << qualifier_to_use << " in " << name << ";\n";
@@ -477,7 +486,7 @@ void ShaderGen::DeclareFragmentEntryPoint(
       {
         Assert(num_color_outputs <= 1);
         for (u32 i = 0; i < num_color_outputs; i++)
-          ss << "layout(location = 0" << i << ") out float4 o_col" << i << ";\n";
+          ss << "layout(location = " << i << ") out float4 o_col" << i << ";\n";
       }
     }
     else
@@ -503,7 +512,7 @@ void ShaderGen::DeclareFragmentEntryPoint(
       ss << "  " << qualifier << "in float2 v_tex" << i << " : TEXCOORD" << i << ",\n";
 
     u32 additional_counter = num_texcoord_inputs;
-    for (const auto [qualifiers, name] : additional_inputs)
+    for (const auto &[qualifiers, name] : additional_inputs)
     {
       const char* qualifier_to_use = (std::strlen(qualifiers) > 0) ? qualifiers : qualifier;
       ss << "  " << qualifier_to_use << " in " << name << " : TEXCOORD" << additional_counter << ",\n";

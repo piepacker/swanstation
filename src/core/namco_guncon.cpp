@@ -95,18 +95,27 @@ bool NamcoGunCon::Transfer(const u8 data_in, u8* data_out)
   {
     case TransferState::Idle:
     {
-      // ack when sent 0x01, send ID for 0x42
+      *data_out = 0xFF;
+
+      if (data_in == 0x01)
+      {
+        m_transfer_state = TransferState::Ready;
+        return true;
+      }
+      return false;
+    }
+
+    case TransferState::Ready:
+    {
       if (data_in == 0x42)
       {
         *data_out = Truncate8(ID);
         m_transfer_state = TransferState::IDMSB;
         return true;
       }
-      else
-      {
-        *data_out = 0xFF;
-        return (data_in == 0x01);
-      }
+
+      *data_out = 0xFF;
+      return false;
     }
 
     case TransferState::IDMSB:
@@ -246,7 +255,7 @@ Controller::SettingList NamcoGunCon::StaticGetSettings()
     {{SettingInfo::Type::Path, "CrosshairImagePath", TRANSLATABLE("NamcoGunCon", "Crosshair Image Path"),
       TRANSLATABLE("NamcoGunCon", "Path to an image to use as a crosshair/cursor.")},
      {SettingInfo::Type::Float, "CrosshairScale", TRANSLATABLE("NamcoGunCon", "Crosshair Image Scale"),
-      TRANSLATABLE("NamcoGunCon", "Scale of crosshair image on screen."), "1.0", "0.0001", "100.0"},
+      TRANSLATABLE("NamcoGunCon", "Scale of crosshair image on screen."), "1.0", "0.0001", "100.0", "0.10"},
      {SettingInfo::Type::Float, "XScale", TRANSLATABLE("NamcoGunCon", "X Scale"),
       TRANSLATABLE("NamcoGunCon", "Scales X coordinates relative to the center of the screen."), "1.0", "0.01", "2.0",
       "0.01"}}};

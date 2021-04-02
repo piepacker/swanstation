@@ -49,6 +49,7 @@
         <item>16:9</item>
         <item>16:10</item>
         <item>19:9</item>
+        <item>20:9</item>
         <item>21:9</item>
         <item>32:9</item>
         <item>8:7</item>
@@ -68,8 +69,11 @@
         <item>xBR (No Blending Bordi)</item>
     </string-array>
     <string-array name="settings_controller_type_entries">
+        <item>None</item>
         <item>Controller Digitale (Gamepad)</item>
         <item>Controller Analogico (DualShock)</item>
+        <item>Analog Joystick</item>
+        <item>NeGcon</item>
     </string-array>
     <string-array name="settings_memory_card_mode_entries">
         <item>No Memory Card</item>
@@ -80,8 +84,8 @@
     <string-array name="emulation_menu">
         <item>Carica Stato</item>
         <item>Salva Stato</item>
-        <item>Slot Salvataggio Stato</item>
         <item>Abilita/Disabilita Avanti Veloce</item>
+        <item>Achievements</item>
         <item>Altre Opzioni</item>
         <item>Esci</item>
     </string-array>
@@ -89,22 +93,9 @@
         <item>Reset</item>
         <item>Codici Patch</item>
         <item>Cambia Disco</item>
-        <item>Impostazioni</item>
         <item>Cambia Controller Touchscreen</item>
-        <item>Edit Touchscreen Controller Layout</item>
-    </string-array>
-    <string-array name="emulation_save_state_slot_menu">
-        <item>Slot Veloce</item>
-        <item>Slot Gioco 1</item>
-        <item>Slot Gioco 2</item>
-        <item>Slot Gioco 3</item>
-        <item>Slot Gioco 4</item>
-        <item>Slot Gioco 5</item>
-        <item>Slot Gioco 6</item>
-        <item>Slot Gioco 7</item>
-        <item>Slot Gioco 8</item>
-        <item>Slot Gioco 9</item>
-        <item>Slot Gioco 10</item>
+        <item>Controller Settings</item>
+        <item>Impostazioni</item>
     </string-array>
     <string-array name="settings_cdrom_read_speedup_entries">
         <item>Nessuna Velocità Doppia)</item>
@@ -152,7 +143,7 @@
         <item>Display</item>
         <item>Audio</item>
         <item>Miglioramenti</item>
-        <item>Controller</item>
+        <item>Achievements</item>
         <item>Avanzate</item>
     </string-array>
     <string-array name="settings_gpu_msaa_entries">

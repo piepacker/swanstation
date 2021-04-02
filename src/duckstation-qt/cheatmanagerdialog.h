@@ -40,6 +40,8 @@ private Q_SLOTS:
   void importFromFileTriggered();
   void importFromTextTriggered();
   void exportClicked();
+  void clearClicked();
+  void resetClicked();
 
   void addToWatchClicked();
   void addManualWatchAddressClicked();

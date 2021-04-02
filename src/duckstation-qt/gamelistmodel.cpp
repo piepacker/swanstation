@@ -1,4 +1,5 @@
 #include "gamelistmodel.h"
+#include "common/file_system.h"
 #include "common/string_util.h"
 #include "core/system.h"
 #include <QtGui/QIcon>
@@ -159,7 +160,7 @@ QVariant GameListModel::data(const QModelIndex& index, int role) const
 
         case Column_FileTitle:
         {
-          const std::string_view file_title(System::GetTitleForPath(ge.path.c_str()));
+          const std::string_view file_title(FileSystem::GetFileTitleFromPath(ge.path));
           return QString::fromUtf8(file_title.data(), static_cast<int>(file_title.length()));
         }
 
@@ -195,7 +196,7 @@ QVariant GameListModel::data(const QModelIndex& index, int role) const
 
         case Column_FileTitle:
         {
-          const std::string_view file_title(System::GetTitleForPath(ge.path.c_str()));
+          const std::string_view file_title(FileSystem::GetFileTitleFromPath(ge.path));
           return QString::fromUtf8(file_title.data(), static_cast<int>(file_title.length()));
         }
 
@@ -225,6 +226,8 @@ QVariant GameListModel::data(const QModelIndex& index, int role) const
               return m_type_disc_pixmap;
             case GameListEntryType::Playlist:
               return m_type_playlist_pixmap;
+            case GameListEntryType::PSF:
+              return m_type_psf_pixmap;
             case GameListEntryType::PSExe:
             default:
               return m_type_exe_pixmap;
@@ -239,6 +242,8 @@ QVariant GameListModel::data(const QModelIndex& index, int role) const
               return m_region_jp_pixmap;
             case DiscRegion::NTSC_U:
               return m_region_us_pixmap;
+            case DiscRegion::Other:
+              return m_region_other_pixmap;
             case DiscRegion::PAL:
             default:
               return m_region_eu_pixmap;
@@ -355,8 +360,8 @@ bool GameListModel::lessThan(const QModelIndex& left_index, const QModelIndex& r
 
     case Column_FileTitle:
     {
-      const std::string_view file_title_left(System::GetTitleForPath(left.path.c_str()));
-      const std::string_view file_title_right(System::GetTitleForPath(right.path.c_str()));
+      const std::string_view file_title_left(FileSystem::GetFileTitleFromPath(left.path));
+      const std::string_view file_title_right(FileSystem::GetFileTitleFromPath(right.path));
       if (file_title_left == file_title_right)
         return titlesLessThan(left_row, right_row, ascending);
 
@@ -401,9 +406,11 @@ void GameListModel::loadCommonImages()
   m_type_disc_pixmap = QIcon(QStringLiteral(":/icons/media-optical-24.png")).pixmap(QSize(24, 24));
   m_type_exe_pixmap = QIcon(QStringLiteral(":/icons/applications-system-24.png")).pixmap(QSize(24, 24));
   m_type_playlist_pixmap = QIcon(QStringLiteral(":/icons/address-book-new-22.png")).pixmap(QSize(22, 22));
+  m_type_psf_pixmap = QIcon(QStringLiteral(":/icons/multimedia-player.png")).pixmap(QSize(22, 22));
   m_region_eu_pixmap = QIcon(QStringLiteral(":/icons/flag-eu.png")).pixmap(QSize(42, 30));
   m_region_jp_pixmap = QIcon(QStringLiteral(":/icons/flag-jp.png")).pixmap(QSize(42, 30));
   m_region_us_pixmap = QIcon(QStringLiteral(":/icons/flag-uc.png")).pixmap(QSize(42, 30));
+  m_region_other_pixmap = QIcon(QStringLiteral(":/icons/flag-other.png")).pixmap(QSize(42, 30));
 
   for (int i = 0; i < static_cast<int>(GameListCompatibilityRating::Count); i++)
     m_compatibiliy_pixmaps[i].load(QStringLiteral(":/icons/star-%1.png").arg(i));

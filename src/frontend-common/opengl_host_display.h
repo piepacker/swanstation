@@ -32,8 +32,10 @@ public:
   virtual bool HasRenderDevice() const override;
   virtual bool HasRenderSurface() const override;
 
-  virtual bool CreateRenderDevice(const WindowInfo& wi, std::string_view adapter_name, bool debug_device, bool threaded_presentation) override;
-  virtual bool InitializeRenderDevice(std::string_view shader_cache_directory, bool debug_device, bool threaded_presentation) override;
+  virtual bool CreateRenderDevice(const WindowInfo& wi, std::string_view adapter_name, bool debug_device,
+                                  bool threaded_presentation) override;
+  virtual bool InitializeRenderDevice(std::string_view shader_cache_directory, bool debug_device,
+                                      bool threaded_presentation) override;
   virtual void DestroyRenderDevice() override;
 
   virtual bool MakeRenderContextCurrent() override;
@@ -44,12 +46,14 @@ public:
   virtual bool SupportsFullscreen() const override;
   virtual bool IsFullscreen() override;
   virtual bool SetFullscreen(bool fullscreen, u32 width, u32 height, float refresh_rate) override;
+  virtual AdapterAndModeList GetAdapterAndModeList() override;
   virtual void DestroyRenderSurface() override;
 
   virtual bool SetPostProcessingChain(const std::string_view& config) override;
 
-  std::unique_ptr<HostDisplayTexture> CreateTexture(u32 width, u32 height, const void* initial_data,
-                                                    u32 initial_data_stride, bool dynamic) override;
+  std::unique_ptr<HostDisplayTexture> CreateTexture(u32 width, u32 height, u32 layers, u32 levels, u32 samples,
+                                                    HostDisplayPixelFormat format, const void* data, u32 data_stride,
+                                                    bool dynamic = false) override;
   void UpdateTexture(HostDisplayTexture* texture, u32 x, u32 y, u32 width, u32 height, const void* texture_data,
                      u32 texture_data_stride) override;
   bool DownloadTexture(const void* texture_handle, HostDisplayPixelFormat texture_format, u32 x, u32 y, u32 width,
@@ -63,6 +67,8 @@ public:
   virtual void SetVSync(bool enabled) override;
 
   virtual bool Render() override;
+  virtual bool RenderScreenshot(u32 width, u32 height, std::vector<u32>* out_pixels, u32* out_stride,
+                                HostDisplayPixelFormat* out_format) override;
 
 protected:
   const char* GetGLSLVersionString() const;
@@ -71,8 +77,14 @@ protected:
   virtual bool CreateResources() override;
   virtual void DestroyResources() override;
 
-  virtual bool CreateImGuiContext();
-  virtual void DestroyImGuiContext();
+#ifndef LIBRETRO
+  virtual bool CreateImGuiContext() override;
+  virtual void DestroyImGuiContext() override;
+  virtual bool UpdateImGuiFontTexture() override;
+#endif
+
+  void BindDisplayPixelsTexture();
+  void UpdateDisplayPixelsTextureFilter();
 
   void RenderDisplay();
   void RenderImGui();
@@ -93,7 +105,8 @@ protected:
   bool CheckPostProcessingRenderTargets(u32 target_width, u32 target_height);
   void ApplyPostProcessingChain(GLuint final_target, s32 final_left, s32 final_top, s32 final_width, s32 final_height,
                                 void* texture_handle, u32 texture_width, s32 texture_height, s32 texture_view_x,
-                                s32 texture_view_y, s32 texture_view_width, s32 texture_view_height);
+                                s32 texture_view_y, s32 texture_view_width, s32 texture_view_height, u32 target_width,
+                                u32 target_height);
 
   std::unique_ptr<GL::Context> m_gl_context;
 
@@ -108,13 +121,16 @@ protected:
   std::unique_ptr<GL::StreamBuffer> m_display_pixels_texture_pbo;
   u32 m_display_pixels_texture_pbo_map_offset = 0;
   u32 m_display_pixels_texture_pbo_map_size = 0;
+  std::vector<u8> m_gles_pixels_repack_buffer;
 
   PostProcessingChain m_post_processing_chain;
   GL::Texture m_post_processing_input_texture;
   std::unique_ptr<GL::StreamBuffer> m_post_processing_ubo;
   std::vector<PostProcessingStage> m_post_processing_stages;
 
+  bool m_display_texture_is_linear_filtered = false;
   bool m_use_gles2_draw_path = false;
+  bool m_use_pbo_for_pixels = false;
 };
 
 } // namespace FrontendCommon

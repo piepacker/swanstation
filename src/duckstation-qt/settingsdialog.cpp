@@ -5,6 +5,7 @@
 #include "consolesettingswidget.h"
 #include "controllersettingswidget.h"
 #include "displaysettingswidget.h"
+#include "emulationsettingswidget.h"
 #include "enhancementsettingswidget.h"
 #include "gamelistsettingswidget.h"
 #include "generalsettingswidget.h"
@@ -13,6 +14,10 @@
 #include "postprocessingsettingswidget.h"
 #include "qthostinterface.h"
 #include <QtWidgets/QTextEdit>
+
+#ifdef WITH_CHEEVOS
+#include "achievementsettingswidget.h"
+#endif
 
 static constexpr char DEFAULT_SETTING_HELP_TEXT[] = "";
 
@@ -27,6 +32,7 @@ SettingsDialog::SettingsDialog(QtHostInterface* host_interface, QWidget* parent 
   m_general_settings = new GeneralSettingsWidget(host_interface, m_ui.settingsContainer, this);
   m_bios_settings = new BIOSSettingsWidget(host_interface, m_ui.settingsContainer, this);
   m_console_settings = new ConsoleSettingsWidget(host_interface, m_ui.settingsContainer, this);
+  m_emulation_settings = new EmulationSettingsWidget(host_interface, m_ui.settingsContainer, this);
   m_game_list_settings = new GameListSettingsWidget(host_interface, m_ui.settingsContainer);
   m_hotkey_settings = new HotkeySettingsWidget(host_interface, m_ui.settingsContainer);
   m_controller_settings = new ControllerSettingsWidget(host_interface, m_ui.settingsContainer);
@@ -37,9 +43,14 @@ SettingsDialog::SettingsDialog(QtHostInterface* host_interface, QWidget* parent 
   m_audio_settings = new AudioSettingsWidget(host_interface, m_ui.settingsContainer, this);
   m_advanced_settings = new AdvancedSettingsWidget(host_interface, m_ui.settingsContainer, this);
 
+#ifdef WITH_CHEEVOS
+  m_achievement_settings = new AchievementSettingsWidget(host_interface, m_ui.settingsContainer, this);
+#endif
+
   m_ui.settingsContainer->insertWidget(static_cast<int>(Category::GeneralSettings), m_general_settings);
   m_ui.settingsContainer->insertWidget(static_cast<int>(Category::BIOSSettings), m_bios_settings);
   m_ui.settingsContainer->insertWidget(static_cast<int>(Category::ConsoleSettings), m_console_settings);
+  m_ui.settingsContainer->insertWidget(static_cast<int>(Category::EmulationSettings), m_emulation_settings);
   m_ui.settingsContainer->insertWidget(static_cast<int>(Category::GameListSettings), m_game_list_settings);
   m_ui.settingsContainer->insertWidget(static_cast<int>(Category::HotkeySettings), m_hotkey_settings);
   m_ui.settingsContainer->insertWidget(static_cast<int>(Category::ControllerSettings), m_controller_settings);
@@ -48,6 +59,16 @@ SettingsDialog::SettingsDialog(QtHostInterface* host_interface, QWidget* parent 
   m_ui.settingsContainer->insertWidget(static_cast<int>(Category::EnhancementSettings), m_enhancement_settings);
   m_ui.settingsContainer->insertWidget(static_cast<int>(Category::PostProcessingSettings), m_post_processing_settings);
   m_ui.settingsContainer->insertWidget(static_cast<int>(Category::AudioSettings), m_audio_settings);
+
+#ifdef WITH_CHEEVOS
+  m_ui.settingsContainer->insertWidget(static_cast<int>(Category::AchievementSettings), m_achievement_settings);
+#else
+  QLabel* placeholder_label =
+    new QLabel(tr("This DuckStation build was not compiled with RetroAchievements support."), m_ui.settingsContainer);
+  placeholder_label->setAlignment(Qt::AlignLeft | Qt::AlignTop);
+  m_ui.settingsContainer->insertWidget(static_cast<int>(Category::AchievementSettings), placeholder_label);
+#endif
+
   m_ui.settingsContainer->insertWidget(static_cast<int>(Category::AdvancedSettings), m_advanced_settings);
 
   m_ui.settingsCategory->setCurrentRow(0);
@@ -55,6 +76,9 @@ SettingsDialog::SettingsDialog(QtHostInterface* host_interface, QWidget* parent 
   m_ui.helpText->setText(m_category_help_text[0]);
   connect(m_ui.settingsCategory, &QListWidget::currentRowChanged, this, &SettingsDialog::onCategoryCurrentRowChanged);
   connect(m_ui.closeButton, &QPushButton::clicked, this, &SettingsDialog::accept);
+
+  connect(m_console_settings, &ConsoleSettingsWidget::multitapModeChanged, m_controller_settings,
+          &ControllerSettingsWidget::updateMultitapControllerTitles);
 }
 
 SettingsDialog::~SettingsDialog() = default;

@@ -18,7 +18,8 @@ public:
   bool IsHardwareRenderer() const override;
 
   bool Initialize(HostDisplay* host_display) override;
-  void Reset() override;
+  bool DoState(StateWrapper& sw, HostDisplayTexture** host_texture, bool update_display) override;
+  void Reset(bool clear_vram) override;
   void UpdateSettings() override;
 
 protected:
@@ -46,7 +47,7 @@ protected:
   void FillBackendCommandParameters(GPUBackendCommand* cmd);
   void FillDrawCommand(GPUBackendDrawCommand* cmd, GPURenderCommand rc);
 
-  HeapArray<u8, VRAM_WIDTH * VRAM_HEIGHT * sizeof(u32)> m_display_texture_buffer;
+  HeapArray<u8, GPU_MAX_DISPLAY_WIDTH * GPU_MAX_DISPLAY_HEIGHT * sizeof(u32)> m_display_texture_buffer;
   HostDisplayPixelFormat m_16bit_display_format = HostDisplayPixelFormat::RGB565;
   HostDisplayPixelFormat m_24bit_display_format = HostDisplayPixelFormat::RGBA8;
 

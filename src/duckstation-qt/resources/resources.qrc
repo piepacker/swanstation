@@ -52,10 +52,14 @@
     <file>icons/edit-clear-16.png</file>
     <file>icons/edit-clear-16@2x.png</file>
     <file>icons/edit-find.png</file>
+    <file>icons/emblem-person-blue.png</file>
+    <file>icons/emblem-person-blue@2x.png</file>
     <file>icons/flag-eu.png</file>
     <file>icons/flag-eu@2x.png</file>
     <file>icons/flag-jp.png</file>
     <file>icons/flag-jp@2x.png</file>
+    <file>icons/flag-other.png</file>
+    <file>icons/flag-other@2x.png</file>
     <file>icons/flag-uc.png</file>
     <file>icons/flag-uc@2x.png</file>
     <file>icons/flag-us.png</file>
@@ -88,10 +92,14 @@
     <file>icons/media-playback-start@2x.png</file>
     <file>icons/media-record.png</file>
     <file>icons/media-record@2x.png</file>
+    <file>icons/multimedia-player.png</file>
+    <file>icons/multimedia-player@2x.png</file>
     <file>icons/preferences-desktop-keyboard-shortcuts.png</file>
     <file>icons/preferences-desktop-keyboard-shortcuts@2x.png</file>
     <file>icons/preferences-system.png</file>
     <file>icons/preferences-system@2x.png</file>
+    <file>icons/process-stop.png</file>
+    <file>icons/process-stop@2x.png</file>
     <file>icons/software-update-available.png</file>
     <file>icons/software-update-available@2x.png</file>
     <file>icons/star-0.png</file>
@@ -106,6 +114,8 @@
     <file>icons/system-search@2x.png</file>
     <file>icons/system-shutdown.png</file>
     <file>icons/system-shutdown@2x.png</file>
+    <file>icons/trophy.png</file>
+    <file>icons/trophy@2x.png</file>
     <file>icons/utilities-system-monitor.png</file>
     <file>icons/utilities-system-monitor@2x.png</file>
     <file>icons/video-display.png</file>

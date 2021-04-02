@@ -32,27 +32,13 @@ GeneralSettingsWidget::GeneralSettingsWidget(QtHostInterface* host_interface, QW
                                                "LoadDevicesFromSaveStates", false);
   SettingWidgetBinder::BindWidgetToBoolSetting(m_host_interface, m_ui.applyGameSettings, "Main", "ApplyGameSettings",
                                                true);
-  SettingWidgetBinder::BindWidgetToBoolSetting(m_host_interface, m_ui.autoLoadCheats, "Main", "AutoLoadCheats", false);
+  SettingWidgetBinder::BindWidgetToBoolSetting(m_host_interface, m_ui.autoLoadCheats, "Main", "AutoLoadCheats", true);
+  SettingWidgetBinder::BindWidgetToBoolSetting(m_host_interface, m_ui.enableFullscreenUI, "Main", "EnableFullscreenUI",
+                                               false);
 
   SettingWidgetBinder::BindWidgetToEnumSetting(
     m_host_interface, m_ui.controllerBackend, "Main", "ControllerBackend", &ControllerInterface::ParseBackendName,
     &ControllerInterface::GetBackendName, ControllerInterface::GetDefaultBackend());
-
-  QtUtils::FillComboBoxWithEmulationSpeeds(m_ui.emulationSpeed);
-  const int emulation_speed_index =
-    m_ui.emulationSpeed->findData(QVariant(m_host_interface->GetFloatSettingValue("Main", "EmulationSpeed")));
-  if (emulation_speed_index >= 0)
-    m_ui.emulationSpeed->setCurrentIndex(emulation_speed_index);
-  connect(m_ui.emulationSpeed, QOverload<int>::of(&QComboBox::currentIndexChanged), this,
-          &GeneralSettingsWidget::onEmulationSpeedIndexChanged);
-
-  QtUtils::FillComboBoxWithEmulationSpeeds(m_ui.fastForwardSpeed);
-  const int fast_forward_speed_index =
-    m_ui.emulationSpeed->findData(QVariant(m_host_interface->GetFloatSettingValue("Main", "FastForwardSpeed")));
-  if (fast_forward_speed_index >= 0)
-    m_ui.fastForwardSpeed->setCurrentIndex(fast_forward_speed_index);
-  connect(m_ui.fastForwardSpeed, QOverload<int>::of(&QComboBox::currentIndexChanged), this,
-          &GeneralSettingsWidget::onFastForwardSpeedIndexChanged);
 
   dialog->registerWidgetHelp(
     m_ui.confirmPowerOff, tr("Confirm Power Off"), tr("Checked"),
@@ -83,22 +69,19 @@ GeneralSettingsWidget::GeneralSettingsWidget(QtHostInterface* host_interface, QW
     m_ui.applyGameSettings, tr("Apply Per-Game Settings"), tr("Checked"),
     tr("When enabled, per-game settings will be applied, and incompatible enhancements will be disabled. You should "
        "leave this option enabled except when testing enhancements with incompatible games."));
-  dialog->registerWidgetHelp(
-    m_ui.emulationSpeed, tr("Emulation Speed"), "100%",
-    tr("Sets the target emulation speed. It is not guaranteed that this speed will be reached, "
-       "and if not, the emulator will run as fast as it can manage."));
-  dialog->registerWidgetHelp(
-    m_ui.fastForwardSpeed, tr("Fast Forward Speed"), "100%",
-    tr(
-      "Sets the fast forward (turbo) speed. This speed will be used when the fast forward hotkey is pressed/toggled."));
+  dialog->registerWidgetHelp(m_ui.autoLoadCheats, tr("Automatically Load Cheats"), tr("Unchecked"),
+                             tr("Automatically loads and applies cheats on game start."));
   dialog->registerWidgetHelp(m_ui.controllerBackend, tr("Controller Backend"),
                              qApp->translate("ControllerInterface", ControllerInterface::GetBackendName(
                                                                       ControllerInterface::GetDefaultBackend())),
                              tr("Determines the backend which is used for controller input. Windows users may prefer "
                                 "to use XInput over SDL2 for compatibility."));
+  dialog->registerWidgetHelp(
+    m_ui.enableFullscreenUI, tr("Enable Fullscreen UI"), tr("Unchecked"),
+    tr("Enables the fullscreen UI mode, suitable for controller operation which is used in the NoGUI frontend."));
 
   // Since this one is compile-time selected, we don't put it in the .ui file.
-  int current_col = 0;
+  int current_col = 1;
   int current_row = m_ui.formLayout_4->rowCount() - current_col;
 #ifdef WITH_DISCORD_PRESENCE
   {
@@ -140,19 +123,3 @@ GeneralSettingsWidget::GeneralSettingsWidget(QtHostInterface* host_interface, QW
 }
 
 GeneralSettingsWidget::~GeneralSettingsWidget() = default;
-
-void GeneralSettingsWidget::onEmulationSpeedIndexChanged(int index)
-{
-  bool okay;
-  const float value = m_ui.emulationSpeed->currentData().toFloat(&okay);
-  m_host_interface->SetFloatSettingValue("Main", "EmulationSpeed", okay ? value : 1.0f);
-  m_host_interface->applySettings();
-}
-
-void GeneralSettingsWidget::onFastForwardSpeedIndexChanged(int index)
-{
-  bool okay;
-  const float value = m_ui.fastForwardSpeed->currentData().toFloat(&okay);
-  m_host_interface->SetFloatSettingValue("Main", "FastForwardSpeed", okay ? value : 0.0f);
-  m_host_interface->applySettings();
-}

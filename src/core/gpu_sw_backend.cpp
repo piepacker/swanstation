@@ -20,11 +20,12 @@ bool GPU_SW_Backend::Initialize()
   return GPUBackend::Initialize();
 }
 
-void GPU_SW_Backend::Reset()
+void GPU_SW_Backend::Reset(bool clear_vram)
 {
-  GPUBackend::Reset();
+  GPUBackend::Reset(clear_vram);
 
-  m_vram.fill(0);
+  if (clear_vram)
+    m_vram.fill(0);
 }
 
 void GPU_SW_Backend::DrawPolygon(const GPUBackendDrawPolygonCommand* cmd)
@@ -43,7 +44,6 @@ void GPU_SW_Backend::DrawPolygon(const GPUBackendDrawPolygonCommand* cmd)
 void GPU_SW_Backend::DrawRectangle(const GPUBackendDrawRectangleCommand* cmd)
 {
   const GPURenderCommand rc{cmd->rc.bits};
-  const bool dithering_enable = rc.IsDitheringEnabled() && cmd->draw_mode.dither_enable;
 
   const DrawRectangleFunction DrawFunction =
     GetDrawRectangleFunction(rc.texture_enable, rc.raw_texture_enable, rc.transparency_enable);
@@ -67,9 +67,9 @@ constexpr GPU_SW_Backend::DitherLUT GPU_SW_Backend::ComputeDitherLUT()
   {
     for (u32 j = 0; j < DITHER_MATRIX_SIZE; j++)
     {
-      for (s32 value = 0; value < DITHER_LUT_SIZE; value++)
+      for (u32 value = 0; value < DITHER_LUT_SIZE; value++)
       {
-        const s32 dithered_value = (value + DITHER_MATRIX[i][j]) >> 3;
+        const s32 dithered_value = (static_cast<s32>(value) + DITHER_MATRIX[i][j]) >> 3;
         lut[i][j][value] = static_cast<u8>((dithered_value < 0) ? 0 : ((dithered_value > 31) ? 31 : dithered_value));
       }
     }
@@ -769,7 +769,7 @@ GPU_SW_Backend::GetDrawRectangleFunction(bool texture_enable, bool raw_texture_e
 
 void GPU_SW_Backend::FillVRAM(u32 x, u32 y, u32 width, u32 height, u32 color, GPUBackendCommandParameters params)
 {
-  const u16 color16 = RGBA8888ToRGBA5551(color);
+  const u16 color16 = VRAMRGBA8888ToRGBA5551(color);
   if ((x + width) <= VRAM_WIDTH && !params.interlaced_rendering)
   {
     for (u32 yoffs = 0; yoffs < height; yoffs++)

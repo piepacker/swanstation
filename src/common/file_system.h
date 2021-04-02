@@ -138,21 +138,35 @@ String BuildPathRelativeToFile(const char* CurrentFileName, const char* NewFileN
 void SanitizeFileName(char* Destination, u32 cbDestination, const char* FileName, bool StripSlashes = true);
 void SanitizeFileName(String& Destination, const char* FileName, bool StripSlashes = true);
 void SanitizeFileName(String& Destination, bool StripSlashes = true);
+void SanitizeFileName(std::string& Destination, bool StripSlashes = true);
 
 /// Returns true if the specified path is an absolute path (C:\Path on Windows or /path on Unix).
 bool IsAbsolutePath(const std::string_view& path);
 
+/// Removes the extension of a filename.
+std::string StripExtension(const std::string_view& path);
+
 /// Replaces the extension of a filename with another.
-std::string ReplaceExtension(std::string_view path, std::string_view new_extension);
+std::string ReplaceExtension(const std::string_view& path, const std::string_view& new_extension);
 
 /// Returns the directory component of a filename.
-std::string GetPathDirectory(const char* path);
+std::string_view GetPathDirectory(const std::string_view& path);
+
+/// Returns the filename component of a filename.
+std::string_view GetFileNameFromPath(const std::string_view& path);
+
+/// Returns the file title (less the extension and path) from a filename.
+std::string_view GetFileTitleFromPath(const std::string_view& path);
+
+/// Returns a list of "root directories" (i.e. root/home directories on Linux, drive letters on Windows).
+std::vector<std::string> GetRootDirectoryList();
 
 // search for files
 bool FindFiles(const char* Path, const char* Pattern, u32 Flags, FindResultsArray* pResults);
 
 // stat file
 bool StatFile(const char* Path, FILESYSTEM_STAT_DATA* pStatData);
+bool StatFile(std::FILE* fp, FILESYSTEM_STAT_DATA* pStatData);
 
 // file exists?
 bool FileExists(const char* Path);
@@ -171,12 +185,17 @@ ManagedCFilePtr OpenManagedCFile(const char* filename, const char* mode);
 std::FILE* OpenCFile(const char* filename, const char* mode);
 
 std::optional<std::vector<u8>> ReadBinaryFile(const char* filename);
+std::optional<std::vector<u8>> ReadBinaryFile(std::FILE* fp);
 std::optional<std::string> ReadFileToString(const char* filename);
+std::optional<std::string> ReadFileToString(std::FILE* fp);
 bool WriteBinaryFile(const char* filename, const void* data, size_t data_length);
 bool WriteFileToString(const char* filename, const std::string_view& sv);
 
 std::string ReadStreamToString(ByteStream* stream, bool seek_to_start = true);
 bool WriteStreamToString(const std::string_view& sv, ByteStream* stream);
+
+std::vector<u8> ReadBinaryStream(ByteStream* stream, bool seek_to_start = true);
+bool WriteBinaryToSTream(ByteStream* stream, const void* data, size_t data_length);
 
 // creates a directory in the local filesystem
 // if the directory already exists, the return value will be true.

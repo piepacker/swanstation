@@ -6,8 +6,8 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>448</width>
-    <height>430</height>
+    <width>485</width>
+    <height>525</height>
    </rect>
   </property>
   <property name="windowTitle">
@@ -85,6 +85,13 @@
           </property>
          </widget>
         </item>
+        <item row="1" column="1">
+         <widget class="QCheckBox" name="displayAllFrames">
+          <property name="text">
+           <string>Optimal Frame Pacing</string>
+          </property>
+         </widget>
+        </item>
        </layout>
       </item>
      </layout>
@@ -125,20 +132,34 @@
       </item>
       <item row="2" column="1">
        <widget class="QComboBox" name="gpuDownsampleMode"/>
-      </item>       
+      </item>
       <item row="3" column="0" colspan="2">
-       <layout class="QGridLayout" name="gridLayout_2">
+       <layout class="QGridLayout" name="gridLayout">
         <item row="0" column="0">
+         <widget class="QCheckBox" name="displayIntegerScaling">
+          <property name="text">
+           <string>Integer Upscaling</string>
+          </property>
+         </widget>
+        </item>
+        <item row="0" column="1">
+         <widget class="QCheckBox" name="displayStretch">
+          <property name="text">
+           <string>Stretch To Fill</string>
+          </property>
+         </widget>
+        </item>
+        <item row="1" column="0">
          <widget class="QCheckBox" name="displayLinearFiltering">
           <property name="text">
            <string>Linear Upscaling</string>
           </property>
          </widget>
         </item>
-        <item row="0" column="1">
-         <widget class="QCheckBox" name="displayIntegerScaling">
+        <item row="1" column="1">
+         <widget class="QCheckBox" name="internalResolutionScreenshots">
           <property name="text">
-           <string>Integer Upscaling</string>
+           <string>Internal Resolution Screenshots</string>
           </property>
          </widget>
         </item>
@@ -156,7 +177,7 @@
       <item row="2" column="0">
        <widget class="QCheckBox" name="showOSDMessages">
         <property name="text">
-         <string>Show Messages</string>
+         <string>Show OSD Messages</string>
         </property>
        </widget>
       </item>
