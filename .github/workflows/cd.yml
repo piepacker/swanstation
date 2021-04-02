@@ -19,7 +19,7 @@ jobs:
 
       - run: sudo apt-get update -q
       - run: sudo apt install libgles2-mesa-dev libevdev-dev libcurl4-gnutls-dev -y --allow-unauthenticated
-      - run: cmake -DCMAKE_BUILD_TYPE=Release -DBUILD_LIBRETRO_CORE=ON .
+      - run: cmake -DCMAKE_BUILD_TYPE=Release -DBUILD_LIBRETRO_CORE=ON -DUSE_EGL=OFF .
       - run: cmake --build . --parallel 2
 
       - name: ZIP Release
