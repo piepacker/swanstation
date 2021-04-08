@@ -21,17 +21,17 @@ endif()
 set(CMAKE_OSX_DEPLOYMENT_TARGET "10.14.0" CACHE STRING "")
 
 # Global options.
+option(ENABLE_CHEEVOS "Build with RetroAchievements support" ON)
+
 if(NOT ANDROID)
   option(BUILD_NOGUI_FRONTEND "Build the NoGUI frontend" ON)
   option(BUILD_QT_FRONTEND "Build the Qt frontend" ON)
-  option(BUILD_LIBRETRO_CORE "Build a libretro core" OFF)
   option(ENABLE_DISCORD_PRESENCE "Build with Discord Rich Presence support" ON)
-  option(ENABLE_CHEEVOS "Build with RetroAchievements support" ON)
   option(USE_SDL2 "Link with SDL2 for controller support" ON)
 endif()
 
-if(NOT BUILD_LIBRETRO_CORE)
-  option(USE_CRASHHANDLER "Crash Handler support" ON)
+if (ANDROID)
+  option(BUILD_ANDROID_FRONTEND "Build the Android frontend" ON)
 endif()
 
 # OpenGL context creation methods.
@@ -55,8 +55,7 @@ if(USE_WAYLAND)
   set(USE_EGL ON)
 endif()
 
-# When we're building for libretro, everything else is invalid because of PIC.
-if(ANDROID OR BUILD_LIBRETRO_CORE)
+if(ANDROID)
   if(BUILD_NOGUI_FRONTEND)
     message(WARNING "Building for Android, disabling NoGUI frontend")
     set(BUILD_NOGUI_FRONTEND OFF)
@@ -78,21 +77,6 @@ if(ANDROID OR BUILD_LIBRETRO_CORE)
   endif()
   if(USE_WAYLAND)
     set(USE_WAYLAND OFF)
-  endif()
-  if(BUILD_LIBRETRO_CORE)
-    set(USE_EGL OFF)
-    set(USE_EVDEV OFF)
-    set(ENABLE_CHEEVOS OFF)
-  endif()
-
-  # Cheevos are always on.
-  if(NOT BUILD_LIBRETRO_CORE)
-    set(ENABLE_CHEEVOS ON)
-  endif()
-
-  # Force PIC when compiling a libretro core.
-  if(BUILD_LIBRETRO_CORE)
-    set(CMAKE_POSITION_INDEPENDENT_CODE ON)
   endif()
 endif()
 
@@ -275,6 +259,6 @@ enable_testing()
 add_subdirectory(dep)
 add_subdirectory(src)
 
-if(ANDROID AND NOT BUILD_LIBRETRO_CORE)
+if(ANDROID AND BUILD_ANDROID_FRONTEND)
   add_subdirectory(android/app/src/cpp)
 endif()

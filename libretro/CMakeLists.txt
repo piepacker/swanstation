@@ -1,0 +1,15 @@
+cmake_minimum_required(VERSION 3.10)
+project(duckstation-libretro C CXX)
+
+set(BUILD_NOGUI_FRONTEND OFF)
+set(BUILD_QT_FRONTEND OFF)
+set(ENABLE_DISCORD_PRESENCE OFF)
+set(USE_SDL2 OFF)
+set(USE_X11 OFF)
+set(USE_WAYLAND OFF)
+set(USE_EGL OFF)
+set(USE_EVDEV OFF)
+set(ENABLE_CHEEVOS OFF)
+set(CMAKE_POSITION_INDEPENDENT_CODE ON)
+
+include("../CmakeLists.txt")
