@@ -138,7 +138,47 @@ find_package(Threads REQUIRED)
 
 # Recursively include the source tree.
 enable_testing()
-add_subdirectory(../dep "../dep")
-add_subdirectory(../src "../src")
 add_subdirectory(src)
+add_subdirectory("libretro-common")
+add_subdirectory(../src "../src")
 
+########################################################
+# import deps section
+
+# these are taken from ../deps/CMakeLists.txt which is pretty must just a simple list
+# of all the interesting things in deps. libretro only cares for about half of them,
+# and may opt to replace others entirely in the future with diff/updated versions.
+# It makes sense to maintain the list here instead of trying to "reuse" the upstream list.
+
+add_subdirectory(../dep/glad          "../dep/glad" )
+add_subdirectory(../dep/libcue        "../dep/libcue" )
+add_subdirectory(../dep/stb           "../dep/stb" )
+add_subdirectory(../dep/zlib          "../dep/zlib" )
+add_subdirectory(../dep/minizip       "../dep/minizip" )
+add_subdirectory(../dep/lzma          "../dep/lzma" )
+add_subdirectory(../dep/libFLAC       "../dep/libFLAC" )
+add_subdirectory(../dep/libchdr       "../dep/libchdr" )
+add_subdirectory(../dep/xxhash        "../dep/xxhash" )
+add_subdirectory(../dep/rapidjson     "../dep/rapidjson" )
+add_subdirectory(../dep/glslang       "../dep/glslang" )
+add_subdirectory(../dep/vulkan-loader "../dep/vulkan-loader" )
+
+#add_subdirectory(../dep/imgui "../dep/imgui")
+
+set(LIBSAMPLERATE_ENABLE_SINC_BEST_CONVERTER OFF)
+add_subdirectory(../dep/libsamplerate "../dep/libsamplerate")
+
+if(ENABLE_DISCORD_PRESENCE)
+  add_subdirectory(../dep/discord-rpc "../dep/discord-rpc")
+endif()
+
+if(ENABLE_CHEEVOS)
+  add_subdirectory(../dep/rcheevos "../dep/rcheevos")
+endif()
+
+if(${CPU_ARCH} STREQUAL "aarch32" OR ${CPU_ARCH} STREQUAL "aarch64")
+  add_subdirectory(../dep/vixl "../dep/vixl")
+endif()
+
+# end deps import
+########################################################
