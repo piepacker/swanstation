@@ -1,11 +1,16 @@
 cmake_minimum_required(VERSION 3.10)
+cmake_policy(SET CMP0077 NEW)
+
 project(duckstation C CXX)
 
 message("CMake Version: ${CMAKE_VERSION}")
 message("CMake System Name: ${CMAKE_SYSTEM_NAME}")
 
 # Pull in modules.
-set(CMAKE_MODULE_PATH "${CMAKE_SOURCE_DIR}/CMakeModules/")
+# use out-of-source friendly syntax, which preserves any CMAKE_MODULE_PATH specified by parent(s)
+set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} ${CMAKE_CURRENT_SOURCE_DIR}/CMakeModules)
+
+message("CMake Modules path: ${CMAKE_MODULE_PATH}")
 
 # Platform detection.
 if(${CMAKE_SYSTEM_NAME} STREQUAL "Linux")

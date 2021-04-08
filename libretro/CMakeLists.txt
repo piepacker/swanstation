@@ -1,5 +1,10 @@
 cmake_minimum_required(VERSION 3.10)
+cmake_policy(SET CMP0077 NEW)
+
 project(duckstation-libretro C CXX)
+
+#set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} ${CMAKE_CURRENT_LIST_DIR}/../CMakeModules)
+
 
 set(BUILD_NOGUI_FRONTEND OFF)
 set(BUILD_QT_FRONTEND OFF)
@@ -12,4 +17,4 @@ set(USE_EVDEV OFF)
 set(ENABLE_CHEEVOS OFF)
 set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 
-include("../CmakeLists.txt")
+add_subdirectory(".." "..")
