@@ -1,16 +1,13 @@
-if(BUILD_LIBRETRO_CORE)
-  add_definitions("-DLIBRETRO=1")
-endif()
-
 add_subdirectory(common)
 add_subdirectory(core)
 add_subdirectory(scmversion)
 
-if(NOT BUILD_LIBRETRO_CORE)
+if(BUILD_TESTS)
   add_subdirectory(common-tests)
-  if(WIN32)
-    add_subdirectory(updater)
-  endif()
+endif()
+
+if(BUILD_UPDATER)
+  add_subdirectory(updater)
 endif()
 
 add_subdirectory(frontend-common)

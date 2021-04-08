@@ -27,6 +27,11 @@ set(CMAKE_OSX_DEPLOYMENT_TARGET "10.14.0" CACHE STRING "")
 
 # Global options.
 option(ENABLE_CHEEVOS "Build with RetroAchievements support" ON)
+option(BUILD_TESTS "Build common tests" ON)
+
+if(WIN32)
+    option(BUILD_UPDATER "Build the updater" ON)
+endif()
 
 if(NOT ANDROID)
   option(BUILD_NOGUI_FRONTEND "Build the NoGUI frontend" ON)
