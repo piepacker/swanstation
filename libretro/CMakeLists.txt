@@ -62,7 +62,7 @@ if(MSVC)
   set(CMAKE_EXE_LINKER_FLAGS_RELWITHDEBINFO "${CMAKE_EXE_LINKER_FLAGS_RELWITHDEBINFO} /OPT:REF /OPT:ICF")
 
   # Enable LTO/LTCG on Release builds.
-  if(${CMAKE_BUILD_TYPE} STREQUAL "Release")
+  if("${CMAKE_BUILD_TYPE}" STREQUAL "Release")
     cmake_policy(SET CMP0069 NEW)
     include(CheckIPOSupported)
     check_ipo_supported(RESULT IPO_IS_SUPPORTED)
@@ -140,5 +140,5 @@ find_package(Threads REQUIRED)
 enable_testing()
 add_subdirectory(../dep "../dep")
 add_subdirectory(../src "../src")
-add_subdirectory(../src/duckstation-libretro "../src/duckstation-libretro")
+add_subdirectory(src)
 
