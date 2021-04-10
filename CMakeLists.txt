@@ -1,13 +1,11 @@
 cmake_minimum_required(VERSION 3.10)
-cmake_policy(SET CMP0077 NEW)  # allows for easier out-of-line builds and will be default behavior someday anyway
-
 project(duckstation C CXX)
 
 message("CMake Version: ${CMAKE_VERSION}")
 message("CMake System Name: ${CMAKE_SYSTEM_NAME}")
 
-# Pull in modules, preserve paths already set by parent projects 
-set(CMAKE_MODULE_PATH "${CMAKE_MODULE_PATH}" "${CMAKE_CURRENT_SOURCE_DIR}/CMakeModules")
+# Pull in modules.
+set(CMAKE_MODULE_PATH "${CMAKE_SOURCE_DIR}/CMakeModules/")
 
 # Platform detection.
 if(${CMAKE_SYSTEM_NAME} STREQUAL "Linux")
@@ -23,22 +21,17 @@ endif()
 set(CMAKE_OSX_DEPLOYMENT_TARGET "10.14.0" CACHE STRING "")
 
 # Global options.
-option(ENABLE_CHEEVOS "Build with RetroAchievements support" ON)
-option(BUILD_TESTS "Build common tests" ON)
-
-if(WIN32)
-    option(BUILD_UPDATER "Build the updater" ON)
-endif()
-
 if(NOT ANDROID)
   option(BUILD_NOGUI_FRONTEND "Build the NoGUI frontend" ON)
   option(BUILD_QT_FRONTEND "Build the Qt frontend" ON)
+  option(BUILD_LIBRETRO_CORE "Build a libretro core" OFF)
   option(ENABLE_DISCORD_PRESENCE "Build with Discord Rich Presence support" ON)
+  option(ENABLE_CHEEVOS "Build with RetroAchievements support" ON)
   option(USE_SDL2 "Link with SDL2 for controller support" ON)
 endif()
 
-if (ANDROID)
-  option(BUILD_ANDROID_FRONTEND "Build the Android frontend" ON)
+if(NOT BUILD_LIBRETRO_CORE)
+  option(USE_CRASHHANDLER "Crash Handler support" ON)
 endif()
 
 # OpenGL context creation methods.
@@ -51,9 +44,6 @@ endif()
 if((LINUX OR FREEBSD) OR ANDROID)
   option(USE_EGL "Support EGL OpenGL context creation" ON)
 endif()
-if(APPLE)
-  option(USE_AGL "Support AGL OpenGL context creation" ON)
-endif()
 if((LINUX OR FREEBSD) AND NOT ANDROID)
   option(USE_DRMKMS "Support DRM/KMS OpenGL contexts" OFF)
   option(USE_FBDEV "Support FBDev OpenGL contexts" OFF)
@@ -65,7 +55,8 @@ if(USE_WAYLAND)
   set(USE_EGL ON)
 endif()
 
-if(ANDROID)
+# When we're building for libretro, everything else is invalid because of PIC.
+if(ANDROID OR BUILD_LIBRETRO_CORE)
   if(BUILD_NOGUI_FRONTEND)
     message(WARNING "Building for Android, disabling NoGUI frontend")
     set(BUILD_NOGUI_FRONTEND OFF)
@@ -87,6 +78,21 @@ if(ANDROID)
   endif()
   if(USE_WAYLAND)
     set(USE_WAYLAND OFF)
+  endif()
+  if(BUILD_LIBRETRO_CORE)
+    set(USE_EGL OFF)
+    set(USE_EVDEV OFF)
+    set(ENABLE_CHEEVOS OFF)
+  endif()
+
+  # Cheevos are always on.
+  if(NOT BUILD_LIBRETRO_CORE)
+    set(ENABLE_CHEEVOS ON)
+  endif()
+
+  # Force PIC when compiling a libretro core.
+  if(BUILD_LIBRETRO_CORE)
+    set(CMAKE_POSITION_INDEPENDENT_CODE ON)
   endif()
 endif()
 
@@ -248,7 +254,7 @@ endif()
 
 
 # Write binaries to a seperate directory.
-if(WIN32)
+if(WIN32 AND NOT BUILD_LIBRETRO_CORE)
   # For Windows, use the source directory, except for libretro.
   set(CMAKE_RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/bin/${CPU_ARCH}")
 else()
@@ -264,18 +270,11 @@ set(THREADS_PREFER_PTHREAD_FLAG ON)
 find_package(Threads REQUIRED)
 
 
-# Enable large file support on Linux 32-bit platforms.
-# Android is deliberately ommitted here as it didn't support 64-bit ops on files until Android 7/N.
-if((LINUX OR FREEBSD) AND (${CPU_ARCH} STREQUAL "x86" OR ${CPU_ARCH} STREQUAL "aarch32"))
-  add_definitions("-D_FILE_OFFSET_BITS=64")
-endif()
-
-
 # Recursively include the source tree.
 enable_testing()
 add_subdirectory(dep)
 add_subdirectory(src)
 
-if(BUILD_ANDROID_FRONTEND)
+if(ANDROID AND NOT BUILD_LIBRETRO_CORE)
   add_subdirectory(android/app/src/cpp)
 endif()
