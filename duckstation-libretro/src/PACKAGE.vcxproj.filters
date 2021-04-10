@@ -1,0 +1,13 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="16.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup>
+    <CustomBuild Include="D:\piepacker\duckstation\libretro\CMakeFiles\684f06d53533d4aae1472c30de5bd6bb\PACKAGE_force.rule">
+      <Filter>CMake Rules</Filter>
+    </CustomBuild>
+  </ItemGroup>
+  <ItemGroup>
+    <Filter Include="CMake Rules">
+      <UniqueIdentifier>{9B30269C-B1A4-38F6-9A3F-82C70B1D826E}</UniqueIdentifier>
+    </Filter>
+  </ItemGroup>
+</Project>

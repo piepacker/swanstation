@@ -152,8 +152,8 @@ if(USE_X11)
     gl/x11_window.h
   )
   target_compile_definitions(common PRIVATE "-DUSE_X11=1")
-  target_include_directories(common PRIVATE "${X11_INCLUDE_DIR}")
-  target_link_libraries(common PRIVATE "${X11_LIBRARIES}")
+  target_include_directories(common PRIVATE "${X11_INCLUDE_DIR}" "${X11_Xrandr_INCLUDE_PATH}")
+  target_link_libraries(common PRIVATE "${X11_LIBRARIES}" "${X11_Xrandr_LIB}")
 endif()
 
 if(USE_DRMKMS)
@@ -227,7 +227,7 @@ if(APPLE)
   target_link_libraries(common PRIVATE "objc")
 endif()
 
-if(APPLE AND NOT BUILD_LIBRETRO_CORE)
+if(NEED_AGL)
   target_sources(common PRIVATE
     gl/context_agl.mm
     gl/context_agl.h

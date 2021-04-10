@@ -1,0 +1,69 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="16.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup>
+    <ClCompile Include="D:\piepacker\duckstation\libretro\src\libretro_audio_stream.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="D:\piepacker\duckstation\libretro\src\libretro_game_settings.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="D:\piepacker\duckstation\libretro\src\libretro_host_display.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="D:\piepacker\duckstation\libretro\src\libretro_host_interface.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="D:\piepacker\duckstation\libretro\src\libretro_opengl_host_display.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="D:\piepacker\duckstation\libretro\src\libretro_settings_interface.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="D:\piepacker\duckstation\libretro\src\libretro_vulkan_host_display.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="D:\piepacker\duckstation\libretro\src\main.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="D:\piepacker\duckstation\libretro\src\libretro_d3d11_host_display.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="D:\piepacker\duckstation\libretro\src\libretro_audio_stream.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="D:\piepacker\duckstation\libretro\src\libretro_game_settings.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="D:\piepacker\duckstation\libretro\src\libretro_host_display.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="D:\piepacker\duckstation\libretro\src\libretro_host_interface.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="D:\piepacker\duckstation\libretro\src\libretro_opengl_host_display.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="D:\piepacker\duckstation\libretro\src\libretro_settings_interface.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="D:\piepacker\duckstation\libretro\src\libretro_vulkan_host_display.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="D:\piepacker\duckstation\libretro\src\libretro_d3d11_host_display.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+  </ItemGroup>
+  <ItemGroup>
+    <CustomBuild Include="D:\piepacker\duckstation\libretro\src\CMakeLists.txt" />
+  </ItemGroup>
+  <ItemGroup>
+    <Filter Include="Header Files">
+      <UniqueIdentifier>{CCDEF2AA-C1BE-350E-BEEE-6F77D98620C9}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Source Files">
+      <UniqueIdentifier>{4835CA92-C550-3C0E-B742-A123139F883B}</UniqueIdentifier>
+    </Filter>
+  </ItemGroup>
+</Project>
