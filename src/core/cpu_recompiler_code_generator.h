@@ -93,6 +93,7 @@ public:
   void EmitStoreGuestMemoryFastmem(const CodeBlockInstruction& cbi, const Value& address, const Value& value);
   void EmitStoreGuestMemorySlowmem(const CodeBlockInstruction& cbi, const Value& address, const Value& value,
                                    bool in_far_code);
+  void EmitUpdateFastmemBase();
 
   // Unconditional branch to pointer. May allocate a scratch register.
   void EmitBranch(const void* address, bool allow_scratch = true);
@@ -263,6 +264,7 @@ private:
   {
     std::array<SpeculativeValue, static_cast<u8>(Reg::count)> regs;
     std::unordered_map<PhysicalMemoryAddress, SpeculativeValue> memory;
+    SpeculativeValue cop0_sr;
   };
 
   void InitSpeculativeRegs();
@@ -271,6 +273,7 @@ private:
   void SpeculativeWriteReg(Reg reg, SpeculativeValue value);
   SpeculativeValue SpeculativeReadMemory(u32 address);
   void SpeculativeWriteMemory(VirtualMemoryAddress address, SpeculativeValue value);
+  bool SpeculativeIsCacheIsolated();
 
   SpeculativeConstants m_speculative_constants;
 };

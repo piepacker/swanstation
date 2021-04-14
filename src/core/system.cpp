@@ -689,9 +689,6 @@ bool RecreateGPU(GPURenderer renderer, bool update_display /* = true*/)
     return false;
   }
 
-  // reinitialize the code cache because the address space could change
-  CPU::CodeCache::Reinitialize();
-
   if (state_valid)
   {
     state_stream->SeekAbsolute(0);
@@ -1994,10 +1991,6 @@ bool InsertMedia(const char* path)
     UpdateMemoryCards();
   }
 
-  // reinitialize recompiler, because especially with preloading this might overlap the fastmem area
-  if (g_settings.IsUsingCodeCache())
-    CPU::CodeCache::Reinitialize();
-
   ClearMemorySaveStates();
   return true;
 }
@@ -2145,6 +2138,7 @@ bool ReplaceMediaPathFromPlaylist(u32 index, const std::string_view& path)
     s_media_playlist[index] = path;
   }
 
+  ClearMemorySaveStates();
   return true;
 }
 
