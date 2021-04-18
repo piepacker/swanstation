@@ -113,6 +113,8 @@ struct Settings
   bool gpu_per_sample_shading = false;
   bool gpu_true_color = true;
   bool gpu_scaled_dithering = false;
+  int  gpu_sw_uprender_scale = 1;
+
   GPUTextureFilter gpu_texture_filter = GPUTextureFilter::Nearest;
   GPUDownsampleMode gpu_downsample_mode = GPUDownsampleMode::Disabled;
   bool gpu_disable_interlacing = false;

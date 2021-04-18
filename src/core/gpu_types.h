@@ -15,8 +15,8 @@ enum : u32
   TEXTURE_PAGE_HEIGHT = 256,
 
   // In interlaced modes, we can exceed the 512 height of VRAM, up to 576 in PAL games.
-  GPU_MAX_DISPLAY_WIDTH = 720,
-  GPU_MAX_DISPLAY_HEIGHT = 576,
+  GPU_MAX_DISPLAY_WIDTH = 1440,
+  GPU_MAX_DISPLAY_HEIGHT = 1080,
 
   DITHER_MATRIX_SIZE = 4
 };
@@ -232,6 +232,7 @@ enum class GPUBackendCommandType : u8
 {
   Wraparound,
   Sync,
+  ReadVRAM,
   FillVRAM,
   UpdateVRAM,
   CopyVRAM,
@@ -277,6 +278,14 @@ struct GPUBackendCommand
 
 struct GPUBackendSyncCommand : public GPUBackendCommand
 {
+};
+
+struct GPUBackendReadVRAMCommand : public GPUBackendCommand
+{
+  u16 x;
+  u16 y;
+  u16 width;
+  u16 height;
 };
 
 struct GPUBackendFillVRAMCommand : public GPUBackendCommand

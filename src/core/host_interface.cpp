@@ -634,6 +634,7 @@ void HostInterface::FixIncompatibleSettings(bool display_osd_messages)
     g_settings.gpu_per_sample_shading = false;
     g_settings.gpu_true_color = false;
     g_settings.gpu_scaled_dithering = false;
+    g_settings.gpu_sw_uprender_scale = false;
     g_settings.gpu_texture_filter = GPUTextureFilter::Nearest;
     g_settings.gpu_disable_interlacing = false;
     g_settings.gpu_force_ntsc_timings = false;
@@ -795,6 +796,7 @@ void HostInterface::CheckForSettingsChanges(const Settings& old_settings)
         g_settings.gpu_force_ntsc_timings != old_settings.gpu_force_ntsc_timings ||
         g_settings.gpu_24bit_chroma_smoothing != old_settings.gpu_24bit_chroma_smoothing ||
         g_settings.gpu_downsample_mode != old_settings.gpu_downsample_mode ||
+        g_settings.gpu_sw_uprender_scale != old_settings.gpu_sw_uprender_scale ||
         g_settings.display_crop_mode != old_settings.display_crop_mode ||
         g_settings.display_aspect_ratio != old_settings.display_aspect_ratio ||
         g_settings.gpu_pgxp_enable != old_settings.gpu_pgxp_enable ||
