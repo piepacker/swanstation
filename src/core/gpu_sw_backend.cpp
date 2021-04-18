@@ -79,9 +79,29 @@ constexpr GPU_SW_Backend::DitherLUT GPU_SW_Backend::ComputeDitherLUT()
 
 static constexpr GPU_SW_Backend::DitherLUT s_dither_lut = GPU_SW_Backend::ComputeDitherLUT();
 
+
+s32 ApplyTextureWindow(const GPUBackendDrawCommand* cmd, s32 coords)
+{
+  return (coords & cmd->window.and_x) | cmd->window.or_x;
+}
+
+s32 ApplyUpscaledTextureWindow(const GPUBackendDrawCommand* cmd, s32 coords)
+{
+  auto native_coords = coords / RESOLUTION_SCALE;
+  auto coords_offset = coords % RESOLUTION_SCALE;
+  return (ApplyTextureWindow(cmd, native_coords) * RESOLUTION_SCALE) + coords_offset;
+}
+
+s32 FloatToIntegerCoord(float coord)
+{
+  // With the vertex offset applied at 1x resolution scale, we want to round the texture coordinates.
+  // Floor them otherwise, as it currently breaks when upscaling as the vertex offset is not applied.
+  return (RESOLUTION_SCALE == 1u) ? roundf(coord) : floorf(coord);
+}
+
 template<bool texture_enable, bool raw_texture_enable, bool transparency_enable, bool dithering_enable>
-void ALWAYS_INLINE_RELEASE GPU_SW_Backend::ShadePixel(const GPUBackendDrawCommand* cmd, u32 x, u32 y, u8 color_r,
-                                                      u8 color_g, u8 color_b, u8 texcoord_x, u8 texcoord_y)
+void ALWAYS_INLINE_RELEASE GPU_SW_Backend::ShadePixel(const GPUBackendDrawCommand* cmd, s32 x, s32 y, u8 color_r,
+                                                      u8 color_g, u8 color_b, float texcoord_x_f32, float texcoord_y_f32)
 {
   VRAMPixel color;
   bool transparent;
@@ -89,8 +109,11 @@ void ALWAYS_INLINE_RELEASE GPU_SW_Backend::ShadePixel(const GPUBackendDrawComman
   {
     // Apply texture window
     // TODO: Precompute the second half
-    texcoord_x = (texcoord_x & cmd->window.and_x) | cmd->window.or_x;
-    texcoord_y = (texcoord_y & cmd->window.and_y) | cmd->window.or_y;
+    //float texcoord_x = (texcoord_x & cmd->window.and_x) | cmd->window.or_x;
+    //float texcoord_y = (texcoord_y & cmd->window.and_y) | cmd->window.or_y;
+
+    auto texcoord_x = ApplyUpscaledTextureWindow(cmd, FloatToIntegerCoord(texcoord_x_f32));
+    auto texcoord_y = ApplyUpscaledTextureWindow(cmd, FloatToIntegerCoord(texcoord_y_f32));
 
     VRAMPixel texture_color;
     switch (cmd->draw_mode.texture_mode)
@@ -98,30 +121,30 @@ void ALWAYS_INLINE_RELEASE GPU_SW_Backend::ShadePixel(const GPUBackendDrawComman
       case GPUTextureMode::Palette4Bit:
       {
         const u16 palette_value =
-          GetPixel((cmd->draw_mode.GetTexturePageBaseX() + ZeroExtend32(texcoord_x / 4)) % VRAM_WIDTH,
-                   (cmd->draw_mode.GetTexturePageBaseY() + ZeroExtend32(texcoord_y)) % VRAM_HEIGHT);
+          GetPixel((cmd->draw_mode.GetTexturePageBaseX() + (texcoord_x / 4)) % VRAM_WIDTH,
+                   (cmd->draw_mode.GetTexturePageBaseY() + (texcoord_y)) % VRAM_HEIGHT);
         const u16 palette_index = (palette_value >> ((texcoord_x % 4) * 4)) & 0x0Fu;
 
         texture_color.bits =
-          GetPixel((cmd->palette.GetXBase() + ZeroExtend32(palette_index)) % VRAM_WIDTH, cmd->palette.GetYBase());
+          GetPixel((cmd->palette.GetXBase() + (palette_index)) % VRAM_WIDTH, cmd->palette.GetYBase());
       }
       break;
 
       case GPUTextureMode::Palette8Bit:
       {
         const u16 palette_value =
-          GetPixel((cmd->draw_mode.GetTexturePageBaseX() + ZeroExtend32(texcoord_x / 2)) % VRAM_WIDTH,
-                   (cmd->draw_mode.GetTexturePageBaseY() + ZeroExtend32(texcoord_y)) % VRAM_HEIGHT);
+          GetPixel((cmd->draw_mode.GetTexturePageBaseX() + (texcoord_x / 2)) % VRAM_WIDTH,
+                   (cmd->draw_mode.GetTexturePageBaseY() + (texcoord_y)) % VRAM_HEIGHT);
         const u16 palette_index = (palette_value >> ((texcoord_x % 2) * 8)) & 0xFFu;
         texture_color.bits =
-          GetPixel((cmd->palette.GetXBase() + ZeroExtend32(palette_index)) % VRAM_WIDTH, cmd->palette.GetYBase());
+          GetPixel((cmd->palette.GetXBase() + (palette_index)) % VRAM_WIDTH, cmd->palette.GetYBase());
       }
       break;
 
       default:
       {
-        texture_color.bits = GetPixel((cmd->draw_mode.GetTexturePageBaseX() + ZeroExtend32(texcoord_x)) % VRAM_WIDTH,
-                                      (cmd->draw_mode.GetTexturePageBaseY() + ZeroExtend32(texcoord_y)) % VRAM_HEIGHT);
+        texture_color.bits = GetPixel((cmd->draw_mode.GetTexturePageBaseX() + (texcoord_x)) % VRAM_WIDTH,
+                                      (cmd->draw_mode.GetTexturePageBaseY() + (texcoord_y)) % VRAM_HEIGHT);
       }
       break;
     }
@@ -158,7 +181,7 @@ void ALWAYS_INLINE_RELEASE GPU_SW_Backend::ShadePixel(const GPUBackendDrawComman
                  (ZeroExtend16(s_dither_lut[dither_y][dither_x][color_b]) << 10);
   }
 
-  const VRAMPixel bg_color{GetPixel(static_cast<u32>(x), static_cast<u32>(y))};
+  const VRAMPixel bg_color{GetPixel(x, y)};
   if constexpr (transparency_enable)
   {
     if (transparent)
@@ -316,7 +339,7 @@ bool ALWAYS_INLINE_RELEASE GPU_SW_Backend::CalcIDeltas(i_deltas& idl, const GPUB
 }
 
 template<bool shading_enable, bool texture_enable>
-void ALWAYS_INLINE_RELEASE GPU_SW_Backend::AddIDeltas_DX(i_group& ig, const i_deltas& idl, u32 count /*= 1*/)
+void ALWAYS_INLINE_RELEASE GPU_SW_Backend::AddIDeltas_DX(i_group& ig, const i_deltas& idl, float count /*= 1*/)
 {
   if constexpr (shading_enable)
   {
@@ -333,7 +356,7 @@ void ALWAYS_INLINE_RELEASE GPU_SW_Backend::AddIDeltas_DX(i_group& ig, const i_de
 }
 
 template<bool shading_enable, bool texture_enable>
-void ALWAYS_INLINE_RELEASE GPU_SW_Backend::AddIDeltas_DY(i_group& ig, const i_deltas& idl, u32 count /*= 1*/)
+void ALWAYS_INLINE_RELEASE GPU_SW_Backend::AddIDeltas_DY(i_group& ig, const i_deltas& idl, float count /*= 1*/)
 {
   if constexpr (shading_enable)
   {
@@ -351,34 +374,38 @@ void ALWAYS_INLINE_RELEASE GPU_SW_Backend::AddIDeltas_DY(i_group& ig, const i_de
 
 template<bool shading_enable, bool texture_enable, bool raw_texture_enable, bool transparency_enable,
          bool dithering_enable>
-void GPU_SW_Backend::DrawSpan(const GPUBackendDrawPolygonCommand* cmd, s32 y, s32 x_start, s32 x_bound, i_group ig,
+void GPU_SW_Backend::DrawSpan(const GPUBackendDrawPolygonCommand* cmd, s32 y_up, s32 x_start_up, s32 x_bound_up, i_group ig,
                               const i_deltas& idl)
 {
-  //if constexpr (texture_enable) return;
+  auto y_native       = y_up       / RESOLUTION_SCALE;
+  auto x_start_native = x_start_up / RESOLUTION_SCALE;
+  auto x_bound_native = x_bound_up / RESOLUTION_SCALE;
 
-  if (cmd->params.interlaced_rendering && cmd->params.active_line_lsb == (Truncate8(static_cast<u32>(y)) & 1u))
+  if (cmd->params.interlaced_rendering && cmd->params.active_line_lsb == (y_native & 1u))
     return;
 
-  s32 x_ig_adjust = x_start;
-  s32 w = x_bound - x_start;
-  s32 x = TruncateGPUVertexPosition(x_start);
+  s32 x_ig_adjust = x_start_native;
+  s32 w_native    = x_bound_native - x_start_native;
+  s32 w_up        = x_bound_up     - x_start_up;
+  s32 x_native    = TruncateGPUVertexPosition(x_start_native);
+  s32 x_up        = TruncateGPUVertexPosition(x_start_up);
 
-  if (x < static_cast<s32>(m_drawing_area.left))
+  if (x_native < static_cast<s32>(m_drawing_area.left))
   {
-    s32 delta = static_cast<s32>(m_drawing_area.left) - x;
+    s32 delta = static_cast<s32>(m_drawing_area.left) - x_native;
     x_ig_adjust += delta;
-    x += delta;
-    w -= delta;
+    x_native += delta;
+    w_native -= delta;
   }
 
-  if ((x + w) > (static_cast<s32>(m_drawing_area.right) + 1))
-    w = static_cast<s32>(m_drawing_area.right) + 1 - x;
+  if ((x_native + w_native) > (static_cast<s32>(m_drawing_area.right) + 1))
+    w_native = static_cast<s32>(m_drawing_area.right) + 1 - x_native;
 
-  if (w <= 0)
+  if (w_native <= 0)
     return;
 
   AddIDeltas_DX<shading_enable, texture_enable>(ig, idl, x_ig_adjust);
-  AddIDeltas_DY<shading_enable, texture_enable>(ig, idl, y);
+  AddIDeltas_DY<shading_enable, texture_enable>(ig, idl, (float)y_up / RESOLUTION_SCALE);
 
   do
   {
@@ -389,12 +416,12 @@ void GPU_SW_Backend::DrawSpan(const GPUBackendDrawPolygonCommand* cmd, s32 y, s3
     const u32 v = ig.v >> (COORD_FBS + COORD_POST_PADDING);
 
     ShadePixel<texture_enable, raw_texture_enable, transparency_enable, dithering_enable>(
-      cmd, static_cast<u32>(x), static_cast<u32>(y), Truncate8(r), Truncate8(g), Truncate8(b), Truncate8(u),
+      cmd, x_up, y_up, Truncate8(r), Truncate8(g), Truncate8(b), Truncate8(u),
       Truncate8(v));
 
-    x++;
-    AddIDeltas_DX<shading_enable, texture_enable>(ig, idl);
-  } while (--w > 0);
+    x_up++;
+    AddIDeltas_DX<shading_enable, texture_enable>(ig, idl, 1.0f / RESOLUTION_SCALE);
+  } while (--w_up > 0);
 }
 
 template<bool shading_enable, bool texture_enable, bool raw_texture_enable, bool transparency_enable,

@@ -124,8 +124,8 @@ protected:
   // Rasterization
   //////////////////////////////////////////////////////////////////////////
   template<bool texture_enable, bool raw_texture_enable, bool transparency_enable, bool dithering_enable>
-  void ShadePixel(const GPUBackendDrawCommand* cmd, u32 x, u32 y, u8 color_r, u8 color_g, u8 color_b, u8 texcoord_x,
-                  u8 texcoord_y);
+  void ShadePixel(const GPUBackendDrawCommand* cmd, s32 x, s32 y, u8 color_r, u8 color_g, u8 color_b, float texcoord_x,
+                  float texcoord_y);
 
   template<bool texture_enable, bool raw_texture_enable, bool transparency_enable>
   void DrawRectangle(const GPUBackendDrawRectangleCommand* cmd);
@@ -157,10 +157,10 @@ protected:
                    const GPUBackendDrawPolygonCommand::Vertex* B, const GPUBackendDrawPolygonCommand::Vertex* C);
 
   template<bool shading_enable, bool texture_enable>
-  void AddIDeltas_DX(i_group& ig, const i_deltas& idl, u32 count = 1);
+  void AddIDeltas_DX(i_group& ig, const i_deltas& idl, float count = 1);
 
   template<bool shading_enable, bool texture_enable>
-  void AddIDeltas_DY(i_group& ig, const i_deltas& idl, u32 count = 1);
+  void AddIDeltas_DY(i_group& ig, const i_deltas& idl, float count = 1);
 
   template<bool shading_enable, bool texture_enable, bool raw_texture_enable, bool transparency_enable,
            bool dithering_enable>
