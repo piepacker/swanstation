@@ -223,7 +223,7 @@ ALWAYS_INLINE void CopyOutRow16<HostDisplayPixelFormat::BGRA8, u32>(const u16* s
 }
 
 template<HostDisplayPixelFormat display_format>
-void GPU_SW::CopyOut15Bit(u32 src_x, u32 src_y, u32 width, u32 height, u32 field, bool interlaced, bool interleaved)
+void GPU_SW::CopyOut15Bit(u32 src_x_native, u32 src_y_native, u32 width_native, u32 height_native, u32 field, bool interlaced, bool interleaved)
 {
   u8* dst_ptr;
   u32 dst_stride;
@@ -233,7 +233,7 @@ void GPU_SW::CopyOut15Bit(u32 src_x, u32 src_y, u32 width, u32 height, u32 field
 
   if (!interlaced)
   {
-    if (!m_host_display->BeginSetDisplayPixels(display_format, width, height, reinterpret_cast<void**>(&dst_ptr),
+    if (!m_host_display->BeginSetDisplayPixels(display_format, width_native, height_native, reinterpret_cast<void**>(&dst_ptr),
                                                &dst_stride))
     {
       return;
@@ -250,35 +250,45 @@ void GPU_SW::CopyOut15Bit(u32 src_x, u32 src_y, u32 width, u32 height, u32 field
   const u8 interleaved_shift = BoolToUInt8(interleaved);
 
   // Fast path when not wrapping around.
-  if ((src_x + width) <= VRAM_WIDTH && (src_y + height) <= VRAM_HEIGHT)
+  if ((src_x_native + width_native) <= VRAM_WIDTH && (src_y_native + height_native) <= VRAM_HEIGHT)
   {
-    const u32 rows = height >> interlaced_shift;
+    auto src_x_up = src_x_native * RESOLUTION_SCALE;
+    auto src_y_up = src_y_native * RESOLUTION_SCALE;
+    auto height_up = height_native * RESOLUTION_SCALE;
+    auto width_up  = width_native  * RESOLUTION_SCALE;
+
+    const u32 rows = height_up >> interlaced_shift;
     dst_stride <<= interlaced_shift;
 
-    const u16* src_ptr = &m_vram_ptr[src_y * VRAM_WIDTH + src_x];
-    const u32 src_step = VRAM_WIDTH << interleaved_shift;
+    const u16* src_ptr = &m_vram_ptr[src_y_up * VRAM_UPRENDER_SIZE_X + src_x_up];
+    const u32 src_step = VRAM_UPRENDER_SIZE_X << interleaved_shift;
     for (u32 row = 0; row < rows; row++)
     {
-      CopyOutRow16<display_format>(src_ptr, reinterpret_cast<OutputPixelType*>(dst_ptr), width);
+      CopyOutRow16<display_format>(src_ptr, reinterpret_cast<OutputPixelType*>(dst_ptr), width_up);
       src_ptr += src_step;
       dst_ptr += dst_stride;
     }
   }
   else
   {
-    const u32 rows = height >> interlaced_shift;
+    auto src_x_up = src_x_native * RESOLUTION_SCALE;
+    auto src_y_up = src_y_native * RESOLUTION_SCALE;
+    auto height_up = height_native * RESOLUTION_SCALE;
+    auto width_up  = width_native  * RESOLUTION_SCALE;
+
+    const u32 rows = height_up >> interlaced_shift;
     dst_stride <<= interlaced_shift;
 
-    const u32 end_x = src_x + width;
+    const u32 end_x_up = src_x_up + width_up;
     for (u32 row = 0; row < rows; row++)
     {
-      const u16* src_row_ptr = &m_vram_ptr[(src_y % VRAM_HEIGHT) * VRAM_WIDTH];
+      const u16* src_row_ptr = &m_vram_ptr[(src_y_up % VRAM_UPRENDER_SIZE_Y) * VRAM_UPRENDER_SIZE_X];
       OutputPixelType* dst_row_ptr = reinterpret_cast<OutputPixelType*>(dst_ptr);
 
-      for (u32 col = src_x; col < end_x; col++)
-        *(dst_row_ptr++) = VRAM16ToOutput<display_format, OutputPixelType>(src_row_ptr[col % VRAM_WIDTH]);
+      for (u32 col = src_x_up; col < end_x_up; col++)
+        *(dst_row_ptr++) = VRAM16ToOutput<display_format, OutputPixelType>(src_row_ptr[col % VRAM_UPRENDER_SIZE_X]);
 
-      src_y += (1 << interleaved_shift);
+      src_y_up += (1 << interleaved_shift);
       dst_ptr += dst_stride;
     }
   }
@@ -289,7 +299,7 @@ void GPU_SW::CopyOut15Bit(u32 src_x, u32 src_y, u32 width, u32 height, u32 field
   }
   else
   {
-    m_host_display->SetDisplayPixels(display_format, width, height, m_display_texture_buffer.data(), output_stride);
+    m_host_display->SetDisplayPixels(display_format, width_native, height_native, m_display_texture_buffer.data(), output_stride);
   }
 }
 

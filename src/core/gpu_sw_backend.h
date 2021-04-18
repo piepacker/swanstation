@@ -4,6 +4,10 @@
 #include <memory>
 #include <vector>
 
+static const int RESOLUTION_SCALE = 1;
+static const int VRAM_UPRENDER_SIZE_X = VRAM_WIDTH  * 2; //RESOLUTION_SCALE;
+static const int VRAM_UPRENDER_SIZE_Y = VRAM_HEIGHT * 2; //RESOLUTION_SCALE;
+
 class GPU_SW_Backend final : public GPUBackend
 {
 public:
@@ -13,10 +17,10 @@ public:
   bool Initialize() override;
   void Reset(bool clear_vram) override;
 
-  ALWAYS_INLINE_RELEASE u16 GetPixel(const u32 x, const u32 y) const { return m_vram[VRAM_WIDTH * y + x]; }
-  ALWAYS_INLINE_RELEASE const u16* GetPixelPtr(const u32 x, const u32 y) const { return &m_vram[VRAM_WIDTH * y + x]; }
-  ALWAYS_INLINE_RELEASE u16* GetPixelPtr(const u32 x, const u32 y) { return &m_vram[VRAM_WIDTH * y + x]; }
-  ALWAYS_INLINE_RELEASE void SetPixel(const u32 x, const u32 y, const u16 value) { m_vram[VRAM_WIDTH * y + x] = value; }
+  ALWAYS_INLINE_RELEASE u16 GetPixel(const u32 x, const u32 y) const { return m_vram[VRAM_UPRENDER_SIZE_X * y + x]; }
+  ALWAYS_INLINE_RELEASE const u16* GetPixelPtr(const u32 x, const u32 y) const { return &m_vram[VRAM_UPRENDER_SIZE_X * y + x]; }
+  ALWAYS_INLINE_RELEASE u16* GetPixelPtr(const u32 x, const u32 y) { return &m_vram[VRAM_UPRENDER_SIZE_X * y + x]; }
+  ALWAYS_INLINE_RELEASE void SetPixel(const u32 x, const u32 y, const u16 value) { m_vram[VRAM_UPRENDER_SIZE_X * y + x] = value; }
 
   // this is actually (31 * 255) >> 4) == 494, but to simplify addressing we use the next power of two (512)
   static constexpr u32 DITHER_LUT_SIZE = 512;
@@ -163,5 +167,5 @@ protected:
                                                     const GPUBackendDrawLineCommand::Vertex* p1);
   DrawLineFunction GetDrawLineFunction(bool shading_enable, bool transparency_enable, bool dithering_enable);
 
-  std::array<u16, VRAM_WIDTH * VRAM_HEIGHT> m_vram;
+  std::array<u16, VRAM_UPRENDER_SIZE_X * VRAM_UPRENDER_SIZE_Y> m_vram;
 };

@@ -811,6 +811,23 @@ void GPU_SW_Backend::FillVRAM(u32 x, u32 y, u32 width, u32 height, u32 color, GP
   }
 }
 
+/* Set a pixel in VRAM, upscaling it if necessary */
+void texel_put(u32 x_native, u32 y_native, u16 v)
+{
+   uint32_t dy, dx;
+   auto x_up = x_native * RESOLUTION_SCALE;
+   auto y_up = y_native * RESOLUTION_SCALE;
+
+   /* Duplicate the pixel as many times as necessary (nearest
+    * neighbour upscaling) */
+   for (dy = 0; dy < RESOLUTION_SCALE; dy++)
+   {
+      for (dx = 0; dx < RESOLUTION_SCALE; dx++)
+         vram_put(&GPU, x + dx, y + dy, v);
+   }
+}
+
+
 void GPU_SW_Backend::UpdateVRAM(u32 x, u32 y, u32 width, u32 height, const void* data,
                                 GPUBackendCommandParameters params)
 {
