@@ -228,12 +228,15 @@ void GPU_SW::CopyOut15Bit(u32 src_x_native, u32 src_y_native, u32 width_native, 
   u8* dst_ptr;
   u32 dst_stride;
 
+  auto width_up  = width_native  * RESOLUTION_SCALE;
+  auto height_up = height_native * RESOLUTION_SCALE;
+
   using OutputPixelType = std::conditional_t<
     display_format == HostDisplayPixelFormat::RGBA8 || display_format == HostDisplayPixelFormat::BGRA8, u32, u16>;
 
   if (!interlaced)
   {
-    if (!m_host_display->BeginSetDisplayPixels(display_format, width_native, height_native, reinterpret_cast<void**>(&dst_ptr),
+    if (!m_host_display->BeginSetDisplayPixels(display_format, width_up, height_up, reinterpret_cast<void**>(&dst_ptr),
                                                &dst_stride))
     {
       return;
@@ -249,14 +252,12 @@ void GPU_SW::CopyOut15Bit(u32 src_x_native, u32 src_y_native, u32 width_native, 
   const u8 interlaced_shift = BoolToUInt8(interlaced);
   const u8 interleaved_shift = BoolToUInt8(interleaved);
 
+  auto src_x_up = src_x_native * RESOLUTION_SCALE;
+  auto src_y_up = src_y_native * RESOLUTION_SCALE;
+
   // Fast path when not wrapping around.
   if ((src_x_native + width_native) <= VRAM_WIDTH && (src_y_native + height_native) <= VRAM_HEIGHT)
   {
-    auto src_x_up = src_x_native * RESOLUTION_SCALE;
-    auto src_y_up = src_y_native * RESOLUTION_SCALE;
-    auto height_up = height_native * RESOLUTION_SCALE;
-    auto width_up  = width_native  * RESOLUTION_SCALE;
-
     const u32 rows = height_up >> interlaced_shift;
     dst_stride <<= interlaced_shift;
 
@@ -271,11 +272,6 @@ void GPU_SW::CopyOut15Bit(u32 src_x_native, u32 src_y_native, u32 width_native, 
   }
   else
   {
-    auto src_x_up = src_x_native * RESOLUTION_SCALE;
-    auto src_y_up = src_y_native * RESOLUTION_SCALE;
-    auto height_up = height_native * RESOLUTION_SCALE;
-    auto width_up  = width_native  * RESOLUTION_SCALE;
-
     const u32 rows = height_up >> interlaced_shift;
     dst_stride <<= interlaced_shift;
 
@@ -299,7 +295,7 @@ void GPU_SW::CopyOut15Bit(u32 src_x_native, u32 src_y_native, u32 width_native, 
   }
   else
   {
-    m_host_display->SetDisplayPixels(display_format, width_native, height_native, m_display_texture_buffer.data(), output_stride);
+    m_host_display->SetDisplayPixels(display_format, width_up, height_up, m_display_texture_buffer.data(), output_stride);
   }
 }
 
@@ -326,18 +322,21 @@ void GPU_SW::CopyOut15Bit(HostDisplayPixelFormat display_format, u32 src_x, u32 
 }
 
 template<HostDisplayPixelFormat display_format>
-void GPU_SW::CopyOut24Bit(u32 src_x, u32 src_y, u32 skip_x, u32 width, u32 height, u32 field, bool interlaced,
+void GPU_SW::CopyOut24Bit(u32 src_x_native, u32 src_y_native, u32 skip_x_native, u32 width_native, u32 height_native, u32 field, bool interlaced,
                           bool interleaved)
 {
   u8* dst_ptr;
   u32 dst_stride;
+
+  auto width_up  = width_native  * RESOLUTION_SCALE;
+  auto height_up = height_native * RESOLUTION_SCALE;
 
   using OutputPixelType = std::conditional_t<
     display_format == HostDisplayPixelFormat::RGBA8 || display_format == HostDisplayPixelFormat::BGRA8, u32, u16>;
 
   if (!interlaced)
   {
-    if (!m_host_display->BeginSetDisplayPixels(display_format, width, height, reinterpret_cast<void**>(&dst_ptr),
+    if (!m_host_display->BeginSetDisplayPixels(display_format, width_up, height_up, reinterpret_cast<void**>(&dst_ptr),
                                                &dst_stride))
     {
       return;
@@ -345,27 +344,41 @@ void GPU_SW::CopyOut24Bit(u32 src_x, u32 src_y, u32 skip_x, u32 width, u32 heigh
   }
   else
   {
-    dst_stride = Common::AlignUpPow2<u32>(width * sizeof(OutputPixelType), 4);
+    dst_stride = GPU_MAX_DISPLAY_WIDTH * sizeof(OutputPixelType);
     dst_ptr = m_display_texture_buffer.data() + (field != 0 ? dst_stride : 0);
   }
 
   const u32 output_stride = dst_stride;
   const u8 interlaced_shift = BoolToUInt8(interlaced);
   const u8 interleaved_shift = BoolToUInt8(interleaved);
-  const u32 rows = height >> interlaced_shift;
+  const u32 rows_native = height_native >> interlaced_shift;
+  const u32 rows = height_up >> interlaced_shift;
+
   dst_stride <<= interlaced_shift;
 
-  if ((src_x + width) <= VRAM_WIDTH && (src_y + (rows << interleaved_shift)) <= VRAM_HEIGHT)
+  auto src_x_up   = src_x_native  * RESOLUTION_SCALE;
+  auto src_y_up   = src_y_native  * RESOLUTION_SCALE;
+  auto skip_x_up  = skip_x_native * RESOLUTION_SCALE;
+
+  // FIXME: 24 bit modes must be sampled either from a native res staging buffer, or by
+  // adapting logic to handle the upres swizzle (due to PSX VMEM being 16-bits natively):
+  //
+  //  1  2  3  4  5  6  7  8  9  10
+  //  RG RG BR BR GB GB RG RG BR BR
+  //  RG RG BR BR GB GB RG RG BR BR
+  //
+
+  if ((src_x_native + width_native) <= VRAM_WIDTH && (src_y_native + (rows_native << interleaved_shift)) <= VRAM_HEIGHT)
   {
-    const u8* src_ptr = reinterpret_cast<const u8*>(&m_vram_ptr[src_y * VRAM_WIDTH + src_x]) + (skip_x * 3);
-    const u32 src_stride = (VRAM_WIDTH << interleaved_shift) * sizeof(u16);
+    const u8* src_ptr = reinterpret_cast<const u8*>(&m_vram_ptr[src_y_up * VRAM_UPRENDER_SIZE_X + src_x_up]) + (skip_x_up * 3);
+    const u32 src_stride = (VRAM_UPRENDER_SIZE_X << interleaved_shift) * sizeof(u16);
     for (u32 row = 0; row < rows; row++)
     {
       if constexpr (display_format == HostDisplayPixelFormat::RGBA8)
       {
         const u8* src_row_ptr = src_ptr;
         u8* dst_row_ptr = reinterpret_cast<u8*>(dst_ptr);
-        for (u32 col = 0; col < width; col++)
+        for (u32 col = 0; col < width_up; col++)
         {
           *(dst_row_ptr++) = *(src_row_ptr++);
           *(dst_row_ptr++) = *(src_row_ptr++);
@@ -377,7 +390,7 @@ void GPU_SW::CopyOut24Bit(u32 src_x, u32 src_y, u32 skip_x, u32 width, u32 heigh
       {
         const u8* src_row_ptr = src_ptr;
         u8* dst_row_ptr = reinterpret_cast<u8*>(dst_ptr);
-        for (u32 col = 0; col < width; col++)
+        for (u32 col = 0; col < width_up; col++)
         {
           *(dst_row_ptr++) = src_row_ptr[2];
           *(dst_row_ptr++) = src_row_ptr[1];
@@ -390,7 +403,7 @@ void GPU_SW::CopyOut24Bit(u32 src_x, u32 src_y, u32 skip_x, u32 width, u32 heigh
       {
         const u8* src_row_ptr = src_ptr;
         u16* dst_row_ptr = reinterpret_cast<u16*>(dst_ptr);
-        for (u32 col = 0; col < width; col++)
+        for (u32 col = 0; col < width_up; col++)
         {
           *(dst_row_ptr++) = ((static_cast<u16>(src_row_ptr[0]) >> 3) << 11) |
                              ((static_cast<u16>(src_row_ptr[1]) >> 2) << 5) | (static_cast<u16>(src_row_ptr[2]) >> 3);
@@ -401,7 +414,7 @@ void GPU_SW::CopyOut24Bit(u32 src_x, u32 src_y, u32 skip_x, u32 width, u32 heigh
       {
         const u8* src_row_ptr = src_ptr;
         u16* dst_row_ptr = reinterpret_cast<u16*>(dst_ptr);
-        for (u32 col = 0; col < width; col++)
+        for (u32 col = 0; col < width_up; col++)
         {
           *(dst_row_ptr++) = ((static_cast<u16>(src_row_ptr[0]) >> 3) << 10) |
                              ((static_cast<u16>(src_row_ptr[1]) >> 3) << 5) | (static_cast<u16>(src_row_ptr[2]) >> 3);
@@ -417,13 +430,13 @@ void GPU_SW::CopyOut24Bit(u32 src_x, u32 src_y, u32 skip_x, u32 width, u32 heigh
   {
     for (u32 row = 0; row < rows; row++)
     {
-      const u16* src_row_ptr = &m_vram_ptr[(src_y % VRAM_HEIGHT) * VRAM_WIDTH];
+      const u16* src_row_ptr = &m_vram_ptr[(src_y_up % VRAM_UPRENDER_SIZE_Y) * VRAM_UPRENDER_SIZE_X];
       OutputPixelType* dst_row_ptr = reinterpret_cast<OutputPixelType*>(dst_ptr);
 
-      for (u32 col = 0; col < width; col++)
+      for (u32 col = 0; col < width_up; col++)
       {
-        const u32 offset = (src_x + (((skip_x + col) * 3) / 2));
-        const u16 s0 = src_row_ptr[offset % VRAM_WIDTH];
+        const u32 offset = (src_x_up + (((skip_x_up + col) * 3) / 2));
+        const u16 s0 = src_row_ptr[(offset + 0) % VRAM_WIDTH];
         const u16 s1 = src_row_ptr[(offset + 1) % VRAM_WIDTH];
         const u8 shift = static_cast<u8>(col & 1u) * 8;
         const u32 rgb = (((ZeroExtend32(s1) << 16) | ZeroExtend32(s0)) >> shift);
@@ -446,7 +459,7 @@ void GPU_SW::CopyOut24Bit(u32 src_x, u32 src_y, u32 skip_x, u32 width, u32 heigh
         }
       }
 
-      src_y += (1 << interleaved_shift);
+      src_y_up += (1 << interleaved_shift);
       dst_ptr += dst_stride;
     }
   }
@@ -457,7 +470,7 @@ void GPU_SW::CopyOut24Bit(u32 src_x, u32 src_y, u32 skip_x, u32 width, u32 heigh
   }
   else
   {
-    m_host_display->SetDisplayPixels(display_format, width, height, m_display_texture_buffer.data(), output_stride);
+    m_host_display->SetDisplayPixels(display_format, width_up, height_up, m_display_texture_buffer.data(), output_stride);
   }
 }
 
@@ -544,8 +557,8 @@ void GPU_SW::UpdateDisplay()
   else
   {
     CopyOut15Bit(m_16bit_display_format, 0, 0, VRAM_WIDTH, VRAM_HEIGHT, 0, false, false);
-    m_host_display->SetDisplayParameters(VRAM_WIDTH, VRAM_HEIGHT, 0, 0, VRAM_WIDTH, VRAM_HEIGHT,
-                                         static_cast<float>(VRAM_WIDTH) / static_cast<float>(VRAM_HEIGHT));
+    m_host_display->SetDisplayParameters(VRAM_UPRENDER_SIZE_X, VRAM_UPRENDER_SIZE_Y, 0, 0, VRAM_UPRENDER_SIZE_X, VRAM_UPRENDER_SIZE_Y,
+                                         static_cast<float>(VRAM_UPRENDER_SIZE_X) / static_cast<float>(VRAM_UPRENDER_SIZE_Y));
   }
 }
 

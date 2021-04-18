@@ -35,9 +35,9 @@ public:
       {
         for (int dx = 0; dx < RESOLUTION_SCALE; dx++)
         {
-          int y_up = (y * RESOLUTION_SCALE);
-          int x_up = (x * RESOLUTION_SCALE);
-          m_vram[(y_up * VRAM_UPRENDER_SIZE_Y) + (x * RESOLUTION_SCALE)] = value;
+          int y_up = (y * RESOLUTION_SCALE) + dy;
+          int x_up = (x * RESOLUTION_SCALE) + dx;
+          m_vram[(y_up * VRAM_UPRENDER_SIZE_X) + x_up] = value;
         }
       }
     }
