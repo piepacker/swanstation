@@ -354,6 +354,8 @@ template<bool shading_enable, bool texture_enable, bool raw_texture_enable, bool
 void GPU_SW_Backend::DrawSpan(const GPUBackendDrawPolygonCommand* cmd, s32 y, s32 x_start, s32 x_bound, i_group ig,
                               const i_deltas& idl)
 {
+  //if constexpr (texture_enable) return;
+
   if (cmd->params.interlaced_rendering && cmd->params.active_line_lsb == (Truncate8(static_cast<u32>(y)) & 1u))
     return;
 
@@ -811,22 +813,6 @@ void GPU_SW_Backend::FillVRAM(u32 x, u32 y, u32 width, u32 height, u32 color, GP
   }
 }
 
-/* Set a pixel in VRAM, upscaling it if necessary */
-void texel_put(u32 x_native, u32 y_native, u16 v)
-{
-   uint32_t dy, dx;
-   auto x_up = x_native * RESOLUTION_SCALE;
-   auto y_up = y_native * RESOLUTION_SCALE;
-
-   /* Duplicate the pixel as many times as necessary (nearest
-    * neighbour upscaling) */
-   for (dy = 0; dy < RESOLUTION_SCALE; dy++)
-   {
-      for (dx = 0; dx < RESOLUTION_SCALE; dx++)
-         vram_put(&GPU, x + dx, y + dy, v);
-   }
-}
-
 
 void GPU_SW_Backend::UpdateVRAM(u32 x, u32 y, u32 width, u32 height, const void* data,
                                 GPUBackendCommandParameters params)
@@ -835,12 +821,25 @@ void GPU_SW_Backend::UpdateVRAM(u32 x, u32 y, u32 width, u32 height, const void*
   if ((x + width) <= VRAM_WIDTH && (y + height) <= VRAM_HEIGHT && !params.IsMaskingEnabled())
   {
     const u16* src_ptr = static_cast<const u16*>(data);
-    u16* dst_ptr = &m_vram_ptr[y * VRAM_WIDTH + x];
-    for (u32 yoffs = 0; yoffs < height; yoffs++)
+    if constexpr (RESOLUTION_SCALE == 1)
     {
-      std::copy_n(src_ptr, width, dst_ptr);
-      src_ptr += width;
-      dst_ptr += VRAM_WIDTH;
+      u16* dst_ptr = &m_vram_ptr[y * VRAM_WIDTH + x];
+      for (u32 yoffs = 0; yoffs < height; yoffs++)
+      {
+        std::copy_n(src_ptr, width, dst_ptr);
+        src_ptr += width;
+        dst_ptr += VRAM_WIDTH;
+      }
+    }
+    else
+    {
+      for (u32 yoffs = 0; yoffs < height; yoffs++)
+      {
+        for(u32 xoffs = 0; xoffs < width; xoffs++, src_ptr++)
+        {
+          SetPixel(x+xoffs, y+yoffs, src_ptr[0]);
+        }
+      }
     }
   }
   else

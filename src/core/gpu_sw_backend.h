@@ -4,9 +4,9 @@
 #include <memory>
 #include <vector>
 
-static const int RESOLUTION_SCALE = 1;
-static const int VRAM_UPRENDER_SIZE_X = VRAM_WIDTH  * 2; //RESOLUTION_SCALE;
-static const int VRAM_UPRENDER_SIZE_Y = VRAM_HEIGHT * 2; //RESOLUTION_SCALE;
+static const int RESOLUTION_SCALE = 2;
+static const int VRAM_UPRENDER_SIZE_X = VRAM_WIDTH  * RESOLUTION_SCALE; //RESOLUTION_SCALE;
+static const int VRAM_UPRENDER_SIZE_Y = VRAM_HEIGHT * RESOLUTION_SCALE; //RESOLUTION_SCALE;
 
 class GPU_SW_Backend final : public GPUBackend
 {
@@ -17,10 +17,31 @@ public:
   bool Initialize() override;
   void Reset(bool clear_vram) override;
 
-  ALWAYS_INLINE_RELEASE u16 GetPixel(const u32 x, const u32 y) const { return m_vram[VRAM_UPRENDER_SIZE_X * y + x]; }
-  ALWAYS_INLINE_RELEASE const u16* GetPixelPtr(const u32 x, const u32 y) const { return &m_vram[VRAM_UPRENDER_SIZE_X * y + x]; }
-  ALWAYS_INLINE_RELEASE u16* GetPixelPtr(const u32 x, const u32 y) { return &m_vram[VRAM_UPRENDER_SIZE_X * y + x]; }
-  ALWAYS_INLINE_RELEASE void SetPixel(const u32 x, const u32 y, const u16 value) { m_vram[VRAM_UPRENDER_SIZE_X * y + x] = value; }
+  // jstine - uprender TODO - rename this to texel, since it's no longer pixel logic.
+  // and double check all referenced uses.
+
+  ALWAYS_INLINE_RELEASE u16 GetPixel(const u32 x, const u32 y)           const { return  m_vram[(y * RESOLUTION_SCALE * VRAM_UPRENDER_SIZE_X) + (x * RESOLUTION_SCALE)]; }
+  ALWAYS_INLINE_RELEASE const u16* GetPixelPtr(const u32 x, const u32 y) const { return &m_vram[(y * RESOLUTION_SCALE * VRAM_UPRENDER_SIZE_X) + (x * RESOLUTION_SCALE)]; }
+  ALWAYS_INLINE_RELEASE       u16* GetPixelPtr(const u32 x, const u32 y)       { return &m_vram[(y * RESOLUTION_SCALE * VRAM_UPRENDER_SIZE_X) + (x * RESOLUTION_SCALE)]; }
+
+  ALWAYS_INLINE_RELEASE void SetPixel(const u32 x, const u32 y, const u16 value)
+  {
+    if constexpr (RESOLUTION_SCALE == 1)
+      m_vram[VRAM_UPRENDER_SIZE_X * y + x] = value;
+    else
+    {
+      /* Duplicate the pixel as many times as necessary (nearest neighbour upscaling) */
+      for (int dy = 0; dy < RESOLUTION_SCALE; dy++)
+      {
+        for (int dx = 0; dx < RESOLUTION_SCALE; dx++)
+        {
+          int y_up = (y * RESOLUTION_SCALE);
+          int x_up = (x * RESOLUTION_SCALE);
+          m_vram[(y_up * VRAM_UPRENDER_SIZE_Y) + (x * RESOLUTION_SCALE)] = value;
+        }
+      }
+    }
+  }
 
   // this is actually (31 * 255) >> 4) == 494, but to simplify addressing we use the next power of two (512)
   static constexpr u32 DITHER_LUT_SIZE = 512;
