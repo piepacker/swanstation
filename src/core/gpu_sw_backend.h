@@ -4,6 +4,19 @@
 #include <memory>
 #include <vector>
 
+static const int RESOLUTION_SHIFT = 1;
+static const int RESOLUTION_SCALE = (1 << RESOLUTION_SHIFT);
+static const int VRAM_UPRENDER_SIZE_X = VRAM_WIDTH  * RESOLUTION_SCALE; //RESOLUTION_SCALE;
+static const int VRAM_UPRENDER_SIZE_Y = VRAM_HEIGHT * RESOLUTION_SCALE; //RESOLUTION_SCALE;
+
+#define SW_GPU_VRAM_BOUNDS_CHECK  0
+
+#if SW_GPU_VRAM_BOUNDS_CHECK
+#define UPRAM_ACCESSOR m_upram
+#else
+#define UPRAM_ACCESSOR m_upram_ptr
+#endif
+
 class GPU_SW_Backend final : public GPUBackend
 {
 public:
@@ -13,15 +26,43 @@ public:
   bool Initialize() override;
   void Reset(bool clear_vram) override;
 
-  ALWAYS_INLINE_RELEASE u16 GetPixel(const u32 x, const u32 y) const { return m_vram[VRAM_WIDTH * y + x]; }
-  ALWAYS_INLINE_RELEASE const u16* GetPixelPtr(const u32 x, const u32 y) const { return &m_vram[VRAM_WIDTH * y + x]; }
-  ALWAYS_INLINE_RELEASE u16* GetPixelPtr(const u32 x, const u32 y) { return &m_vram[VRAM_WIDTH * y + x]; }
-  ALWAYS_INLINE_RELEASE void SetPixel(const u32 x, const u32 y, const u16 value) { m_vram[VRAM_WIDTH * y + x] = value; }
+  ALWAYS_INLINE u16* GetUPRAM() const { return m_upram_ptr; }
+
+  u16* GetVRAMshadowPtr() override { return m_vram.data(); }
+
+
+  // jstine - uprender TODO - rename this to texel, since it's no longer pixel logic.
+  // and double check all referenced uses.
+
+  ALWAYS_INLINE_RELEASE u16 GetPixel(const u32 x, const u32 y)           const { return  UPRAM_ACCESSOR[(y * RESOLUTION_SCALE * VRAM_UPRENDER_SIZE_X) + (x * RESOLUTION_SCALE)]; }
+  ALWAYS_INLINE_RELEASE const u16* GetPixelPtr(const u32 x, const u32 y) const { return &UPRAM_ACCESSOR[(y * RESOLUTION_SCALE * VRAM_UPRENDER_SIZE_X) + (x * RESOLUTION_SCALE)]; }
+  ALWAYS_INLINE_RELEASE       u16* GetPixelPtr(const u32 x, const u32 y)       { return &UPRAM_ACCESSOR[(y * RESOLUTION_SCALE * VRAM_UPRENDER_SIZE_X) + (x * RESOLUTION_SCALE)]; }
+
+  ALWAYS_INLINE_RELEASE void SetPixel(const u32 x, const u32 y, const u16 value)
+  {
+    if constexpr (RESOLUTION_SCALE == 1)
+      UPRAM_ACCESSOR[VRAM_UPRENDER_SIZE_X * y + x] = value;
+    else
+    {
+      /* Duplicate the pixel as many times as necessary (nearest neighbour upscaling) */
+      for (int dy = 0; dy < RESOLUTION_SCALE; dy++)
+      {
+        for (int dx = 0; dx < RESOLUTION_SCALE; dx++)
+        {
+          int y_up = (y * RESOLUTION_SCALE) + dy;
+          int x_up = (x * RESOLUTION_SCALE) + dx;
+          UPRAM_ACCESSOR[(y_up * VRAM_UPRENDER_SIZE_X) + x_up] = value;
+        }
+      }
+    }
+  }
 
   // this is actually (31 * 255) >> 4) == 494, but to simplify addressing we use the next power of two (512)
   static constexpr u32 DITHER_LUT_SIZE = 512;
   using DitherLUT = std::array<std::array<std::array<u8, 512>, DITHER_MATRIX_SIZE>, DITHER_MATRIX_SIZE>;
   static constexpr DitherLUT ComputeDitherLUT();
+
+  void Sync(bool allow_sleep) override;
 
 protected:
   union VRAMPixel
@@ -84,6 +125,7 @@ protected:
     return std::make_tuple(static_cast<u8>(rgb24), static_cast<u8>(rgb24 >> 8), static_cast<u8>(rgb24 >> 16));
   }
 
+  void ReadVRAM(u32 x, u32 y, u32 width, u32 height) override;
   void FillVRAM(u32 x, u32 y, u32 width, u32 height, u32 color, GPUBackendCommandParameters params) override;
   void UpdateVRAM(u32 x, u32 y, u32 width, u32 height, const void* data, GPUBackendCommandParameters params) override;
   void CopyVRAM(u32 src_x, u32 src_y, u32 dst_x, u32 dst_y, u32 width, u32 height,
@@ -99,8 +141,8 @@ protected:
   // Rasterization
   //////////////////////////////////////////////////////////////////////////
   template<bool texture_enable, bool raw_texture_enable, bool transparency_enable, bool dithering_enable>
-  void ShadePixel(const GPUBackendDrawCommand* cmd, u32 x, u32 y, u8 color_r, u8 color_g, u8 color_b, u8 texcoord_x,
-                  u8 texcoord_y);
+  void ShadePixel(const GPUBackendDrawCommand* cmd, s32 x, s32 y, u8 color_r, u8 color_g, u8 color_b, float texcoord_x,
+                  float texcoord_y);
 
   template<bool texture_enable, bool raw_texture_enable, bool transparency_enable>
   void DrawRectangle(const GPUBackendDrawRectangleCommand* cmd);
@@ -131,11 +173,11 @@ protected:
   bool CalcIDeltas(i_deltas& idl, const GPUBackendDrawPolygonCommand::Vertex* A,
                    const GPUBackendDrawPolygonCommand::Vertex* B, const GPUBackendDrawPolygonCommand::Vertex* C);
 
-  template<bool shading_enable, bool texture_enable>
-  void AddIDeltas_DX(i_group& ig, const i_deltas& idl, u32 count = 1);
+  template<bool shading_enable, bool texture_enable, typename I_GROUP>
+  void AddIDeltas_DX(I_GROUP& ig, const i_deltas& idl, float count = 1);
 
-  template<bool shading_enable, bool texture_enable>
-  void AddIDeltas_DY(i_group& ig, const i_deltas& idl, u32 count = 1);
+  template<bool shading_enable, bool texture_enable, typename I_GROUP>
+  void AddIDeltas_DY(I_GROUP& ig, const i_deltas& idl, float count = 1);
 
   template<bool shading_enable, bool texture_enable, bool raw_texture_enable, bool transparency_enable,
            bool dithering_enable>
@@ -164,4 +206,7 @@ protected:
   DrawLineFunction GetDrawLineFunction(bool shading_enable, bool transparency_enable, bool dithering_enable);
 
   std::array<u16, VRAM_WIDTH * VRAM_HEIGHT> m_vram;
+  std::array<u16, VRAM_UPRENDER_SIZE_X * VRAM_UPRENDER_SIZE_Y> m_upram;
+
+  u16* m_upram_ptr = {};
 };

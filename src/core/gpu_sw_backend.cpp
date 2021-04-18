@@ -7,10 +7,16 @@
 #include <algorithm>
 Log_SetChannel(GPU_SW_Backend);
 
+#define SCALE_ALL_VERTEX 1
+#ifdef _MSC_VER
+#pragma warning(push)
+#pragma warning(disable : 4244) // warning C4324: 'GPUBackend': structure was padded due to alignment specifier
+#endif
+
 GPU_SW_Backend::GPU_SW_Backend() : GPUBackend()
 {
-  m_vram.fill(0);
-  m_vram_ptr = m_vram.data();
+  m_upram.fill(0);
+  m_upram_ptr = m_upram.data();
 }
 
 GPU_SW_Backend::~GPU_SW_Backend() = default;
@@ -25,7 +31,7 @@ void GPU_SW_Backend::Reset(bool clear_vram)
   GPUBackend::Reset(clear_vram);
 
   if (clear_vram)
-    m_vram.fill(0);
+    m_upram.fill(0);
 }
 
 void GPU_SW_Backend::DrawPolygon(const GPUBackendDrawPolygonCommand* cmd)
@@ -79,9 +85,29 @@ constexpr GPU_SW_Backend::DitherLUT GPU_SW_Backend::ComputeDitherLUT()
 
 static constexpr GPU_SW_Backend::DitherLUT s_dither_lut = GPU_SW_Backend::ComputeDitherLUT();
 
+
+s32 ApplyTextureWindow(const GPUBackendDrawCommand* cmd, s32 coords)
+{
+  return (coords & cmd->window.and_x) | cmd->window.or_x;
+}
+
+s32 ApplyUpscaledTextureWindow(const GPUBackendDrawCommand* cmd, s32 coords)
+{
+  auto native_coords = coords / RESOLUTION_SCALE;
+  auto coords_offset = coords % RESOLUTION_SCALE;
+  return (ApplyTextureWindow(cmd, native_coords) * RESOLUTION_SCALE) + coords_offset;
+}
+
+s32 FloatToIntegerCoord(float coord)
+{
+  // With the vertex offset applied at 1x resolution scale, we want to round the texture coordinates.
+  // Floor them otherwise, as it currently breaks when upscaling as the vertex offset is not applied.
+  return (RESOLUTION_SCALE == 1u) ? roundf(coord) : floorf(coord);
+}
+
 template<bool texture_enable, bool raw_texture_enable, bool transparency_enable, bool dithering_enable>
-void ALWAYS_INLINE_RELEASE GPU_SW_Backend::ShadePixel(const GPUBackendDrawCommand* cmd, u32 x, u32 y, u8 color_r,
-                                                      u8 color_g, u8 color_b, u8 texcoord_x, u8 texcoord_y)
+void ALWAYS_INLINE_RELEASE GPU_SW_Backend::ShadePixel(const GPUBackendDrawCommand* cmd, s32 x, s32 y, u8 color_r,
+                                                      u8 color_g, u8 color_b, float texcoord_x_f32, float texcoord_y_f32)
 {
   VRAMPixel color;
   bool transparent;
@@ -89,8 +115,14 @@ void ALWAYS_INLINE_RELEASE GPU_SW_Backend::ShadePixel(const GPUBackendDrawComman
   {
     // Apply texture window
     // TODO: Precompute the second half
-    texcoord_x = (texcoord_x & cmd->window.and_x) | cmd->window.or_x;
-    texcoord_y = (texcoord_y & cmd->window.and_y) | cmd->window.or_y;
+    //float texcoord_x = (texcoord_x & cmd->window.and_x) | cmd->window.or_x;
+    //float texcoord_y = (texcoord_y & cmd->window.and_y) | cmd->window.or_y;
+
+    //auto texcoord_x = ApplyUpscaledTextureWindow(cmd, FloatToIntegerCoord(texcoord_x_f32));
+    //auto texcoord_y = ApplyUpscaledTextureWindow(cmd, FloatToIntegerCoord(texcoord_y_f32));
+
+    auto texcoord_x = ApplyTextureWindow(cmd, FloatToIntegerCoord(texcoord_x_f32));
+    auto texcoord_y = ApplyTextureWindow(cmd, FloatToIntegerCoord(texcoord_y_f32));
 
     VRAMPixel texture_color;
     switch (cmd->draw_mode.texture_mode)
@@ -98,30 +130,30 @@ void ALWAYS_INLINE_RELEASE GPU_SW_Backend::ShadePixel(const GPUBackendDrawComman
       case GPUTextureMode::Palette4Bit:
       {
         const u16 palette_value =
-          GetPixel((cmd->draw_mode.GetTexturePageBaseX() + ZeroExtend32(texcoord_x / 4)) % VRAM_WIDTH,
-                   (cmd->draw_mode.GetTexturePageBaseY() + ZeroExtend32(texcoord_y)) % VRAM_HEIGHT);
+          GetPixel((cmd->draw_mode.GetTexturePageBaseX() + (texcoord_x / 4)) % VRAM_WIDTH,
+                   (cmd->draw_mode.GetTexturePageBaseY() + (texcoord_y)) % VRAM_HEIGHT);
         const u16 palette_index = (palette_value >> ((texcoord_x % 4) * 4)) & 0x0Fu;
 
         texture_color.bits =
-          GetPixel((cmd->palette.GetXBase() + ZeroExtend32(palette_index)) % VRAM_WIDTH, cmd->palette.GetYBase());
+          GetPixel((cmd->palette.GetXBase() + (palette_index)) % VRAM_WIDTH, cmd->palette.GetYBase());
       }
       break;
 
       case GPUTextureMode::Palette8Bit:
       {
         const u16 palette_value =
-          GetPixel((cmd->draw_mode.GetTexturePageBaseX() + ZeroExtend32(texcoord_x / 2)) % VRAM_WIDTH,
-                   (cmd->draw_mode.GetTexturePageBaseY() + ZeroExtend32(texcoord_y)) % VRAM_HEIGHT);
+          GetPixel((cmd->draw_mode.GetTexturePageBaseX() + (texcoord_x / 2)) % VRAM_WIDTH,
+                   (cmd->draw_mode.GetTexturePageBaseY() + (texcoord_y)) % VRAM_HEIGHT);
         const u16 palette_index = (palette_value >> ((texcoord_x % 2) * 8)) & 0xFFu;
         texture_color.bits =
-          GetPixel((cmd->palette.GetXBase() + ZeroExtend32(palette_index)) % VRAM_WIDTH, cmd->palette.GetYBase());
+          GetPixel((cmd->palette.GetXBase() + (palette_index)) % VRAM_WIDTH, cmd->palette.GetYBase());
       }
       break;
 
       default:
       {
-        texture_color.bits = GetPixel((cmd->draw_mode.GetTexturePageBaseX() + ZeroExtend32(texcoord_x)) % VRAM_WIDTH,
-                                      (cmd->draw_mode.GetTexturePageBaseY() + ZeroExtend32(texcoord_y)) % VRAM_HEIGHT);
+        texture_color.bits = GetPixel((cmd->draw_mode.GetTexturePageBaseX() + (texcoord_x)) % VRAM_WIDTH,
+                                      (cmd->draw_mode.GetTexturePageBaseY() + (texcoord_y)) % VRAM_HEIGHT);
       }
       break;
     }
@@ -158,7 +190,9 @@ void ALWAYS_INLINE_RELEASE GPU_SW_Backend::ShadePixel(const GPUBackendDrawComman
                  (ZeroExtend16(s_dither_lut[dither_y][dither_x][color_b]) << 10);
   }
 
-  const VRAMPixel bg_color{GetPixel(static_cast<u32>(x), static_cast<u32>(y))};
+  //const VRAMPixel bg_color{GetPixel(x, y)};
+  const VRAMPixel bg_color { UPRAM_ACCESSOR[VRAM_UPRENDER_SIZE_X * y + x] };
+
   if constexpr (transparency_enable)
   {
     if (transparent)
@@ -207,7 +241,8 @@ void ALWAYS_INLINE_RELEASE GPU_SW_Backend::ShadePixel(const GPUBackendDrawComman
   if ((bg_color.bits & mask_and) != 0)
     return;
 
-  SetPixel(static_cast<u32>(x), static_cast<u32>(y), color.bits | cmd->params.GetMaskOR());
+  UPRAM_ACCESSOR[VRAM_UPRENDER_SIZE_X * y + x] = (color.bits | cmd->params.GetMaskOR());
+  //SetPixel(static_cast<u32>(x), static_cast<u32>(y), color.bits | cmd->params.GetMaskOR());
 }
 
 template<bool texture_enable, bool raw_texture_enable, bool transparency_enable>
@@ -218,27 +253,36 @@ void GPU_SW_Backend::DrawRectangle(const GPUBackendDrawRectangleCommand* cmd)
   const auto [r, g, b] = UnpackColorRGB24(cmd->color);
   const auto [origin_texcoord_x, origin_texcoord_y] = UnpackTexcoord(cmd->texcoord);
 
-  for (u32 offset_y = 0; offset_y < cmd->height; offset_y++)
+  auto origin_x_up = origin_x * RESOLUTION_SCALE;
+  auto origin_y_up = origin_y * RESOLUTION_SCALE;
+
+  auto size_x_up = cmd->width  * RESOLUTION_SCALE;
+  auto size_y_up = cmd->height * RESOLUTION_SCALE;
+
+  for (int offset_y = 0; offset_y < size_y_up; offset_y++)
   {
-    const s32 y = origin_y + static_cast<s32>(offset_y);
-    if (y < static_cast<s32>(m_drawing_area.top) || y > static_cast<s32>(m_drawing_area.bottom) ||
-        (cmd->params.interlaced_rendering && cmd->params.active_line_lsb == (Truncate8(static_cast<u32>(y)) & 1u)))
+    const s32 y_up = origin_y_up + static_cast<s32>(offset_y);
+    if (y_up < static_cast<s32>(m_drawing_area.top * RESOLUTION_SCALE) || y_up > static_cast<s32>(m_drawing_area.bottom * RESOLUTION_SCALE) ||
+        (cmd->params.interlaced_rendering && cmd->params.active_line_lsb == (Truncate8(static_cast<u32>(y_up)) & 1u)))
     {
       continue;
     }
 
-    const u8 texcoord_y = Truncate8(ZeroExtend32(origin_texcoord_y) + offset_y);
+    const u8 texcoord_y = Truncate8(ZeroExtend32(origin_texcoord_y) + (offset_y / RESOLUTION_SCALE));
 
-    for (u32 offset_x = 0; offset_x < cmd->width; offset_x++)
+    for (int offset_x = 0; offset_x < size_x_up; offset_x++)
     {
-      const s32 x = origin_x + static_cast<s32>(offset_x);
-      if (x < static_cast<s32>(m_drawing_area.left) || x > static_cast<s32>(m_drawing_area.right))
+      const s32 x_up = origin_x_up + static_cast<s32>(offset_x);
+      if (x_up < static_cast<s32>(m_drawing_area.left * RESOLUTION_SCALE) || x_up > static_cast<s32>(m_drawing_area.right * RESOLUTION_SCALE))
         continue;
 
-      const u8 texcoord_x = Truncate8(ZeroExtend32(origin_texcoord_x) + offset_x);
+      // TODO: sub-pixel texture sampling?
+      // Not sure it matters unless we're using tex replacements, as PSX was very likely using 1:1 scale textures
+      // for rectangle draws.
+      const u8 texcoord_x = Truncate8(ZeroExtend32(origin_texcoord_x) + (offset_x / RESOLUTION_SCALE));
 
       ShadePixel<texture_enable, raw_texture_enable, transparency_enable, false>(
-        cmd, static_cast<u32>(x), static_cast<u32>(y), r, g, b, texcoord_x, texcoord_y);
+        cmd, static_cast<u32>(x_up), static_cast<u32>(y_up), r, g, b, texcoord_x, texcoord_y);
     }
   }
 }
@@ -249,7 +293,7 @@ void GPU_SW_Backend::DrawRectangle(const GPUBackendDrawRectangleCommand* cmd)
 
 #define COORD_FBS 12
 #define COORD_MF_INT(n) ((n) << COORD_FBS)
-#define COORD_POST_PADDING 12
+#define COORD_POST_PADDING 10
 
 static ALWAYS_INLINE_RELEASE s64 MakePolyXFP(s32 x)
 {
@@ -315,8 +359,8 @@ bool ALWAYS_INLINE_RELEASE GPU_SW_Backend::CalcIDeltas(i_deltas& idl, const GPUB
 #undef CALCIS
 }
 
-template<bool shading_enable, bool texture_enable>
-void ALWAYS_INLINE_RELEASE GPU_SW_Backend::AddIDeltas_DX(i_group& ig, const i_deltas& idl, u32 count /*= 1*/)
+template<bool shading_enable, bool texture_enable, typename I_GROUP>
+void ALWAYS_INLINE_RELEASE GPU_SW_Backend::AddIDeltas_DX(I_GROUP& ig, const i_deltas& idl, float count /*= 1*/)
 {
   if constexpr (shading_enable)
   {
@@ -332,8 +376,8 @@ void ALWAYS_INLINE_RELEASE GPU_SW_Backend::AddIDeltas_DX(i_group& ig, const i_de
   }
 }
 
-template<bool shading_enable, bool texture_enable>
-void ALWAYS_INLINE_RELEASE GPU_SW_Backend::AddIDeltas_DY(i_group& ig, const i_deltas& idl, u32 count /*= 1*/)
+template<bool shading_enable, bool texture_enable, typename I_GROUP>
+void ALWAYS_INLINE_RELEASE GPU_SW_Backend::AddIDeltas_DY(I_GROUP& ig, const i_deltas& idl, float count /*= 1*/)
 {
   if constexpr (shading_enable)
   {
@@ -349,112 +393,212 @@ void ALWAYS_INLINE_RELEASE GPU_SW_Backend::AddIDeltas_DY(i_group& ig, const i_de
   }
 }
 
+struct i_group_float
+{
+  float u, v;
+  float r, g, b;
+};
+
+#define USE_FLOAT_STEP 0
+#define USE_INT_STEP   1
+
 template<bool shading_enable, bool texture_enable, bool raw_texture_enable, bool transparency_enable,
          bool dithering_enable>
-void GPU_SW_Backend::DrawSpan(const GPUBackendDrawPolygonCommand* cmd, s32 y, s32 x_start, s32 x_bound, i_group ig,
+void GPU_SW_Backend::DrawSpan(const GPUBackendDrawPolygonCommand* cmd, s32 y_up, s32 x_start_up, s32 x_bound_up, i_group igi,
                               const i_deltas& idl)
 {
-  if (cmd->params.interlaced_rendering && cmd->params.active_line_lsb == (Truncate8(static_cast<u32>(y)) & 1u))
+  auto y_native       = y_up       / RESOLUTION_SCALE;
+  auto x_start_native = x_start_up / RESOLUTION_SCALE;
+  auto x_bound_native = x_bound_up / RESOLUTION_SCALE;
+
+  if (cmd->params.interlaced_rendering && cmd->params.active_line_lsb == (y_up & 1u))
     return;
 
-  s32 x_ig_adjust = x_start;
-  s32 w = x_bound - x_start;
-  s32 x = TruncateGPUVertexPosition(x_start);
+  s32 x_ig_adjust = x_start_up;
+  s32 w_native    = x_bound_native - x_start_native;
+  s32 w_up        = x_bound_up     - x_start_up;
+  s32 x_native    = SignExtendN<11, s32>(x_start_native);
+  s32 x_up        = SignExtendN<11 + RESOLUTION_SHIFT, s32>(x_start_up);
 
-  if (x < static_cast<s32>(m_drawing_area.left))
+  if (x_up < static_cast<s32>(m_drawing_area.left * RESOLUTION_SCALE))
   {
-    s32 delta = static_cast<s32>(m_drawing_area.left) - x;
-    x_ig_adjust += delta;
-    x += delta;
-    w -= delta;
+    s32 delta_up     = static_cast<s32>(m_drawing_area.left * RESOLUTION_SCALE) - x_up;
+    x_ig_adjust += delta_up;
+    x_up     += delta_up;
+    w_up     -= delta_up;
   }
 
-  if ((x + w) > (static_cast<s32>(m_drawing_area.right) + 1))
-    w = static_cast<s32>(m_drawing_area.right) + 1 - x;
+  if ((x_up + w_up) > (static_cast<s32>(m_drawing_area.right * RESOLUTION_SCALE) + 2))
+  {
+    w_up = static_cast<s32>(m_drawing_area.right * RESOLUTION_SCALE) + 2 - x_up;
+  }
 
-  if (w <= 0)
+  if (w_up <= 0)
     return;
 
-  AddIDeltas_DX<shading_enable, texture_enable>(ig, idl, x_ig_adjust);
-  AddIDeltas_DY<shading_enable, texture_enable>(ig, idl, y);
+#if 0
+  if (x_native < static_cast<s32>(m_drawing_area.left))
+  {
+    s32 delta_native = static_cast<s32>(m_drawing_area.left) - x_native;
+    x_native += delta_native;
+    w_native -= delta_native;
+  }
+
+  if ((x_native + w_native) > (static_cast<s32>(m_drawing_area.right) + 1))
+  {
+    w_native = (static_cast<s32>(m_drawing_area.right + 1))  - x_native;
+  }
+
+  if (w_native <= 0)
+    return;
+#endif
+
+#if USE_FLOAT_STEP
+  i_group_float igf = {};
+
+  igf.r = (float)igi.r / (1ll << (COORD_FBS + COORD_POST_PADDING));
+  igf.g = (float)igi.g / (1ll << (COORD_FBS + COORD_POST_PADDING));
+  igf.b = (float)igi.b / (1ll << (COORD_FBS + COORD_POST_PADDING));
+  igf.u = (float)igi.u / (1ll << (COORD_FBS + COORD_POST_PADDING));
+  igf.v = (float)igi.v / (1ll << (COORD_FBS + COORD_POST_PADDING));
+
+  float postpad_scalar = 1ll << (COORD_FBS + COORD_POST_PADDING + (SCALE_ALL_VERTEX ? 0 : RESOLUTION_SHIFT));
+
+  AddIDeltas_DX<shading_enable, texture_enable>(igf, idl, (float)x_ig_adjust / postpad_scalar);
+  AddIDeltas_DY<shading_enable, texture_enable>(igf, idl, (float)y_up        / postpad_scalar);
+#endif
+
+#if USE_INT_STEP
+  AddIDeltas_DX<shading_enable, texture_enable>(igi, idl, (float)x_ig_adjust / (SCALE_ALL_VERTEX ? 1 : RESOLUTION_SCALE));
+  AddIDeltas_DY<shading_enable, texture_enable>(igi, idl, (float)y_up        / (SCALE_ALL_VERTEX ? 1 : RESOLUTION_SCALE));
+#endif
 
   do
   {
-    const u32 r = ig.r >> (COORD_FBS + COORD_POST_PADDING);
-    const u32 g = ig.g >> (COORD_FBS + COORD_POST_PADDING);
-    const u32 b = ig.b >> (COORD_FBS + COORD_POST_PADDING);
-    const u32 u = ig.u >> (COORD_FBS + COORD_POST_PADDING);
-    const u32 v = ig.v >> (COORD_FBS + COORD_POST_PADDING);
+    Assert(x_up <= static_cast<s32>(m_drawing_area.right+1) * RESOLUTION_SCALE);
 
-    ShadePixel<texture_enable, raw_texture_enable, transparency_enable, dithering_enable>(
-      cmd, static_cast<u32>(x), static_cast<u32>(y), Truncate8(r), Truncate8(g), Truncate8(b), Truncate8(u),
-      Truncate8(v));
+#if USE_FLOAT_STEP
+    auto r = Truncate8((int)floorf(igf.r));
+    auto g = Truncate8((int)floorf(igf.g));
+    auto b = Truncate8((int)floorf(igf.b));
+    auto u = Truncate8((int)floorf(igf.u));
+    auto v = Truncate8((int)floorf(igf.v));
+#endif
 
-    x++;
-    AddIDeltas_DX<shading_enable, texture_enable>(ig, idl);
-  } while (--w > 0);
+#if USE_INT_STEP
+    auto ri = Truncate8(igi.r >> (COORD_FBS + COORD_POST_PADDING)); // + RESOLUTION_SHIFT);
+    auto gi = Truncate8(igi.g >> (COORD_FBS + COORD_POST_PADDING)); // + RESOLUTION_SHIFT);
+    auto bi = Truncate8(igi.b >> (COORD_FBS + COORD_POST_PADDING)); // + RESOLUTION_SHIFT);
+    auto ui = Truncate8(igi.u >> (COORD_FBS + COORD_POST_PADDING)); // + RESOLUTION_SHIFT);
+    auto vi = Truncate8(igi.v >> (COORD_FBS + COORD_POST_PADDING)); // + RESOLUTION_SHIFT);
+#endif
+
+    //Assert(r == ri && u == ui);
+    //Assert(g == gi && v == vi);
+    //Assert(b == bi);
+
+    // FIXME: also need to clip uprender right edge.
+    if (x_up >= 0) {
+      ShadePixel<texture_enable, raw_texture_enable, transparency_enable, dithering_enable>(
+        cmd, x_up, y_up,
+#if USE_INT_STEP
+        ri, gi, bi, ui, vi
+#else
+        r, g, b, u, v
+#endif
+      );
+    }
+    x_up++;
+
+#if USE_FLOAT_STEP
+    AddIDeltas_DX<shading_enable, texture_enable>(igf, idl, 1.0f / postpad_scalar);
+#endif
+
+#if USE_INT_STEP
+    AddIDeltas_DX<shading_enable, texture_enable>(igi, idl, 1.0f / (SCALE_ALL_VERTEX ? 1 : RESOLUTION_SCALE));
+#endif
+
+  } while (--w_up > 0);
 }
 
 template<bool shading_enable, bool texture_enable, bool raw_texture_enable, bool transparency_enable,
          bool dithering_enable>
 void GPU_SW_Backend::DrawTriangle(const GPUBackendDrawPolygonCommand* cmd,
-                                  const GPUBackendDrawPolygonCommand::Vertex* v0,
-                                  const GPUBackendDrawPolygonCommand::Vertex* v1,
-                                  const GPUBackendDrawPolygonCommand::Vertex* v2)
+                                  const GPUBackendDrawPolygonCommand::Vertex* v0n,
+                                  const GPUBackendDrawPolygonCommand::Vertex* v1n,
+                                  const GPUBackendDrawPolygonCommand::Vertex* v2n)
 {
   u32 core_vertex;
   {
     u32 cvtemp = 0;
 
-    if (v1->x <= v0->x)
+    if (v1n->x <= v0n->x)
     {
-      if (v2->x <= v1->x)
+      if (v2n->x <= v1n->x)
         cvtemp = (1 << 2);
       else
         cvtemp = (1 << 1);
     }
-    else if (v2->x < v0->x)
+    else if (v2n->x < v0n->x)
       cvtemp = (1 << 2);
     else
       cvtemp = (1 << 0);
 
-    if (v2->y < v1->y)
+    if (v2n->y < v1n->y)
     {
-      std::swap(v2, v1);
+      std::swap(v2n, v1n);
       cvtemp = ((cvtemp >> 1) & 0x2) | ((cvtemp << 1) & 0x4) | (cvtemp & 0x1);
     }
 
-    if (v1->y < v0->y)
+    if (v1n->y < v0n->y)
     {
-      std::swap(v1, v0);
+      std::swap(v1n, v0n);
       cvtemp = ((cvtemp >> 1) & 0x1) | ((cvtemp << 1) & 0x2) | (cvtemp & 0x4);
     }
 
-    if (v2->y < v1->y)
+    if (v2n->y < v1n->y)
     {
-      std::swap(v2, v1);
+      std::swap(v2n, v1n);
       cvtemp = ((cvtemp >> 1) & 0x2) | ((cvtemp << 1) & 0x4) | (cvtemp & 0x1);
     }
 
     core_vertex = cvtemp >> 1;
   }
 
-  if (v0->y == v2->y)
+  if (v0n->y == v2n->y)
     return;
 
-  if (static_cast<u32>(std::abs(v2->x - v0->x)) >= MAX_PRIMITIVE_WIDTH ||
-      static_cast<u32>(std::abs(v2->x - v1->x)) >= MAX_PRIMITIVE_WIDTH ||
-      static_cast<u32>(std::abs(v1->x - v0->x)) >= MAX_PRIMITIVE_WIDTH ||
-      static_cast<u32>(v2->y - v0->y) >= MAX_PRIMITIVE_HEIGHT)
+  if (static_cast<u32>(std::abs(v2n->x - v0n->x)) >= MAX_PRIMITIVE_WIDTH ||
+      static_cast<u32>(std::abs(v2n->x - v1n->x)) >= MAX_PRIMITIVE_WIDTH ||
+      static_cast<u32>(std::abs(v1n->x - v0n->x)) >= MAX_PRIMITIVE_WIDTH ||
+      static_cast<u32>(v2n->y - v0n->y) >= MAX_PRIMITIVE_HEIGHT)
   {
     return;
   }
 
-  s64 base_coord = MakePolyXFP(v0->x);
-  s64 base_step = MakePolyXFPStep((v2->x - v0->x), (v2->y - v0->y));
   s64 bound_coord_us;
   s64 bound_coord_ls;
   bool right_facing;
+
+  GPUBackendDrawPolygonCommand::Vertex up_v0 = *v0n;
+  GPUBackendDrawPolygonCommand::Vertex up_v1 = *v1n;
+  GPUBackendDrawPolygonCommand::Vertex up_v2 = *v2n;
+
+  GPUBackendDrawPolygonCommand::Vertex* v0 = &up_v0;
+  GPUBackendDrawPolygonCommand::Vertex* v1 = &up_v1;
+  GPUBackendDrawPolygonCommand::Vertex* v2 = &up_v2;
+
+#if SCALE_ALL_VERTEX
+  v0->x *= RESOLUTION_SCALE;
+  v0->y *= RESOLUTION_SCALE;
+  v1->x *= RESOLUTION_SCALE;
+  v1->y *= RESOLUTION_SCALE;
+  v2->x *= RESOLUTION_SCALE;
+  v2->y *= RESOLUTION_SCALE;
+#endif
+
+  s64 base_coord = MakePolyXFP(v0->x);
+  s64 base_step = MakePolyXFPStep((v2->x - v0->x), (v2->y - v0->y));
 
   if (v1->y == v0->y)
   {
@@ -477,17 +621,19 @@ void GPU_SW_Backend::DrawTriangle(const GPUBackendDrawPolygonCommand* cmd,
     return;
 
   const GPUBackendDrawPolygonCommand::Vertex* vertices[3] = {v0, v1, v2};
+  int upshift = SCALE_ALL_VERTEX ? RESOLUTION_SHIFT : 0;
+  int upmul = 1; //RESOLUTION_SCALE;
 
   i_group ig;
   if constexpr (texture_enable)
   {
-    ig.u = (COORD_MF_INT(vertices[core_vertex]->u) + (1 << (COORD_FBS - 1))) << COORD_POST_PADDING;
-    ig.v = (COORD_MF_INT(vertices[core_vertex]->v) + (1 << (COORD_FBS - 1))) << COORD_POST_PADDING;
+    ig.u = (COORD_MF_INT(vertices[core_vertex]->u * upmul) + (1 << (COORD_FBS - 1 - upshift))) << COORD_POST_PADDING;
+    ig.v = (COORD_MF_INT(vertices[core_vertex]->v * upmul) + (1 << (COORD_FBS - 1 - upshift))) << COORD_POST_PADDING;
   }
 
-  ig.r = (COORD_MF_INT(vertices[core_vertex]->r) + (1 << (COORD_FBS - 1))) << COORD_POST_PADDING;
-  ig.g = (COORD_MF_INT(vertices[core_vertex]->g) + (1 << (COORD_FBS - 1))) << COORD_POST_PADDING;
-  ig.b = (COORD_MF_INT(vertices[core_vertex]->b) + (1 << (COORD_FBS - 1))) << COORD_POST_PADDING;
+  ig.r = (COORD_MF_INT(vertices[core_vertex]->r * upmul) + (1 << (COORD_FBS - 1 - upshift))) << COORD_POST_PADDING;
+  ig.g = (COORD_MF_INT(vertices[core_vertex]->g * upmul) + (1 << (COORD_FBS - 1 - upshift))) << COORD_POST_PADDING;
+  ig.b = (COORD_MF_INT(vertices[core_vertex]->b * upmul) + (1 << (COORD_FBS - 1 - upshift))) << COORD_POST_PADDING;
 
   AddIDeltas_DX<shading_enable, texture_enable>(ig, idl, -vertices[core_vertex]->x);
   AddIDeltas_DY<shading_enable, texture_enable>(ig, idl, -vertices[core_vertex]->y);
@@ -536,13 +682,15 @@ void GPU_SW_Backend::DrawTriangle(const GPUBackendDrawPolygonCommand* cmd,
 
   for (u32 i = 0; i < 2; i++)
   {
-    s32 yi = tripart[i].y_coord;
-    s32 yb = tripart[i].y_bound;
+    auto scalar = SCALE_ALL_VERTEX ? 1 : RESOLUTION_SCALE;
 
-    u64 lc = tripart[i].x_coord[0];
+    s32 yi = tripart[i].y_coord * scalar;
+    s32 yb = tripart[i].y_bound * scalar;
+
+    u64 lc = tripart[i].x_coord[0] * scalar;
     u64 ls = tripart[i].x_step[0];
 
-    u64 rc = tripart[i].x_coord[1];
+    u64 rc = tripart[i].x_coord[1] * scalar;
     u64 rs = tripart[i].x_step[1];
 
     if (tripart[i].dec_mode)
@@ -553,12 +701,12 @@ void GPU_SW_Backend::DrawTriangle(const GPUBackendDrawPolygonCommand* cmd,
         lc -= ls;
         rc -= rs;
 
-        s32 y = TruncateGPUVertexPosition(yi);
+        s32 y = SignExtendN<11 + RESOLUTION_SHIFT, s32>(yi);
 
-        if (y < static_cast<s32>(m_drawing_area.top))
+        if (y < static_cast<s32>(m_drawing_area.top) * RESOLUTION_SCALE)
           break;
 
-        if (y > static_cast<s32>(m_drawing_area.bottom))
+        if (y > (static_cast<s32>(m_drawing_area.bottom) * RESOLUTION_SCALE) + 1)
           continue;
 
         DrawSpan<shading_enable, texture_enable, raw_texture_enable, transparency_enable, dithering_enable>(
@@ -569,14 +717,13 @@ void GPU_SW_Backend::DrawTriangle(const GPUBackendDrawPolygonCommand* cmd,
     {
       while (yi < yb)
       {
-        s32 y = TruncateGPUVertexPosition(yi);
+        s32 y = SignExtendN<11 + RESOLUTION_SHIFT, s32>(yi);
 
-        if (y > static_cast<s32>(m_drawing_area.bottom))
+        if (y > static_cast<s32>(m_drawing_area.bottom)* RESOLUTION_SCALE)
           break;
 
-        if (y >= static_cast<s32>(m_drawing_area.top))
+        if (y >= static_cast<s32>(m_drawing_area.top)* RESOLUTION_SCALE)
         {
-
           DrawSpan<shading_enable, texture_enable, raw_texture_enable, transparency_enable, dithering_enable>(
             cmd, yi, GetPolyXFP_Int(lc), GetPolyXFP_Int(rc), ig, idl);
         }
@@ -723,10 +870,22 @@ void GPU_SW_Backend::DrawLine(const GPUBackendDrawLineCommand* cmd, const GPUBac
       const u8 g = shading_enable ? static_cast<u8>(cur_point.g >> Line_RGB_FractBits) : p0->g;
       const u8 b = shading_enable ? static_cast<u8>(cur_point.b >> Line_RGB_FractBits) : p0->b;
 
-      ShadePixel<false, false, transparency_enable, dithering_enable>(cmd, static_cast<u32>(x), static_cast<u32>(y), r,
-                                                                      g, b, 0, 0);
-    }
+      // FIXME: this is sufficient for horizontal or vertical lines, but diaglonals will likely
+      // need more advanced heuristics or anti-aliasing to avoid looking ugly and/or causing unsightly
+      // coverage artifacts.
 
+      for (int yu=0; yu<RESOLUTION_SCALE; ++yu)
+      {
+        for (int xu=0; xu<RESOLUTION_SCALE; ++xu)
+        {
+          ShadePixel<false, false, transparency_enable, dithering_enable>(cmd,
+            static_cast<u32>((x * RESOLUTION_SCALE) + xu),
+            static_cast<u32>((y * RESOLUTION_SCALE) + yu),
+            r, g, b, 0, 0
+          );
+        }
+      }
+    }
     cur_point.x += step.dx_dk;
     cur_point.y += step.dy_dk;
 
@@ -770,46 +929,66 @@ GPU_SW_Backend::GetDrawRectangleFunction(bool texture_enable, bool raw_texture_e
 void GPU_SW_Backend::FillVRAM(u32 x, u32 y, u32 width, u32 height, u32 color, GPUBackendCommandParameters params)
 {
   const u16 color16 = VRAMRGBA8888ToRGBA5551(color);
-  if ((x + width) <= VRAM_WIDTH && !params.interlaced_rendering)
-  {
-    for (u32 yoffs = 0; yoffs < height; yoffs++)
-    {
-      const u32 row = (y + yoffs) % VRAM_HEIGHT;
-      std::fill_n(&m_vram_ptr[row * VRAM_WIDTH + x], width, color16);
-    }
-  }
-  else if (params.interlaced_rendering)
-  {
-    // Hardware tests show that fills seem to break on the first two lines when the offset matches the displayed field.
-    const u32 active_field = params.active_line_lsb;
-    for (u32 yoffs = 0; yoffs < height; yoffs++)
-    {
-      const u32 row = (y + yoffs) % VRAM_HEIGHT;
-      if ((row & u32(1)) == active_field)
-        continue;
 
-      u16* row_ptr = &m_vram_ptr[row * VRAM_WIDTH];
-      for (u32 xoffs = 0; xoffs < width; xoffs++)
+  if constexpr (RESOLUTION_SCALE == 1)
+  {
+    if ((x + width) <= VRAM_WIDTH && !params.interlaced_rendering)
+    {
+      for (u32 yoffs = 0; yoffs < height; yoffs++)
       {
-        const u32 col = (x + xoffs) % VRAM_WIDTH;
-        row_ptr[col] = color16;
+        const u32 row = (y + yoffs) % VRAM_HEIGHT;
+        std::fill_n(&UPRAM_ACCESSOR[row * VRAM_WIDTH + x], width, color16);
+      }
+    }
+    else if (params.interlaced_rendering)
+    {
+      // Hardware tests show that fills seem to break on the first two lines when the offset matches the displayed field.
+      const u32 active_field = params.active_line_lsb;
+      for (u32 yoffs = 0; yoffs < height; yoffs++)
+      {
+        const u32 row = (y + yoffs) % VRAM_HEIGHT;
+        if ((row & u32(1)) == active_field)
+          continue;
+           
+        u16* row_ptr = &UPRAM_ACCESSOR[row * VRAM_WIDTH];
+        for (u32 xoffs = 0; xoffs < width; xoffs++)
+        {
+          const u32 col = (x + xoffs) % VRAM_WIDTH;
+          row_ptr[col] = color16;
+        }
+      }
+    }
+    else
+    {
+      for (u32 yoffs = 0; yoffs < height; yoffs++)
+      {
+        const u32 row = (y + yoffs) % VRAM_HEIGHT;
+        u16* row_ptr = &UPRAM_ACCESSOR[row * VRAM_WIDTH];
+        for (u32 xoffs = 0; xoffs < width; xoffs++)
+        {
+          const u32 col = (x + xoffs) % VRAM_WIDTH;
+          row_ptr[col] = color16;
+        }
       }
     }
   }
   else
   {
+    const u32 active_field = params.active_line_lsb;
     for (u32 yoffs = 0; yoffs < height; yoffs++)
     {
-      const u32 row = (y + yoffs) % VRAM_HEIGHT;
-      u16* row_ptr = &m_vram_ptr[row * VRAM_WIDTH];
-      for (u32 xoffs = 0; xoffs < width; xoffs++)
+      for(u32 xoffs = 0; xoffs < width; xoffs++)
       {
-        const u32 col = (x + xoffs) % VRAM_WIDTH;
-        row_ptr[col] = color16;
+        const u32 row = (y + yoffs) % VRAM_HEIGHT;
+        if (params.interlaced_rendering && (row & u32(1)) == active_field)
+          continue;
+
+        SetPixel(x+xoffs, y+yoffs, color16);
       }
     }
   }
 }
+
 
 void GPU_SW_Backend::UpdateVRAM(u32 x, u32 y, u32 width, u32 height, const void* data,
                                 GPUBackendCommandParameters params)
@@ -818,12 +997,25 @@ void GPU_SW_Backend::UpdateVRAM(u32 x, u32 y, u32 width, u32 height, const void*
   if ((x + width) <= VRAM_WIDTH && (y + height) <= VRAM_HEIGHT && !params.IsMaskingEnabled())
   {
     const u16* src_ptr = static_cast<const u16*>(data);
-    u16* dst_ptr = &m_vram_ptr[y * VRAM_WIDTH + x];
-    for (u32 yoffs = 0; yoffs < height; yoffs++)
+    if constexpr (RESOLUTION_SCALE == 1)
     {
-      std::copy_n(src_ptr, width, dst_ptr);
-      src_ptr += width;
-      dst_ptr += VRAM_WIDTH;
+      u16* dst_ptr = &UPRAM_ACCESSOR[y * VRAM_WIDTH + x];
+      for (u32 yoffs = 0; yoffs < height; yoffs++)
+      {
+        std::copy_n(src_ptr, width, dst_ptr);
+        src_ptr += width;
+        dst_ptr += VRAM_WIDTH;
+      }
+    }
+    else
+    {
+      for (u32 yoffs = 0; yoffs < height; yoffs++)
+      {
+        for(u32 xoffs = 0; xoffs < width; xoffs++, src_ptr++)
+        {
+          SetPixel(x+xoffs, y+yoffs, src_ptr[0]);
+        }
+      }
     }
   }
   else
@@ -835,7 +1027,7 @@ void GPU_SW_Backend::UpdateVRAM(u32 x, u32 y, u32 width, u32 height, const void*
 
     for (u32 row = 0; row < height;)
     {
-      u16* dst_row_ptr = &m_vram_ptr[((y + row++) % VRAM_HEIGHT) * VRAM_WIDTH];
+      u16* dst_row_ptr = &UPRAM_ACCESSOR[((y + row++) % VRAM_HEIGHT) * VRAM_WIDTH];
       for (u32 col = 0; col < width;)
       {
         // TODO: Handle unaligned reads...
@@ -846,6 +1038,33 @@ void GPU_SW_Backend::UpdateVRAM(u32 x, u32 y, u32 width, u32 height, const void*
     }
   }
 }
+
+void GPU_SW_Backend::ReadVRAM(u32 x, u32 y, u32 width, u32 height)
+{
+  // copy from m_upram_ptr to m_vram_ptr using simple sparse read logic.
+
+  auto* shadow_ptr = GetVRAMshadowPtr();
+
+  for (u32 yoffs = 0; yoffs < height; yoffs++)
+  {
+    const u32 row = (y + yoffs) % VRAM_HEIGHT;
+    const u16* src = UPRAM_ACCESSOR + (row * VRAM_UPRENDER_SIZE_X);
+          u16* dst = shadow_ptr     + (row);
+    for (u32 xoffs = 0; xoffs < width; xoffs++)
+    {
+      const u32 col = (x + xoffs) % VRAM_WIDTH;
+      dst[col] = src[col * RESOLUTION_SCALE];
+    }
+  }
+
+}
+
+void GPU_SW_Backend::Sync(bool allow_sleep) 
+{
+  GPUBackend::Sync(allow_sleep);
+  ReadVRAM(0, 0, VRAM_WIDTH, VRAM_HEIGHT);
+}
+
 
 void GPU_SW_Backend::CopyVRAM(u32 src_x, u32 src_y, u32 dst_x, u32 dst_y, u32 width, u32 height,
                               GPUBackendCommandParameters params)
@@ -891,8 +1110,8 @@ void GPU_SW_Backend::CopyVRAM(u32 src_x, u32 src_y, u32 dst_x, u32 dst_y, u32 wi
   {
     for (u32 row = 0; row < height; row++)
     {
-      const u16* src_row_ptr = &m_vram_ptr[((src_y + row) % VRAM_HEIGHT) * VRAM_WIDTH];
-      u16* dst_row_ptr = &m_vram_ptr[((dst_y + row) % VRAM_HEIGHT) * VRAM_WIDTH];
+      const u16* src_row_ptr = &UPRAM_ACCESSOR[((src_y + row) % VRAM_HEIGHT) * VRAM_WIDTH];
+      u16* dst_row_ptr = &UPRAM_ACCESSOR[((dst_y + row) % VRAM_HEIGHT) * VRAM_WIDTH];
 
       for (s32 col = static_cast<s32>(width - 1); col >= 0; col--)
       {
@@ -907,8 +1126,8 @@ void GPU_SW_Backend::CopyVRAM(u32 src_x, u32 src_y, u32 dst_x, u32 dst_y, u32 wi
   {
     for (u32 row = 0; row < height; row++)
     {
-      const u16* src_row_ptr = &m_vram_ptr[((src_y + row) % VRAM_HEIGHT) * VRAM_WIDTH];
-      u16* dst_row_ptr = &m_vram_ptr[((dst_y + row) % VRAM_HEIGHT) * VRAM_WIDTH];
+      const u16* src_row_ptr = &UPRAM_ACCESSOR[((src_y + row) % VRAM_HEIGHT) * VRAM_WIDTH];
+      u16* dst_row_ptr = &UPRAM_ACCESSOR[((dst_y + row) % VRAM_HEIGHT) * VRAM_WIDTH];
 
       for (u32 col = 0; col < width; col++)
       {
@@ -924,3 +1143,7 @@ void GPU_SW_Backend::CopyVRAM(u32 src_x, u32 src_y, u32 dst_x, u32 dst_y, u32 wi
 void GPU_SW_Backend::FlushRender() {}
 
 void GPU_SW_Backend::DrawingAreaChanged() {}
+
+#ifdef _MSC_VER
+#pragma warning(pop)
+#endif

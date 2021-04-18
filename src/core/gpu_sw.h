@@ -16,6 +16,7 @@ public:
   ~GPU_SW() override;
 
   bool IsHardwareRenderer() const override;
+  u16* GetVRAMshadowPtr() override { return m_backend.GetVRAMshadowPtr(); }
 
   bool Initialize(HostDisplay* host_display) override;
   bool DoState(StateWrapper& sw, HostDisplayTexture** host_texture, bool update_display) override;

@@ -21,13 +21,13 @@ bool GPUBackend::Initialize()
 
 void GPUBackend::Reset(bool clear_vram)
 {
-  Sync();
+  Sync(true);
   m_drawing_area = {};
 }
 
 void GPUBackend::UpdateSettings()
 {
-  Sync();
+  Sync(true);
 
   if (m_use_gpu_thread != g_settings.gpu_use_thread)
   {
@@ -41,6 +41,12 @@ void GPUBackend::UpdateSettings()
 void GPUBackend::Shutdown()
 {
   StopGPUThread();
+}
+
+GPUBackendReadVRAMCommand* GPUBackend::NewReadVRAMCommand()
+{
+  return static_cast<GPUBackendReadVRAMCommand*>(
+    AllocateCommand(GPUBackendCommandType::ReadVRAM, sizeof(GPUBackendReadVRAMCommand)));
 }
 
 GPUBackendFillVRAMCommand* GPUBackend::NewFillVRAMCommand()
@@ -188,7 +194,7 @@ void GPUBackend::StopGPUThread()
   Log_InfoPrint("GPU thread stopped.");
 }
 
-void GPUBackend::Sync()
+void GPUBackend::Sync(bool allow_sleep)
 {
   if (!m_use_gpu_thread)
     return;
@@ -260,6 +266,14 @@ void GPUBackend::HandleCommand(const GPUBackendCommand* cmd)
 {
   switch (cmd->type)
   {
+    case GPUBackendCommandType::ReadVRAM:
+    {
+      FlushRender();
+      const auto* ccmd = static_cast<const GPUBackendReadVRAMCommand*>(cmd);
+      ReadVRAM(ZeroExtend32(ccmd->x), ZeroExtend32(ccmd->y), ZeroExtend32(ccmd->width), ZeroExtend32(ccmd->height));
+    }
+    break;
+
     case GPUBackendCommandType::FillVRAM:
     {
       FlushRender();
