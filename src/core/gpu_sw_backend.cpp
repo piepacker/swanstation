@@ -390,8 +390,8 @@ void GPU_SW_Backend::DrawSpan(const GPUBackendDrawPolygonCommand* cmd, s32 y_up,
   s32 x_ig_adjust = x_start_native;
   s32 w_native    = x_bound_native - x_start_native;
   s32 w_up        = x_bound_up     - x_start_up;
-  s32 x_native    = TruncateGPUVertexPosition(x_start_native);
-  s32 x_up        = TruncateGPUVertexPosition(x_start_up);
+  s32 x_native    = SignExtendN<11, s32>(x_start_native);
+  s32 x_up        = SignExtendN<11 + RESOLUTION_SHIFT, s32>(x_start_up);
 
   if (x_native < static_cast<s32>(m_drawing_area.left))
   {
@@ -408,7 +408,7 @@ void GPU_SW_Backend::DrawSpan(const GPUBackendDrawPolygonCommand* cmd, s32 y_up,
     return;
 
   AddIDeltas_DX<shading_enable, texture_enable>(ig, idl, x_ig_adjust);
-  AddIDeltas_DY<shading_enable, texture_enable>(ig, idl, (float)y_up / RESOLUTION_SCALE);
+  AddIDeltas_DY<shading_enable, texture_enable>(ig, idl, y_up / RESOLUTION_SCALE); // / RESOLUTION_SCALE);
 
   do
   {
@@ -509,17 +509,18 @@ void GPU_SW_Backend::DrawTriangle(const GPUBackendDrawPolygonCommand* cmd,
     return;
 
   const GPUBackendDrawPolygonCommand::Vertex* vertices[3] = {v0, v1, v2};
+  int upshift = 0;
 
   i_group ig;
   if constexpr (texture_enable)
   {
-    ig.u = (COORD_MF_INT(vertices[core_vertex]->u) + (1 << (COORD_FBS - 1))) << COORD_POST_PADDING;
-    ig.v = (COORD_MF_INT(vertices[core_vertex]->v) + (1 << (COORD_FBS - 1))) << COORD_POST_PADDING;
+    ig.u = (COORD_MF_INT(vertices[core_vertex]->u) + (1 << (COORD_FBS - 1 - upshift))) << COORD_POST_PADDING;
+    ig.v = (COORD_MF_INT(vertices[core_vertex]->v) + (1 << (COORD_FBS - 1 - upshift))) << COORD_POST_PADDING;
   }
 
-  ig.r = (COORD_MF_INT(vertices[core_vertex]->r) + (1 << (COORD_FBS - 1))) << COORD_POST_PADDING;
-  ig.g = (COORD_MF_INT(vertices[core_vertex]->g) + (1 << (COORD_FBS - 1))) << COORD_POST_PADDING;
-  ig.b = (COORD_MF_INT(vertices[core_vertex]->b) + (1 << (COORD_FBS - 1))) << COORD_POST_PADDING;
+  ig.r = (COORD_MF_INT(vertices[core_vertex]->r) + (1 << (COORD_FBS - 1 - upshift))) << COORD_POST_PADDING;
+  ig.g = (COORD_MF_INT(vertices[core_vertex]->g) + (1 << (COORD_FBS - 1 - upshift))) << COORD_POST_PADDING;
+  ig.b = (COORD_MF_INT(vertices[core_vertex]->b) + (1 << (COORD_FBS - 1 - upshift))) << COORD_POST_PADDING;
 
   AddIDeltas_DX<shading_enable, texture_enable>(ig, idl, -vertices[core_vertex]->x);
   AddIDeltas_DY<shading_enable, texture_enable>(ig, idl, -vertices[core_vertex]->y);
@@ -568,19 +569,14 @@ void GPU_SW_Backend::DrawTriangle(const GPUBackendDrawPolygonCommand* cmd,
 
   for (u32 i = 0; i < 2; i++)
   {
-    s32 yi = tripart[i].y_coord;
-    s32 yb = tripart[i].y_bound;
+    s32 yi = tripart[i].y_coord * RESOLUTION_SCALE;
+    s32 yb = tripart[i].y_bound * RESOLUTION_SCALE;
 
-    u64 lc = tripart[i].x_coord[0]; // * RESOLUTION_SCALE;
+    u64 lc = tripart[i].x_coord[0] * RESOLUTION_SCALE;
     u64 ls = tripart[i].x_step[0];
 
-    u64 rc = tripart[i].x_coord[1]; // * RESOLUTION_SCALE;
+    u64 rc = tripart[i].x_coord[1] * RESOLUTION_SCALE;
     u64 rs = tripart[i].x_step[1];
-
-    // jstine - from here we want to upscale and render.
-    
-    yi *= RESOLUTION_SCALE;
-    yb *= RESOLUTION_SCALE;
 
     if (tripart[i].dec_mode)
     {
@@ -590,49 +586,31 @@ void GPU_SW_Backend::DrawTriangle(const GPUBackendDrawPolygonCommand* cmd,
         lc -= ls;
         rc -= rs;
 
-        s32 y_native = TruncateGPUVertexPosition(yi / RESOLUTION_SCALE);
-        s32 y_up     = TruncateGPUVertexPosition(yi);
+        s32 y = SignExtendN<11 + RESOLUTION_SHIFT, s32>(yi);
 
-        if (y_up < static_cast<s32>(m_drawing_area.top * RESOLUTION_SCALE))
+        if (y < static_cast<s32>(m_drawing_area.top) * RESOLUTION_SCALE)
           break;
 
-        if (y_up > static_cast<s32>(m_drawing_area.bottom * RESOLUTION_SCALE))
-          continue;
-
-        if (y_native < static_cast<s32>(m_drawing_area.top))
-          break;
-
-        if (y_native > static_cast<s32>(m_drawing_area.bottom))
+        if (y > static_cast<s32>(m_drawing_area.bottom) * RESOLUTION_SCALE)
           continue;
 
         DrawSpan<shading_enable, texture_enable, raw_texture_enable, transparency_enable, dithering_enable>(
-          cmd, y_up, GetPolyXFP_Int(lc), GetPolyXFP_Int(rc), ig, idl);
+          cmd, yi, GetPolyXFP_Int(lc), GetPolyXFP_Int(rc), ig, idl);
       }
     }
     else
     {
       while (yi < yb)
       {
-        s32 y_native = TruncateGPUVertexPosition(yi / RESOLUTION_SCALE);
-        s32 y_up     = TruncateGPUVertexPosition(yi);
+        s32 y = SignExtendN<11 + RESOLUTION_SHIFT, s32>(yi);
 
-        if (y_up < static_cast<s32>(m_drawing_area.top * RESOLUTION_SCALE))
+        if (y > static_cast<s32>(m_drawing_area.bottom)* RESOLUTION_SCALE)
           break;
 
-        if (y_up > static_cast<s32>(m_drawing_area.bottom * RESOLUTION_SCALE))
-          continue;
-
-        if (y_native < static_cast<s32>(m_drawing_area.top))
-          break;
-
-        if (y_native > static_cast<s32>(m_drawing_area.bottom))
-          continue;
-
-        if (y_up >= static_cast<s32>(m_drawing_area.top * RESOLUTION_SCALE))
+        if (y >= static_cast<s32>(m_drawing_area.top)* RESOLUTION_SCALE)
         {
-
           DrawSpan<shading_enable, texture_enable, raw_texture_enable, transparency_enable, dithering_enable>(
-            cmd, y_up, GetPolyXFP_Int(lc), GetPolyXFP_Int(rc), ig, idl);
+            cmd, yi, GetPolyXFP_Int(lc), GetPolyXFP_Int(rc), ig, idl);
         }
 
         yi++;
