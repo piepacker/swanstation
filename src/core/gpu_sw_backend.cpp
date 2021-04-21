@@ -181,7 +181,9 @@ void ALWAYS_INLINE_RELEASE GPU_SW_Backend::ShadePixel(const GPUBackendDrawComman
                  (ZeroExtend16(s_dither_lut[dither_y][dither_x][color_b]) << 10);
   }
 
-  const VRAMPixel bg_color{GetPixel(x, y)};
+  //const VRAMPixel bg_color{GetPixel(x, y)};
+  const VRAMPixel bg_color { m_vram[VRAM_UPRENDER_SIZE_X * y + x] };
+
   if constexpr (transparency_enable)
   {
     if (transparent)
@@ -230,7 +232,8 @@ void ALWAYS_INLINE_RELEASE GPU_SW_Backend::ShadePixel(const GPUBackendDrawComman
   if ((bg_color.bits & mask_and) != 0)
     return;
 
-  SetPixel(static_cast<u32>(x), static_cast<u32>(y), color.bits | cmd->params.GetMaskOR());
+  m_vram[VRAM_UPRENDER_SIZE_X * y + x] = (color.bits | cmd->params.GetMaskOR());
+  //SetPixel(static_cast<u32>(x), static_cast<u32>(y), color.bits | cmd->params.GetMaskOR());
 }
 
 template<bool texture_enable, bool raw_texture_enable, bool transparency_enable>
@@ -568,11 +571,16 @@ void GPU_SW_Backend::DrawTriangle(const GPUBackendDrawPolygonCommand* cmd,
     s32 yi = tripart[i].y_coord;
     s32 yb = tripart[i].y_bound;
 
-    u64 lc = tripart[i].x_coord[0];
+    u64 lc = tripart[i].x_coord[0]; // * RESOLUTION_SCALE;
     u64 ls = tripart[i].x_step[0];
 
-    u64 rc = tripart[i].x_coord[1];
+    u64 rc = tripart[i].x_coord[1]; // * RESOLUTION_SCALE;
     u64 rs = tripart[i].x_step[1];
+
+    // jstine - from here we want to upscale and render.
+    
+    yi *= RESOLUTION_SCALE;
+    yb *= RESOLUTION_SCALE;
 
     if (tripart[i].dec_mode)
     {
@@ -582,32 +590,49 @@ void GPU_SW_Backend::DrawTriangle(const GPUBackendDrawPolygonCommand* cmd,
         lc -= ls;
         rc -= rs;
 
-        s32 y = TruncateGPUVertexPosition(yi);
+        s32 y_native = TruncateGPUVertexPosition(yi / RESOLUTION_SCALE);
+        s32 y_up     = TruncateGPUVertexPosition(yi);
 
-        if (y < static_cast<s32>(m_drawing_area.top))
+        if (y_up < static_cast<s32>(m_drawing_area.top * RESOLUTION_SCALE))
           break;
 
-        if (y > static_cast<s32>(m_drawing_area.bottom))
+        if (y_up > static_cast<s32>(m_drawing_area.bottom * RESOLUTION_SCALE))
+          continue;
+
+        if (y_native < static_cast<s32>(m_drawing_area.top))
+          break;
+
+        if (y_native > static_cast<s32>(m_drawing_area.bottom))
           continue;
 
         DrawSpan<shading_enable, texture_enable, raw_texture_enable, transparency_enable, dithering_enable>(
-          cmd, yi, GetPolyXFP_Int(lc), GetPolyXFP_Int(rc), ig, idl);
+          cmd, y_up, GetPolyXFP_Int(lc), GetPolyXFP_Int(rc), ig, idl);
       }
     }
     else
     {
       while (yi < yb)
       {
-        s32 y = TruncateGPUVertexPosition(yi);
+        s32 y_native = TruncateGPUVertexPosition(yi / RESOLUTION_SCALE);
+        s32 y_up     = TruncateGPUVertexPosition(yi);
 
-        if (y > static_cast<s32>(m_drawing_area.bottom))
+        if (y_up < static_cast<s32>(m_drawing_area.top * RESOLUTION_SCALE))
           break;
 
-        if (y >= static_cast<s32>(m_drawing_area.top))
+        if (y_up > static_cast<s32>(m_drawing_area.bottom * RESOLUTION_SCALE))
+          continue;
+
+        if (y_native < static_cast<s32>(m_drawing_area.top))
+          break;
+
+        if (y_native > static_cast<s32>(m_drawing_area.bottom))
+          continue;
+
+        if (y_up >= static_cast<s32>(m_drawing_area.top * RESOLUTION_SCALE))
         {
 
           DrawSpan<shading_enable, texture_enable, raw_texture_enable, transparency_enable, dithering_enable>(
-            cmd, yi, GetPolyXFP_Int(lc), GetPolyXFP_Int(rc), ig, idl);
+            cmd, y_up, GetPolyXFP_Int(lc), GetPolyXFP_Int(rc), ig, idl);
         }
 
         yi++;

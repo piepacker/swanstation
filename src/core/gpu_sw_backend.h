@@ -4,7 +4,8 @@
 #include <memory>
 #include <vector>
 
-static const int RESOLUTION_SCALE = 2;
+static const int RESOLUTION_SHIFT = 1;
+static const int RESOLUTION_SCALE = (1 << RESOLUTION_SHIFT);
 static const int VRAM_UPRENDER_SIZE_X = VRAM_WIDTH  * RESOLUTION_SCALE; //RESOLUTION_SCALE;
 static const int VRAM_UPRENDER_SIZE_Y = VRAM_HEIGHT * RESOLUTION_SCALE; //RESOLUTION_SCALE;
 
