@@ -275,7 +275,7 @@ void GPU_SW_Backend::DrawRectangle(const GPUBackendDrawRectangleCommand* cmd)
 
 #define COORD_FBS 12
 #define COORD_MF_INT(n) ((n) << COORD_FBS)
-#define COORD_POST_PADDING 12
+#define COORD_POST_PADDING 10
 
 static ALWAYS_INLINE_RELEASE s64 MakePolyXFP(s32 x)
 {
@@ -387,7 +387,7 @@ void GPU_SW_Backend::DrawSpan(const GPUBackendDrawPolygonCommand* cmd, s32 y_up,
   if (cmd->params.interlaced_rendering && cmd->params.active_line_lsb == (y_native & 1u))
     return;
 
-  s32 x_ig_adjust = x_start_native;
+  s32 x_ig_adjust = x_start_up;
   s32 w_native    = x_bound_native - x_start_native;
   s32 w_up        = x_bound_up     - x_start_up;
   s32 x_native    = SignExtendN<11, s32>(x_start_native);
@@ -395,10 +395,11 @@ void GPU_SW_Backend::DrawSpan(const GPUBackendDrawPolygonCommand* cmd, s32 y_up,
 
   if (x_native < static_cast<s32>(m_drawing_area.left))
   {
-    s32 delta = static_cast<s32>(m_drawing_area.left) - x_native;
-    x_ig_adjust += delta;
-    x_native += delta;
-    w_native -= delta;
+    s32 delta_native = static_cast<s32>(m_drawing_area.left) - x_native;
+    s32 delta_up     = static_cast<s32>(m_drawing_area.left * RESOLUTION_SCALE) - x_up;
+    x_ig_adjust += delta_up;
+    x_native += delta_native;
+    w_native -= delta_native;
   }
 
   if ((x_native + w_native) > (static_cast<s32>(m_drawing_area.right) + 1))
@@ -407,8 +408,8 @@ void GPU_SW_Backend::DrawSpan(const GPUBackendDrawPolygonCommand* cmd, s32 y_up,
   if (w_native <= 0)
     return;
 
-  AddIDeltas_DX<shading_enable, texture_enable>(ig, idl, x_ig_adjust);
-  AddIDeltas_DY<shading_enable, texture_enable>(ig, idl, y_up / RESOLUTION_SCALE); // / RESOLUTION_SCALE);
+  AddIDeltas_DX<shading_enable, texture_enable>(ig, idl, (float)x_ig_adjust / RESOLUTION_SCALE);
+  AddIDeltas_DY<shading_enable, texture_enable>(ig, idl, (float)y_up        / RESOLUTION_SCALE);
 
   do
   {
