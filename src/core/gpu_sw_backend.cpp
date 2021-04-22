@@ -112,8 +112,11 @@ void ALWAYS_INLINE_RELEASE GPU_SW_Backend::ShadePixel(const GPUBackendDrawComman
     //float texcoord_x = (texcoord_x & cmd->window.and_x) | cmd->window.or_x;
     //float texcoord_y = (texcoord_y & cmd->window.and_y) | cmd->window.or_y;
 
-    auto texcoord_x = ApplyUpscaledTextureWindow(cmd, FloatToIntegerCoord(texcoord_x_f32));
-    auto texcoord_y = ApplyUpscaledTextureWindow(cmd, FloatToIntegerCoord(texcoord_y_f32));
+    //auto texcoord_x = ApplyUpscaledTextureWindow(cmd, FloatToIntegerCoord(texcoord_x_f32));
+    //auto texcoord_y = ApplyUpscaledTextureWindow(cmd, FloatToIntegerCoord(texcoord_y_f32));
+
+    auto texcoord_x = ApplyTextureWindow(cmd, FloatToIntegerCoord(texcoord_x_f32));
+    auto texcoord_y = ApplyTextureWindow(cmd, FloatToIntegerCoord(texcoord_y_f32));
 
     VRAMPixel texture_color;
     switch (cmd->draw_mode.texture_mode)
@@ -384,7 +387,7 @@ void GPU_SW_Backend::DrawSpan(const GPUBackendDrawPolygonCommand* cmd, s32 y_up,
   auto x_start_native = x_start_up / RESOLUTION_SCALE;
   auto x_bound_native = x_bound_up / RESOLUTION_SCALE;
 
-  if (cmd->params.interlaced_rendering && cmd->params.active_line_lsb == (y_native & 1u))
+  if (cmd->params.interlaced_rendering && cmd->params.active_line_lsb == (y_up & 1u))
     return;
 
   s32 x_ig_adjust = x_start_up;
@@ -398,6 +401,7 @@ void GPU_SW_Backend::DrawSpan(const GPUBackendDrawPolygonCommand* cmd, s32 y_up,
     s32 delta_native = static_cast<s32>(m_drawing_area.left) - x_native;
     s32 delta_up     = static_cast<s32>(m_drawing_area.left * RESOLUTION_SCALE) - x_up;
     x_ig_adjust += delta_up;
+    x_up     += delta_up;
     x_native += delta_native;
     w_native -= delta_native;
   }
@@ -413,16 +417,18 @@ void GPU_SW_Backend::DrawSpan(const GPUBackendDrawPolygonCommand* cmd, s32 y_up,
 
   do
   {
-    const u32 r = ig.r >> (COORD_FBS + COORD_POST_PADDING);
-    const u32 g = ig.g >> (COORD_FBS + COORD_POST_PADDING);
-    const u32 b = ig.b >> (COORD_FBS + COORD_POST_PADDING);
-    const u32 u = ig.u >> (COORD_FBS + COORD_POST_PADDING);
-    const u32 v = ig.v >> (COORD_FBS + COORD_POST_PADDING);
+    const u32 r = ig.r >> (COORD_FBS + COORD_POST_PADDING); // + RESOLUTION_SHIFT);
+    const u32 g = ig.g >> (COORD_FBS + COORD_POST_PADDING); // + RESOLUTION_SHIFT);
+    const u32 b = ig.b >> (COORD_FBS + COORD_POST_PADDING); // + RESOLUTION_SHIFT);
+    const u32 u = ig.u >> (COORD_FBS + COORD_POST_PADDING); // + RESOLUTION_SHIFT);
+    const u32 v = ig.v >> (COORD_FBS + COORD_POST_PADDING); // + RESOLUTION_SHIFT);
 
-    ShadePixel<texture_enable, raw_texture_enable, transparency_enable, dithering_enable>(
-      cmd, x_up, y_up, Truncate8(r), Truncate8(g), Truncate8(b), Truncate8(u),
-      Truncate8(v));
-
+    // FIXME: also need to clip uprender right edge.
+    if (x_up >= 0) {
+      ShadePixel<texture_enable, raw_texture_enable, transparency_enable, dithering_enable>(
+        cmd, x_up, y_up, Truncate8(r), Truncate8(g), Truncate8(b), Truncate8(u),
+        Truncate8(v));
+    }
     x_up++;
     AddIDeltas_DX<shading_enable, texture_enable>(ig, idl, 1.0f / RESOLUTION_SCALE);
   } while (--w_up > 0);
@@ -511,17 +517,18 @@ void GPU_SW_Backend::DrawTriangle(const GPUBackendDrawPolygonCommand* cmd,
 
   const GPUBackendDrawPolygonCommand::Vertex* vertices[3] = {v0, v1, v2};
   int upshift = 0;
+  int upmul = 1; //RESOLUTION_SCALE;
 
   i_group ig;
   if constexpr (texture_enable)
   {
-    ig.u = (COORD_MF_INT(vertices[core_vertex]->u) + (1 << (COORD_FBS - 1 - upshift))) << COORD_POST_PADDING;
-    ig.v = (COORD_MF_INT(vertices[core_vertex]->v) + (1 << (COORD_FBS - 1 - upshift))) << COORD_POST_PADDING;
+    ig.u = (COORD_MF_INT(vertices[core_vertex]->u * upmul) + (1 << (COORD_FBS - 1 - upshift))) << COORD_POST_PADDING;
+    ig.v = (COORD_MF_INT(vertices[core_vertex]->v * upmul) + (1 << (COORD_FBS - 1 - upshift))) << COORD_POST_PADDING;
   }
 
-  ig.r = (COORD_MF_INT(vertices[core_vertex]->r) + (1 << (COORD_FBS - 1 - upshift))) << COORD_POST_PADDING;
-  ig.g = (COORD_MF_INT(vertices[core_vertex]->g) + (1 << (COORD_FBS - 1 - upshift))) << COORD_POST_PADDING;
-  ig.b = (COORD_MF_INT(vertices[core_vertex]->b) + (1 << (COORD_FBS - 1 - upshift))) << COORD_POST_PADDING;
+  ig.r = (COORD_MF_INT(vertices[core_vertex]->r * upmul) + (1 << (COORD_FBS - 1 - upshift))) << COORD_POST_PADDING;
+  ig.g = (COORD_MF_INT(vertices[core_vertex]->g * upmul) + (1 << (COORD_FBS - 1 - upshift))) << COORD_POST_PADDING;
+  ig.b = (COORD_MF_INT(vertices[core_vertex]->b * upmul) + (1 << (COORD_FBS - 1 - upshift))) << COORD_POST_PADDING;
 
   AddIDeltas_DX<shading_enable, texture_enable>(ig, idl, -vertices[core_vertex]->x);
   AddIDeltas_DY<shading_enable, texture_enable>(ig, idl, -vertices[core_vertex]->y);
