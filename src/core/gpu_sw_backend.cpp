@@ -247,27 +247,36 @@ void GPU_SW_Backend::DrawRectangle(const GPUBackendDrawRectangleCommand* cmd)
   const auto [r, g, b] = UnpackColorRGB24(cmd->color);
   const auto [origin_texcoord_x, origin_texcoord_y] = UnpackTexcoord(cmd->texcoord);
 
-  for (u32 offset_y = 0; offset_y < cmd->height; offset_y++)
+  auto origin_x_up = origin_x * RESOLUTION_SCALE;
+  auto origin_y_up = origin_y * RESOLUTION_SCALE;
+
+  auto size_x_up = cmd->width  * RESOLUTION_SCALE;
+  auto size_y_up = cmd->height * RESOLUTION_SCALE;
+
+  for (u32 offset_y = 0; offset_y < size_y_up; offset_y++)
   {
-    const s32 y = origin_y + static_cast<s32>(offset_y);
-    if (y < static_cast<s32>(m_drawing_area.top) || y > static_cast<s32>(m_drawing_area.bottom) ||
-        (cmd->params.interlaced_rendering && cmd->params.active_line_lsb == (Truncate8(static_cast<u32>(y)) & 1u)))
+    const s32 y_up = origin_y_up + static_cast<s32>(offset_y);
+    if (y_up < static_cast<s32>(m_drawing_area.top * RESOLUTION_SCALE) || y_up > static_cast<s32>(m_drawing_area.bottom * RESOLUTION_SCALE) ||
+        (cmd->params.interlaced_rendering && cmd->params.active_line_lsb == (Truncate8(static_cast<u32>(y_up)) & 1u)))
     {
       continue;
     }
 
-    const u8 texcoord_y = Truncate8(ZeroExtend32(origin_texcoord_y) + offset_y);
+    const u8 texcoord_y = Truncate8(ZeroExtend32(origin_texcoord_y) + (offset_y / RESOLUTION_SCALE));
 
-    for (u32 offset_x = 0; offset_x < cmd->width; offset_x++)
+    for (u32 offset_x = 0; offset_x < size_x_up; offset_x++)
     {
-      const s32 x = origin_x + static_cast<s32>(offset_x);
-      if (x < static_cast<s32>(m_drawing_area.left) || x > static_cast<s32>(m_drawing_area.right))
+      const s32 x_up = origin_x_up + static_cast<s32>(offset_x);
+      if (x_up < static_cast<s32>(m_drawing_area.left * RESOLUTION_SCALE) || x_up > static_cast<s32>(m_drawing_area.right * RESOLUTION_SCALE))
         continue;
 
-      const u8 texcoord_x = Truncate8(ZeroExtend32(origin_texcoord_x) + offset_x);
+      // TODO: sub-pixel texture sampling?
+      // Not sure it matters unless we're using tex replacements, as PSX was very likely using 1:1 scale textures
+      // for rectangle draws.
+      const u8 texcoord_x = Truncate8(ZeroExtend32(origin_texcoord_x) + (offset_x / RESOLUTION_SCALE));
 
       ShadePixel<texture_enable, raw_texture_enable, transparency_enable, false>(
-        cmd, static_cast<u32>(x), static_cast<u32>(y), r, g, b, texcoord_x, texcoord_y);
+        cmd, static_cast<u32>(x_up), static_cast<u32>(y_up), r, g, b, texcoord_x, texcoord_y);
     }
   }
 }
@@ -396,27 +405,45 @@ void GPU_SW_Backend::DrawSpan(const GPUBackendDrawPolygonCommand* cmd, s32 y_up,
   s32 x_native    = SignExtendN<11, s32>(x_start_native);
   s32 x_up        = SignExtendN<11 + RESOLUTION_SHIFT, s32>(x_start_up);
 
-  if (x_native < static_cast<s32>(m_drawing_area.left))
+  if (x_up < static_cast<s32>(m_drawing_area.left * RESOLUTION_SCALE))
   {
-    s32 delta_native = static_cast<s32>(m_drawing_area.left) - x_native;
     s32 delta_up     = static_cast<s32>(m_drawing_area.left * RESOLUTION_SCALE) - x_up;
     x_ig_adjust += delta_up;
     x_up     += delta_up;
+    w_up     -= delta_up;
+  }
+
+  if ((x_up + w_up) > (static_cast<s32>(m_drawing_area.right * RESOLUTION_SCALE) + 1))
+  {
+    w_up = static_cast<s32>(m_drawing_area.right * RESOLUTION_SCALE) + 1 - x_up;
+  }
+
+  if (w_up <= 0)
+    return;
+
+#if 0
+  if (x_native < static_cast<s32>(m_drawing_area.left))
+  {
+    s32 delta_native = static_cast<s32>(m_drawing_area.left) - x_native;
     x_native += delta_native;
     w_native -= delta_native;
   }
 
   if ((x_native + w_native) > (static_cast<s32>(m_drawing_area.right) + 1))
-    w_native = static_cast<s32>(m_drawing_area.right) + 1 - x_native;
+  {
+    w_native = (static_cast<s32>(m_drawing_area.right + 1))  - x_native;
+  }
 
   if (w_native <= 0)
     return;
+#endif
 
   AddIDeltas_DX<shading_enable, texture_enable>(ig, idl, (float)x_ig_adjust / RESOLUTION_SCALE);
   AddIDeltas_DY<shading_enable, texture_enable>(ig, idl, (float)y_up        / RESOLUTION_SCALE);
 
   do
   {
+    Assert(x_up <= static_cast<s32>(m_drawing_area.right+1) * RESOLUTION_SCALE);
     const u32 r = ig.r >> (COORD_FBS + COORD_POST_PADDING); // + RESOLUTION_SHIFT);
     const u32 g = ig.g >> (COORD_FBS + COORD_POST_PADDING); // + RESOLUTION_SHIFT);
     const u32 b = ig.b >> (COORD_FBS + COORD_POST_PADDING); // + RESOLUTION_SHIFT);
