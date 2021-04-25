@@ -157,11 +157,11 @@ protected:
   bool CalcIDeltas(i_deltas& idl, const GPUBackendDrawPolygonCommand::Vertex* A,
                    const GPUBackendDrawPolygonCommand::Vertex* B, const GPUBackendDrawPolygonCommand::Vertex* C);
 
-  template<bool shading_enable, bool texture_enable>
-  void AddIDeltas_DX(i_group& ig, const i_deltas& idl, float count = 1);
+  template<bool shading_enable, bool texture_enable, typename I_GROUP>
+  void AddIDeltas_DX(I_GROUP& ig, const i_deltas& idl, float count = 1);
 
-  template<bool shading_enable, bool texture_enable>
-  void AddIDeltas_DY(i_group& ig, const i_deltas& idl, float count = 1);
+  template<bool shading_enable, bool texture_enable, typename I_GROUP>
+  void AddIDeltas_DY(I_GROUP& ig, const i_deltas& idl, float count = 1);
 
   template<bool shading_enable, bool texture_enable, bool raw_texture_enable, bool transparency_enable,
            bool dithering_enable>

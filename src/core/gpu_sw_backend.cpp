@@ -7,6 +7,11 @@
 #include <algorithm>
 Log_SetChannel(GPU_SW_Backend);
 
+#ifdef _MSC_VER
+#pragma warning(push)
+#pragma warning(disable : 4244) // warning C4324: 'GPUBackend': structure was padded due to alignment specifier
+#endif
+
 GPU_SW_Backend::GPU_SW_Backend() : GPUBackend()
 {
   m_vram.fill(0);
@@ -253,7 +258,7 @@ void GPU_SW_Backend::DrawRectangle(const GPUBackendDrawRectangleCommand* cmd)
   auto size_x_up = cmd->width  * RESOLUTION_SCALE;
   auto size_y_up = cmd->height * RESOLUTION_SCALE;
 
-  for (u32 offset_y = 0; offset_y < size_y_up; offset_y++)
+  for (int offset_y = 0; offset_y < size_y_up; offset_y++)
   {
     const s32 y_up = origin_y_up + static_cast<s32>(offset_y);
     if (y_up < static_cast<s32>(m_drawing_area.top * RESOLUTION_SCALE) || y_up > static_cast<s32>(m_drawing_area.bottom * RESOLUTION_SCALE) ||
@@ -264,7 +269,7 @@ void GPU_SW_Backend::DrawRectangle(const GPUBackendDrawRectangleCommand* cmd)
 
     const u8 texcoord_y = Truncate8(ZeroExtend32(origin_texcoord_y) + (offset_y / RESOLUTION_SCALE));
 
-    for (u32 offset_x = 0; offset_x < size_x_up; offset_x++)
+    for (int offset_x = 0; offset_x < size_x_up; offset_x++)
     {
       const s32 x_up = origin_x_up + static_cast<s32>(offset_x);
       if (x_up < static_cast<s32>(m_drawing_area.left * RESOLUTION_SCALE) || x_up > static_cast<s32>(m_drawing_area.right * RESOLUTION_SCALE))
@@ -353,8 +358,8 @@ bool ALWAYS_INLINE_RELEASE GPU_SW_Backend::CalcIDeltas(i_deltas& idl, const GPUB
 #undef CALCIS
 }
 
-template<bool shading_enable, bool texture_enable>
-void ALWAYS_INLINE_RELEASE GPU_SW_Backend::AddIDeltas_DX(i_group& ig, const i_deltas& idl, float count /*= 1*/)
+template<bool shading_enable, bool texture_enable, typename I_GROUP>
+void ALWAYS_INLINE_RELEASE GPU_SW_Backend::AddIDeltas_DX(I_GROUP& ig, const i_deltas& idl, float count /*= 1*/)
 {
   if constexpr (shading_enable)
   {
@@ -370,8 +375,8 @@ void ALWAYS_INLINE_RELEASE GPU_SW_Backend::AddIDeltas_DX(i_group& ig, const i_de
   }
 }
 
-template<bool shading_enable, bool texture_enable>
-void ALWAYS_INLINE_RELEASE GPU_SW_Backend::AddIDeltas_DY(i_group& ig, const i_deltas& idl, float count /*= 1*/)
+template<bool shading_enable, bool texture_enable, typename I_GROUP>
+void ALWAYS_INLINE_RELEASE GPU_SW_Backend::AddIDeltas_DY(I_GROUP& ig, const i_deltas& idl, float count /*= 1*/)
 {
   if constexpr (shading_enable)
   {
@@ -387,9 +392,18 @@ void ALWAYS_INLINE_RELEASE GPU_SW_Backend::AddIDeltas_DY(i_group& ig, const i_de
   }
 }
 
+struct i_group_float
+{
+  float u, v;
+  float r, g, b;
+};
+
+#define USE_FLOAT_STEP 1
+#define USE_INT_STEP   0
+
 template<bool shading_enable, bool texture_enable, bool raw_texture_enable, bool transparency_enable,
          bool dithering_enable>
-void GPU_SW_Backend::DrawSpan(const GPUBackendDrawPolygonCommand* cmd, s32 y_up, s32 x_start_up, s32 x_bound_up, i_group ig,
+void GPU_SW_Backend::DrawSpan(const GPUBackendDrawPolygonCommand* cmd, s32 y_up, s32 x_start_up, s32 x_bound_up, i_group igi,
                               const i_deltas& idl)
 {
   auto y_native       = y_up       / RESOLUTION_SCALE;
@@ -438,26 +452,71 @@ void GPU_SW_Backend::DrawSpan(const GPUBackendDrawPolygonCommand* cmd, s32 y_up,
     return;
 #endif
 
-  AddIDeltas_DX<shading_enable, texture_enable>(ig, idl, (float)x_ig_adjust / RESOLUTION_SCALE);
-  AddIDeltas_DY<shading_enable, texture_enable>(ig, idl, (float)y_up        / RESOLUTION_SCALE);
+#if USE_FLOAT_STEP
+  i_group_float igf = {};
+
+  igf.r = (float)igi.r / (1ll << (COORD_FBS + COORD_POST_PADDING));
+  igf.g = (float)igi.g / (1ll << (COORD_FBS + COORD_POST_PADDING));
+  igf.b = (float)igi.b / (1ll << (COORD_FBS + COORD_POST_PADDING));
+  igf.u = (float)igi.u / (1ll << (COORD_FBS + COORD_POST_PADDING));
+  igf.v = (float)igi.v / (1ll << (COORD_FBS + COORD_POST_PADDING));
+
+  float postpad_scalar = 1ll << (COORD_FBS + COORD_POST_PADDING + RESOLUTION_SHIFT);
+
+  AddIDeltas_DX<shading_enable, texture_enable>(igf, idl, (float)x_ig_adjust / postpad_scalar);
+  AddIDeltas_DY<shading_enable, texture_enable>(igf, idl, (float)y_up        / postpad_scalar);
+#endif
+
+#if USE_INT_STEP
+  AddIDeltas_DX<shading_enable, texture_enable>(igi, idl, (float)x_ig_adjust / RESOLUTION_SCALE);
+  AddIDeltas_DY<shading_enable, texture_enable>(igi, idl, (float)y_up        / RESOLUTION_SCALE);
+#endif
 
   do
   {
     Assert(x_up <= static_cast<s32>(m_drawing_area.right+1) * RESOLUTION_SCALE);
-    const u32 r = ig.r >> (COORD_FBS + COORD_POST_PADDING); // + RESOLUTION_SHIFT);
-    const u32 g = ig.g >> (COORD_FBS + COORD_POST_PADDING); // + RESOLUTION_SHIFT);
-    const u32 b = ig.b >> (COORD_FBS + COORD_POST_PADDING); // + RESOLUTION_SHIFT);
-    const u32 u = ig.u >> (COORD_FBS + COORD_POST_PADDING); // + RESOLUTION_SHIFT);
-    const u32 v = ig.v >> (COORD_FBS + COORD_POST_PADDING); // + RESOLUTION_SHIFT);
+
+#if USE_FLOAT_STEP
+    auto r = Truncate8((int)floorf(igf.r));
+    auto g = Truncate8((int)floorf(igf.g));
+    auto b = Truncate8((int)floorf(igf.b));
+    auto u = Truncate8((int)floorf(igf.u));
+    auto v = Truncate8((int)floorf(igf.v));
+#endif
+
+#if USE_INT_STEP
+    auto ri = Truncate8(igi.r >> (COORD_FBS + COORD_POST_PADDING)); // + RESOLUTION_SHIFT);
+    auto gi = Truncate8(igi.g >> (COORD_FBS + COORD_POST_PADDING)); // + RESOLUTION_SHIFT);
+    auto bi = Truncate8(igi.b >> (COORD_FBS + COORD_POST_PADDING)); // + RESOLUTION_SHIFT);
+    auto ui = Truncate8(igi.u >> (COORD_FBS + COORD_POST_PADDING)); // + RESOLUTION_SHIFT);
+    auto vi = Truncate8(igi.v >> (COORD_FBS + COORD_POST_PADDING)); // + RESOLUTION_SHIFT);
+#endif
+
+    //Assert(r == ri && u == ui);
+    //Assert(g == gi && v == vi);
+    //Assert(b == bi);
 
     // FIXME: also need to clip uprender right edge.
     if (x_up >= 0) {
       ShadePixel<texture_enable, raw_texture_enable, transparency_enable, dithering_enable>(
-        cmd, x_up, y_up, Truncate8(r), Truncate8(g), Truncate8(b), Truncate8(u),
-        Truncate8(v));
+        cmd, x_up, y_up,
+#if USE_INT_STEP
+        ri, gi, bi, ui, vi
+#else
+        r, g, b, u, v
+#endif
+      );
     }
     x_up++;
-    AddIDeltas_DX<shading_enable, texture_enable>(ig, idl, 1.0f / RESOLUTION_SCALE);
+
+#if USE_FLOAT_STEP
+    AddIDeltas_DX<shading_enable, texture_enable>(igf, idl, 1.0f / postpad_scalar);
+#endif
+
+#if USE_INT_STEP
+    AddIDeltas_DX<shading_enable, texture_enable>(igi, idl, 1.0f / RESOLUTION_SCALE);
+#endif
+
   } while (--w_up > 0);
 }
 
@@ -1005,3 +1064,7 @@ void GPU_SW_Backend::CopyVRAM(u32 src_x, u32 src_y, u32 dst_x, u32 dst_y, u32 wi
 void GPU_SW_Backend::FlushRender() {}
 
 void GPU_SW_Backend::DrawingAreaChanged() {}
+
+#ifdef _MSC_VER
+#pragma warning(pop)
+#endif
