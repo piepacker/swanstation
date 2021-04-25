@@ -917,42 +917,61 @@ GPU_SW_Backend::GetDrawRectangleFunction(bool texture_enable, bool raw_texture_e
 void GPU_SW_Backend::FillVRAM(u32 x, u32 y, u32 width, u32 height, u32 color, GPUBackendCommandParameters params)
 {
   const u16 color16 = VRAMRGBA8888ToRGBA5551(color);
-  if ((x + width) <= VRAM_WIDTH && !params.interlaced_rendering)
-  {
-    for (u32 yoffs = 0; yoffs < height; yoffs++)
-    {
-      const u32 row = (y + yoffs) % VRAM_HEIGHT;
-      std::fill_n(&m_vram_ptr[row * VRAM_WIDTH + x], width, color16);
-    }
-  }
-  else if (params.interlaced_rendering)
-  {
-    // Hardware tests show that fills seem to break on the first two lines when the offset matches the displayed field.
-    const u32 active_field = params.active_line_lsb;
-    for (u32 yoffs = 0; yoffs < height; yoffs++)
-    {
-      const u32 row = (y + yoffs) % VRAM_HEIGHT;
-      if ((row & u32(1)) == active_field)
-        continue;
 
-      u16* row_ptr = &m_vram_ptr[row * VRAM_WIDTH];
-      for (u32 xoffs = 0; xoffs < width; xoffs++)
+  if constexpr (RESOLUTION_SCALE == 1)
+  {
+    if ((x + width) <= VRAM_WIDTH && !params.interlaced_rendering)
+    {
+      for (u32 yoffs = 0; yoffs < height; yoffs++)
       {
-        const u32 col = (x + xoffs) % VRAM_WIDTH;
-        row_ptr[col] = color16;
+        const u32 row = (y + yoffs) % VRAM_HEIGHT;
+        std::fill_n(&m_vram_ptr[row * VRAM_WIDTH + x], width, color16);
+      }
+    }
+    else if (params.interlaced_rendering)
+    {
+      // Hardware tests show that fills seem to break on the first two lines when the offset matches the displayed field.
+      const u32 active_field = params.active_line_lsb;
+      for (u32 yoffs = 0; yoffs < height; yoffs++)
+      {
+        const u32 row = (y + yoffs) % VRAM_HEIGHT;
+        if ((row & u32(1)) == active_field)
+          continue;
+           
+        u16* row_ptr = &m_vram_ptr[row * VRAM_WIDTH];
+        for (u32 xoffs = 0; xoffs < width; xoffs++)
+        {
+          const u32 col = (x + xoffs) % VRAM_WIDTH;
+          row_ptr[col] = color16;
+        }
+      }
+    }
+    else
+    {
+      for (u32 yoffs = 0; yoffs < height; yoffs++)
+      {
+        const u32 row = (y + yoffs) % VRAM_HEIGHT;
+        u16* row_ptr = &m_vram_ptr[row * VRAM_WIDTH];
+        for (u32 xoffs = 0; xoffs < width; xoffs++)
+        {
+          const u32 col = (x + xoffs) % VRAM_WIDTH;
+          row_ptr[col] = color16;
+        }
       }
     }
   }
   else
   {
+    const u32 active_field = params.active_line_lsb;
     for (u32 yoffs = 0; yoffs < height; yoffs++)
     {
-      const u32 row = (y + yoffs) % VRAM_HEIGHT;
-      u16* row_ptr = &m_vram_ptr[row * VRAM_WIDTH];
-      for (u32 xoffs = 0; xoffs < width; xoffs++)
+      for(u32 xoffs = 0; xoffs < width; xoffs++)
       {
-        const u32 col = (x + xoffs) % VRAM_WIDTH;
-        row_ptr[col] = color16;
+        const u32 row = (y + yoffs) % VRAM_HEIGHT;
+        if (params.interlaced_rendering && (row & u32(1)) == active_field)
+          continue;
+
+        SetPixel(x+xoffs, y+yoffs, color16);
       }
     }
   }
