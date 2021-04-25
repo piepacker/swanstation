@@ -870,10 +870,22 @@ void GPU_SW_Backend::DrawLine(const GPUBackendDrawLineCommand* cmd, const GPUBac
       const u8 g = shading_enable ? static_cast<u8>(cur_point.g >> Line_RGB_FractBits) : p0->g;
       const u8 b = shading_enable ? static_cast<u8>(cur_point.b >> Line_RGB_FractBits) : p0->b;
 
-      ShadePixel<false, false, transparency_enable, dithering_enable>(cmd, static_cast<u32>(x), static_cast<u32>(y), r,
-                                                                      g, b, 0, 0);
-    }
+      // FIXME: this is sufficient for horizontal or vertical lines, but diaglonals will likely
+      // need more advanced heuristics or anti-aliasing to avoid looking ugly and/or causing unsightly
+      // coverage artifacts.
 
+      for (int yu=0; yu<RESOLUTION_SCALE; ++yu)
+      {
+        for (int xu=0; xu<RESOLUTION_SCALE; ++xu)
+        {
+          ShadePixel<false, false, transparency_enable, dithering_enable>(cmd,
+            static_cast<u32>((x * RESOLUTION_SCALE) + xu),
+            static_cast<u32>((y * RESOLUTION_SCALE) + yu),
+            r, g, b, 0, 0
+          );
+        }
+      }
+    }
     cur_point.x += step.dx_dk;
     cur_point.y += step.dy_dk;
 
