@@ -7,6 +7,7 @@
 #include <algorithm>
 Log_SetChannel(GPU_SW_Backend);
 
+#define SCALE_ALL_VERTEX 1
 #ifdef _MSC_VER
 #pragma warning(push)
 #pragma warning(disable : 4244) // warning C4324: 'GPUBackend': structure was padded due to alignment specifier
@@ -398,8 +399,8 @@ struct i_group_float
   float r, g, b;
 };
 
-#define USE_FLOAT_STEP 1
-#define USE_INT_STEP   0
+#define USE_FLOAT_STEP 0
+#define USE_INT_STEP   1
 
 template<bool shading_enable, bool texture_enable, bool raw_texture_enable, bool transparency_enable,
          bool dithering_enable>
@@ -427,9 +428,9 @@ void GPU_SW_Backend::DrawSpan(const GPUBackendDrawPolygonCommand* cmd, s32 y_up,
     w_up     -= delta_up;
   }
 
-  if ((x_up + w_up) > (static_cast<s32>(m_drawing_area.right * RESOLUTION_SCALE) + 1))
+  if ((x_up + w_up) > (static_cast<s32>(m_drawing_area.right * RESOLUTION_SCALE) + 2))
   {
-    w_up = static_cast<s32>(m_drawing_area.right * RESOLUTION_SCALE) + 1 - x_up;
+    w_up = static_cast<s32>(m_drawing_area.right * RESOLUTION_SCALE) + 2 - x_up;
   }
 
   if (w_up <= 0)
@@ -461,15 +462,15 @@ void GPU_SW_Backend::DrawSpan(const GPUBackendDrawPolygonCommand* cmd, s32 y_up,
   igf.u = (float)igi.u / (1ll << (COORD_FBS + COORD_POST_PADDING));
   igf.v = (float)igi.v / (1ll << (COORD_FBS + COORD_POST_PADDING));
 
-  float postpad_scalar = 1ll << (COORD_FBS + COORD_POST_PADDING + RESOLUTION_SHIFT);
+  float postpad_scalar = 1ll << (COORD_FBS + COORD_POST_PADDING + (SCALE_ALL_VERTEX ? 0 : RESOLUTION_SHIFT));
 
   AddIDeltas_DX<shading_enable, texture_enable>(igf, idl, (float)x_ig_adjust / postpad_scalar);
   AddIDeltas_DY<shading_enable, texture_enable>(igf, idl, (float)y_up        / postpad_scalar);
 #endif
 
 #if USE_INT_STEP
-  AddIDeltas_DX<shading_enable, texture_enable>(igi, idl, (float)x_ig_adjust / RESOLUTION_SCALE);
-  AddIDeltas_DY<shading_enable, texture_enable>(igi, idl, (float)y_up        / RESOLUTION_SCALE);
+  AddIDeltas_DX<shading_enable, texture_enable>(igi, idl, (float)x_ig_adjust / (SCALE_ALL_VERTEX ? 1 : RESOLUTION_SCALE));
+  AddIDeltas_DY<shading_enable, texture_enable>(igi, idl, (float)y_up        / (SCALE_ALL_VERTEX ? 1 : RESOLUTION_SCALE));
 #endif
 
   do
@@ -514,7 +515,7 @@ void GPU_SW_Backend::DrawSpan(const GPUBackendDrawPolygonCommand* cmd, s32 y_up,
 #endif
 
 #if USE_INT_STEP
-    AddIDeltas_DX<shading_enable, texture_enable>(igi, idl, 1.0f / RESOLUTION_SCALE);
+    AddIDeltas_DX<shading_enable, texture_enable>(igi, idl, 1.0f / (SCALE_ALL_VERTEX ? 1 : RESOLUTION_SCALE));
 #endif
 
   } while (--w_up > 0);
@@ -523,63 +524,81 @@ void GPU_SW_Backend::DrawSpan(const GPUBackendDrawPolygonCommand* cmd, s32 y_up,
 template<bool shading_enable, bool texture_enable, bool raw_texture_enable, bool transparency_enable,
          bool dithering_enable>
 void GPU_SW_Backend::DrawTriangle(const GPUBackendDrawPolygonCommand* cmd,
-                                  const GPUBackendDrawPolygonCommand::Vertex* v0,
-                                  const GPUBackendDrawPolygonCommand::Vertex* v1,
-                                  const GPUBackendDrawPolygonCommand::Vertex* v2)
+                                  const GPUBackendDrawPolygonCommand::Vertex* v0n,
+                                  const GPUBackendDrawPolygonCommand::Vertex* v1n,
+                                  const GPUBackendDrawPolygonCommand::Vertex* v2n)
 {
   u32 core_vertex;
   {
     u32 cvtemp = 0;
 
-    if (v1->x <= v0->x)
+    if (v1n->x <= v0n->x)
     {
-      if (v2->x <= v1->x)
+      if (v2n->x <= v1n->x)
         cvtemp = (1 << 2);
       else
         cvtemp = (1 << 1);
     }
-    else if (v2->x < v0->x)
+    else if (v2n->x < v0n->x)
       cvtemp = (1 << 2);
     else
       cvtemp = (1 << 0);
 
-    if (v2->y < v1->y)
+    if (v2n->y < v1n->y)
     {
-      std::swap(v2, v1);
+      std::swap(v2n, v1n);
       cvtemp = ((cvtemp >> 1) & 0x2) | ((cvtemp << 1) & 0x4) | (cvtemp & 0x1);
     }
 
-    if (v1->y < v0->y)
+    if (v1n->y < v0n->y)
     {
-      std::swap(v1, v0);
+      std::swap(v1n, v0n);
       cvtemp = ((cvtemp >> 1) & 0x1) | ((cvtemp << 1) & 0x2) | (cvtemp & 0x4);
     }
 
-    if (v2->y < v1->y)
+    if (v2n->y < v1n->y)
     {
-      std::swap(v2, v1);
+      std::swap(v2n, v1n);
       cvtemp = ((cvtemp >> 1) & 0x2) | ((cvtemp << 1) & 0x4) | (cvtemp & 0x1);
     }
 
     core_vertex = cvtemp >> 1;
   }
 
-  if (v0->y == v2->y)
+  if (v0n->y == v2n->y)
     return;
 
-  if (static_cast<u32>(std::abs(v2->x - v0->x)) >= MAX_PRIMITIVE_WIDTH ||
-      static_cast<u32>(std::abs(v2->x - v1->x)) >= MAX_PRIMITIVE_WIDTH ||
-      static_cast<u32>(std::abs(v1->x - v0->x)) >= MAX_PRIMITIVE_WIDTH ||
-      static_cast<u32>(v2->y - v0->y) >= MAX_PRIMITIVE_HEIGHT)
+  if (static_cast<u32>(std::abs(v2n->x - v0n->x)) >= MAX_PRIMITIVE_WIDTH ||
+      static_cast<u32>(std::abs(v2n->x - v1n->x)) >= MAX_PRIMITIVE_WIDTH ||
+      static_cast<u32>(std::abs(v1n->x - v0n->x)) >= MAX_PRIMITIVE_WIDTH ||
+      static_cast<u32>(v2n->y - v0n->y) >= MAX_PRIMITIVE_HEIGHT)
   {
     return;
   }
 
-  s64 base_coord = MakePolyXFP(v0->x);
-  s64 base_step = MakePolyXFPStep((v2->x - v0->x), (v2->y - v0->y));
   s64 bound_coord_us;
   s64 bound_coord_ls;
   bool right_facing;
+
+  GPUBackendDrawPolygonCommand::Vertex up_v0 = *v0n;
+  GPUBackendDrawPolygonCommand::Vertex up_v1 = *v1n;
+  GPUBackendDrawPolygonCommand::Vertex up_v2 = *v2n;
+
+  GPUBackendDrawPolygonCommand::Vertex* v0 = &up_v0;
+  GPUBackendDrawPolygonCommand::Vertex* v1 = &up_v1;
+  GPUBackendDrawPolygonCommand::Vertex* v2 = &up_v2;
+
+#if SCALE_ALL_VERTEX
+  v0->x *= RESOLUTION_SCALE;
+  v0->y *= RESOLUTION_SCALE;
+  v1->x *= RESOLUTION_SCALE;
+  v1->y *= RESOLUTION_SCALE;
+  v2->x *= RESOLUTION_SCALE;
+  v2->y *= RESOLUTION_SCALE;
+#endif
+
+  s64 base_coord = MakePolyXFP(v0->x);
+  s64 base_step = MakePolyXFPStep((v2->x - v0->x), (v2->y - v0->y));
 
   if (v1->y == v0->y)
   {
@@ -602,7 +621,7 @@ void GPU_SW_Backend::DrawTriangle(const GPUBackendDrawPolygonCommand* cmd,
     return;
 
   const GPUBackendDrawPolygonCommand::Vertex* vertices[3] = {v0, v1, v2};
-  int upshift = 0;
+  int upshift = SCALE_ALL_VERTEX ? RESOLUTION_SHIFT : 0;
   int upmul = 1; //RESOLUTION_SCALE;
 
   i_group ig;
@@ -663,13 +682,15 @@ void GPU_SW_Backend::DrawTriangle(const GPUBackendDrawPolygonCommand* cmd,
 
   for (u32 i = 0; i < 2; i++)
   {
-    s32 yi = tripart[i].y_coord * RESOLUTION_SCALE;
-    s32 yb = tripart[i].y_bound * RESOLUTION_SCALE;
+    auto scalar = SCALE_ALL_VERTEX ? 1 : RESOLUTION_SCALE;
 
-    u64 lc = tripart[i].x_coord[0] * RESOLUTION_SCALE;
+    s32 yi = tripart[i].y_coord * scalar;
+    s32 yb = tripart[i].y_bound * scalar;
+
+    u64 lc = tripart[i].x_coord[0] * scalar;
     u64 ls = tripart[i].x_step[0];
 
-    u64 rc = tripart[i].x_coord[1] * RESOLUTION_SCALE;
+    u64 rc = tripart[i].x_coord[1] * scalar;
     u64 rs = tripart[i].x_step[1];
 
     if (tripart[i].dec_mode)
@@ -685,7 +706,7 @@ void GPU_SW_Backend::DrawTriangle(const GPUBackendDrawPolygonCommand* cmd,
         if (y < static_cast<s32>(m_drawing_area.top) * RESOLUTION_SCALE)
           break;
 
-        if (y > static_cast<s32>(m_drawing_area.bottom) * RESOLUTION_SCALE)
+        if (y > (static_cast<s32>(m_drawing_area.bottom) * RESOLUTION_SCALE) + 1)
           continue;
 
         DrawSpan<shading_enable, texture_enable, raw_texture_enable, transparency_enable, dithering_enable>(
