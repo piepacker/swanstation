@@ -858,7 +858,7 @@ void GPU_SW::DispatchRenderCommand()
 
 void GPU_SW::ReadVRAM(u32 x, u32 y, u32 width, u32 height)
 {
-  GPUBackendFillVRAMCommand* cmd = m_backend.NewFillVRAMCommand();
+  auto* cmd = m_backend.NewReadVRAMCommand();
   FillBackendCommandParameters(cmd);
   cmd->x = static_cast<u16>(x);
   cmd->y = static_cast<u16>(y);

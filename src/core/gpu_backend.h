@@ -26,6 +26,7 @@ public:
   virtual void Reset(bool clear_vram);
   virtual void Shutdown();
 
+  GPUBackendReadVRAMCommand* NewReadVRAMCommand();
   GPUBackendFillVRAMCommand* NewFillVRAMCommand();
   GPUBackendUpdateVRAMCommand* NewUpdateVRAMCommand(u32 num_words);
   GPUBackendCopyVRAMCommand* NewCopyVRAMCommand();
@@ -47,6 +48,7 @@ protected:
   void StartGPUThread();
   void StopGPUThread();
 
+  virtual void ReadVRAM(u32 x, u32 y, u32 width, u32 height) {}
   virtual void FillVRAM(u32 x, u32 y, u32 width, u32 height, u32 color, GPUBackendCommandParameters params) = 0;
   virtual void UpdateVRAM(u32 x, u32 y, u32 width, u32 height, const void* data,
                           GPUBackendCommandParameters params) = 0;

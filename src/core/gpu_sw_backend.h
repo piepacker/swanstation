@@ -62,7 +62,6 @@ public:
   using DitherLUT = std::array<std::array<std::array<u8, 512>, DITHER_MATRIX_SIZE>, DITHER_MATRIX_SIZE>;
   static constexpr DitherLUT ComputeDitherLUT();
 
-  void ReadVRAM(u32 x, u32 y, u32 width, u32 height);
   void Sync(bool allow_sleep) override;
 
 protected:
@@ -126,6 +125,7 @@ protected:
     return std::make_tuple(static_cast<u8>(rgb24), static_cast<u8>(rgb24 >> 8), static_cast<u8>(rgb24 >> 16));
   }
 
+  void ReadVRAM(u32 x, u32 y, u32 width, u32 height) override;
   void FillVRAM(u32 x, u32 y, u32 width, u32 height, u32 color, GPUBackendCommandParameters params) override;
   void UpdateVRAM(u32 x, u32 y, u32 width, u32 height, const void* data, GPUBackendCommandParameters params) override;
   void CopyVRAM(u32 src_x, u32 src_y, u32 dst_x, u32 dst_y, u32 width, u32 height,

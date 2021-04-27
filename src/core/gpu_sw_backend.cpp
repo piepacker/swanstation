@@ -1042,6 +1042,21 @@ void GPU_SW_Backend::UpdateVRAM(u32 x, u32 y, u32 width, u32 height, const void*
 void GPU_SW_Backend::ReadVRAM(u32 x, u32 y, u32 width, u32 height)
 {
   // copy from m_upram_ptr to m_vram_ptr using simple sparse read logic.
+
+  auto* shadow_ptr = GetVRAMshadowPtr();
+
+  for (u32 yoffs = 0; yoffs < height; yoffs++)
+  {
+    const u32 row = (y + yoffs) % VRAM_HEIGHT;
+    const u16* src = UPRAM_ACCESSOR + (row * VRAM_UPRENDER_SIZE_X);
+          u16* dst = shadow_ptr     + (row);
+    for (u32 xoffs = 0; xoffs < width; xoffs++)
+    {
+      const u32 col = (x + xoffs) % VRAM_WIDTH;
+      dst[col] = src[col * RESOLUTION_SCALE];
+    }
+  }
+
 }
 
 void GPU_SW_Backend::Sync(bool allow_sleep) 
