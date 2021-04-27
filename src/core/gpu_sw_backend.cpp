@@ -15,8 +15,8 @@ Log_SetChannel(GPU_SW_Backend);
 
 GPU_SW_Backend::GPU_SW_Backend() : GPUBackend()
 {
-  m_vram.fill(0);
-  m_vram_ptr = m_vram.data();
+  m_upram.fill(0);
+  m_upram_ptr = m_upram.data();
 }
 
 GPU_SW_Backend::~GPU_SW_Backend() = default;
@@ -31,7 +31,7 @@ void GPU_SW_Backend::Reset(bool clear_vram)
   GPUBackend::Reset(clear_vram);
 
   if (clear_vram)
-    m_vram.fill(0);
+    m_upram.fill(0);
 }
 
 void GPU_SW_Backend::DrawPolygon(const GPUBackendDrawPolygonCommand* cmd)
@@ -191,7 +191,7 @@ void ALWAYS_INLINE_RELEASE GPU_SW_Backend::ShadePixel(const GPUBackendDrawComman
   }
 
   //const VRAMPixel bg_color{GetPixel(x, y)};
-  const VRAMPixel bg_color { m_vram[VRAM_UPRENDER_SIZE_X * y + x] };
+  const VRAMPixel bg_color { UPRAM_ACCESSOR[VRAM_UPRENDER_SIZE_X * y + x] };
 
   if constexpr (transparency_enable)
   {
@@ -241,7 +241,7 @@ void ALWAYS_INLINE_RELEASE GPU_SW_Backend::ShadePixel(const GPUBackendDrawComman
   if ((bg_color.bits & mask_and) != 0)
     return;
 
-  m_vram[VRAM_UPRENDER_SIZE_X * y + x] = (color.bits | cmd->params.GetMaskOR());
+  UPRAM_ACCESSOR[VRAM_UPRENDER_SIZE_X * y + x] = (color.bits | cmd->params.GetMaskOR());
   //SetPixel(static_cast<u32>(x), static_cast<u32>(y), color.bits | cmd->params.GetMaskOR());
 }
 
@@ -937,7 +937,7 @@ void GPU_SW_Backend::FillVRAM(u32 x, u32 y, u32 width, u32 height, u32 color, GP
       for (u32 yoffs = 0; yoffs < height; yoffs++)
       {
         const u32 row = (y + yoffs) % VRAM_HEIGHT;
-        std::fill_n(&m_vram_ptr[row * VRAM_WIDTH + x], width, color16);
+        std::fill_n(&UPRAM_ACCESSOR[row * VRAM_WIDTH + x], width, color16);
       }
     }
     else if (params.interlaced_rendering)
@@ -950,7 +950,7 @@ void GPU_SW_Backend::FillVRAM(u32 x, u32 y, u32 width, u32 height, u32 color, GP
         if ((row & u32(1)) == active_field)
           continue;
            
-        u16* row_ptr = &m_vram_ptr[row * VRAM_WIDTH];
+        u16* row_ptr = &UPRAM_ACCESSOR[row * VRAM_WIDTH];
         for (u32 xoffs = 0; xoffs < width; xoffs++)
         {
           const u32 col = (x + xoffs) % VRAM_WIDTH;
@@ -963,7 +963,7 @@ void GPU_SW_Backend::FillVRAM(u32 x, u32 y, u32 width, u32 height, u32 color, GP
       for (u32 yoffs = 0; yoffs < height; yoffs++)
       {
         const u32 row = (y + yoffs) % VRAM_HEIGHT;
-        u16* row_ptr = &m_vram_ptr[row * VRAM_WIDTH];
+        u16* row_ptr = &UPRAM_ACCESSOR[row * VRAM_WIDTH];
         for (u32 xoffs = 0; xoffs < width; xoffs++)
         {
           const u32 col = (x + xoffs) % VRAM_WIDTH;
@@ -999,7 +999,7 @@ void GPU_SW_Backend::UpdateVRAM(u32 x, u32 y, u32 width, u32 height, const void*
     const u16* src_ptr = static_cast<const u16*>(data);
     if constexpr (RESOLUTION_SCALE == 1)
     {
-      u16* dst_ptr = &m_vram_ptr[y * VRAM_WIDTH + x];
+      u16* dst_ptr = &UPRAM_ACCESSOR[y * VRAM_WIDTH + x];
       for (u32 yoffs = 0; yoffs < height; yoffs++)
       {
         std::copy_n(src_ptr, width, dst_ptr);
@@ -1027,7 +1027,7 @@ void GPU_SW_Backend::UpdateVRAM(u32 x, u32 y, u32 width, u32 height, const void*
 
     for (u32 row = 0; row < height;)
     {
-      u16* dst_row_ptr = &m_vram_ptr[((y + row++) % VRAM_HEIGHT) * VRAM_WIDTH];
+      u16* dst_row_ptr = &UPRAM_ACCESSOR[((y + row++) % VRAM_HEIGHT) * VRAM_WIDTH];
       for (u32 col = 0; col < width;)
       {
         // TODO: Handle unaligned reads...
@@ -1038,6 +1038,18 @@ void GPU_SW_Backend::UpdateVRAM(u32 x, u32 y, u32 width, u32 height, const void*
     }
   }
 }
+
+void GPU_SW_Backend::ReadVRAM(u32 x, u32 y, u32 width, u32 height)
+{
+  // copy from m_upram_ptr to m_vram_ptr using simple sparse read logic.
+}
+
+void GPU_SW_Backend::Sync(bool allow_sleep) 
+{
+  GPUBackend::Sync(allow_sleep);
+  ReadVRAM(0, 0, VRAM_WIDTH, VRAM_HEIGHT);
+}
+
 
 void GPU_SW_Backend::CopyVRAM(u32 src_x, u32 src_y, u32 dst_x, u32 dst_y, u32 width, u32 height,
                               GPUBackendCommandParameters params)
@@ -1083,8 +1095,8 @@ void GPU_SW_Backend::CopyVRAM(u32 src_x, u32 src_y, u32 dst_x, u32 dst_y, u32 wi
   {
     for (u32 row = 0; row < height; row++)
     {
-      const u16* src_row_ptr = &m_vram_ptr[((src_y + row) % VRAM_HEIGHT) * VRAM_WIDTH];
-      u16* dst_row_ptr = &m_vram_ptr[((dst_y + row) % VRAM_HEIGHT) * VRAM_WIDTH];
+      const u16* src_row_ptr = &UPRAM_ACCESSOR[((src_y + row) % VRAM_HEIGHT) * VRAM_WIDTH];
+      u16* dst_row_ptr = &UPRAM_ACCESSOR[((dst_y + row) % VRAM_HEIGHT) * VRAM_WIDTH];
 
       for (s32 col = static_cast<s32>(width - 1); col >= 0; col--)
       {
@@ -1099,8 +1111,8 @@ void GPU_SW_Backend::CopyVRAM(u32 src_x, u32 src_y, u32 dst_x, u32 dst_y, u32 wi
   {
     for (u32 row = 0; row < height; row++)
     {
-      const u16* src_row_ptr = &m_vram_ptr[((src_y + row) % VRAM_HEIGHT) * VRAM_WIDTH];
-      u16* dst_row_ptr = &m_vram_ptr[((dst_y + row) % VRAM_HEIGHT) * VRAM_WIDTH];
+      const u16* src_row_ptr = &UPRAM_ACCESSOR[((src_y + row) % VRAM_HEIGHT) * VRAM_WIDTH];
+      u16* dst_row_ptr = &UPRAM_ACCESSOR[((dst_y + row) % VRAM_HEIGHT) * VRAM_WIDTH];
 
       for (u32 col = 0; col < width; col++)
       {

@@ -15,6 +15,8 @@ public:
   GPU_SW();
   ~GPU_SW() override;
 
+  u16* GetVRAMshadowPtr() override { return m_backend.GetVRAMshadowPtr(); }
+
   GPURenderer GetRendererType() const override;
 
   bool Initialize(HostDisplay* host_display) override;

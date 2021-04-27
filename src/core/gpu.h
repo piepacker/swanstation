@@ -73,6 +73,8 @@ public:
   GPU();
   virtual ~GPU();
 
+  virtual u16* GetVRAMshadowPtr() = 0;
+
   virtual GPURenderer GetRendererType() const = 0;
 
   virtual bool Initialize(HostDisplay* host_display);
@@ -318,7 +320,7 @@ protected:
   std::unique_ptr<TimingEvent> m_command_tick_event;
 
   // Pointer to VRAM, used for reads/writes. In the hardware backends, this is the shadow buffer.
-  u16* m_vram_ptr = nullptr;
+  //u16* m_vram_ptr = nullptr;
 
   union GPUSTAT
   {
