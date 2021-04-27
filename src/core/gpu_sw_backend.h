@@ -9,6 +9,14 @@ static const int RESOLUTION_SCALE = (1 << RESOLUTION_SHIFT);
 static const int VRAM_UPRENDER_SIZE_X = VRAM_WIDTH  * RESOLUTION_SCALE; //RESOLUTION_SCALE;
 static const int VRAM_UPRENDER_SIZE_Y = VRAM_HEIGHT * RESOLUTION_SCALE; //RESOLUTION_SCALE;
 
+#define SW_GPU_VRAM_BOUNDS_CHECK  0
+
+#if SW_GPU_VRAM_BOUNDS_CHECK
+#define UPRAM_ACCESSOR m_upram
+#else
+#define UPRAM_ACCESSOR m_upram_ptr
+#endif
+
 class GPU_SW_Backend final : public GPUBackend
 {
 public:
@@ -18,17 +26,22 @@ public:
   bool Initialize() override;
   void Reset(bool clear_vram) override;
 
+  ALWAYS_INLINE u16* GetUPRAM() const { return m_upram_ptr; }
+
+  u16* GetVRAMshadowPtr() override { return m_vram.data(); }
+
+
   // jstine - uprender TODO - rename this to texel, since it's no longer pixel logic.
   // and double check all referenced uses.
 
-  ALWAYS_INLINE_RELEASE u16 GetPixel(const u32 x, const u32 y)           const { return  m_vram[(y * RESOLUTION_SCALE * VRAM_UPRENDER_SIZE_X) + (x * RESOLUTION_SCALE)]; }
-  ALWAYS_INLINE_RELEASE const u16* GetPixelPtr(const u32 x, const u32 y) const { return &m_vram[(y * RESOLUTION_SCALE * VRAM_UPRENDER_SIZE_X) + (x * RESOLUTION_SCALE)]; }
-  ALWAYS_INLINE_RELEASE       u16* GetPixelPtr(const u32 x, const u32 y)       { return &m_vram[(y * RESOLUTION_SCALE * VRAM_UPRENDER_SIZE_X) + (x * RESOLUTION_SCALE)]; }
+  ALWAYS_INLINE_RELEASE u16 GetPixel(const u32 x, const u32 y)           const { return  UPRAM_ACCESSOR[(y * RESOLUTION_SCALE * VRAM_UPRENDER_SIZE_X) + (x * RESOLUTION_SCALE)]; }
+  ALWAYS_INLINE_RELEASE const u16* GetPixelPtr(const u32 x, const u32 y) const { return &UPRAM_ACCESSOR[(y * RESOLUTION_SCALE * VRAM_UPRENDER_SIZE_X) + (x * RESOLUTION_SCALE)]; }
+  ALWAYS_INLINE_RELEASE       u16* GetPixelPtr(const u32 x, const u32 y)       { return &UPRAM_ACCESSOR[(y * RESOLUTION_SCALE * VRAM_UPRENDER_SIZE_X) + (x * RESOLUTION_SCALE)]; }
 
   ALWAYS_INLINE_RELEASE void SetPixel(const u32 x, const u32 y, const u16 value)
   {
     if constexpr (RESOLUTION_SCALE == 1)
-      m_vram[VRAM_UPRENDER_SIZE_X * y + x] = value;
+      UPRAM_ACCESSOR[VRAM_UPRENDER_SIZE_X * y + x] = value;
     else
     {
       /* Duplicate the pixel as many times as necessary (nearest neighbour upscaling) */
@@ -38,7 +51,7 @@ public:
         {
           int y_up = (y * RESOLUTION_SCALE) + dy;
           int x_up = (x * RESOLUTION_SCALE) + dx;
-          m_vram[(y_up * VRAM_UPRENDER_SIZE_X) + x_up] = value;
+          UPRAM_ACCESSOR[(y_up * VRAM_UPRENDER_SIZE_X) + x_up] = value;
         }
       }
     }
@@ -48,6 +61,9 @@ public:
   static constexpr u32 DITHER_LUT_SIZE = 512;
   using DitherLUT = std::array<std::array<std::array<u8, 512>, DITHER_MATRIX_SIZE>, DITHER_MATRIX_SIZE>;
   static constexpr DitherLUT ComputeDitherLUT();
+
+  void ReadVRAM(u32 x, u32 y, u32 width, u32 height);
+  void Sync(bool allow_sleep) override;
 
 protected:
   union VRAMPixel
@@ -189,5 +205,8 @@ protected:
                                                     const GPUBackendDrawLineCommand::Vertex* p1);
   DrawLineFunction GetDrawLineFunction(bool shading_enable, bool transparency_enable, bool dithering_enable);
 
-  std::array<u16, VRAM_UPRENDER_SIZE_X * VRAM_UPRENDER_SIZE_Y> m_vram;
+  std::array<u16, VRAM_WIDTH * VRAM_HEIGHT> m_vram;
+  std::array<u16, VRAM_UPRENDER_SIZE_X * VRAM_UPRENDER_SIZE_Y> m_upram;
+
+  u16* m_upram_ptr = {};
 };

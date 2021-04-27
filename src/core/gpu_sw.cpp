@@ -28,9 +28,11 @@ ALWAYS_INLINE static constexpr std::tuple<T, T> MinMax(T v1, T v2)
     return std::tie(v1, v2);
 }
 
+#define GetVramDisplayMemPtr() m_backend.GetUPRAM()
+
 GPU_SW::GPU_SW()
 {
-  m_vram_ptr = m_backend.GetVRAM();
+  //m_vram_ptr = m_backend.GetUPRAM();
 }
 
 GPU_SW::~GPU_SW()
@@ -255,6 +257,8 @@ void GPU_SW::CopyOut15Bit(u32 src_x_native, u32 src_y_native, u32 width_native, 
   auto src_x_up = src_x_native * RESOLUTION_SCALE;
   auto src_y_up = src_y_native * RESOLUTION_SCALE;
 
+  auto m_vram_ptr = GetVramDisplayMemPtr();
+
   // Fast path when not wrapping around.
   if ((src_x_native + width_native) <= VRAM_WIDTH && (src_y_native + height_native) <= VRAM_HEIGHT)
   {
@@ -367,6 +371,8 @@ void GPU_SW::CopyOut24Bit(u32 src_x_native, u32 src_y_native, u32 skip_x_native,
   //  RG RG BR BR GB GB RG RG BR BR
   //  RG RG BR BR GB GB RG RG BR BR
   //
+
+  auto m_vram_ptr = GetVramDisplayMemPtr();
 
   if ((src_x_native + width_native) <= VRAM_WIDTH && (src_y_native + (rows_native << interleaved_shift)) <= VRAM_HEIGHT)
   {
@@ -506,6 +512,11 @@ void GPU_SW::UpdateDisplay()
 {
   // fill display texture
   m_backend.Sync();
+
+  // FIXME - UPRENDER - this should be implemented by the BACKEND.
+  // In fact, a separation of frontend and backend in GPU software hardly makes sense.
+  // The backends on the HW GPU impl are for platform dependent things: DX11, DX12, Vulkan, etc.
+  // But in software, we have no such thing. It's all platform agnostic. So why the backend?
 
   if (!g_settings.debugging.show_vram)
   {
@@ -847,6 +858,13 @@ void GPU_SW::DispatchRenderCommand()
 
 void GPU_SW::ReadVRAM(u32 x, u32 y, u32 width, u32 height)
 {
+  GPUBackendFillVRAMCommand* cmd = m_backend.NewFillVRAMCommand();
+  FillBackendCommandParameters(cmd);
+  cmd->x = static_cast<u16>(x);
+  cmd->y = static_cast<u16>(y);
+  cmd->width = static_cast<u16>(width);
+  cmd->height = static_cast<u16>(height);
+  m_backend.PushCommand(cmd);
   m_backend.Sync();
 }
 

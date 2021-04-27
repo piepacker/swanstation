@@ -19,7 +19,7 @@ public:
   GPUBackend();
   virtual ~GPUBackend();
 
-  ALWAYS_INLINE u16* GetVRAM() const { return m_vram_ptr; }
+  virtual u16* GetVRAMshadowPtr() = 0;
 
   virtual bool Initialize();
   virtual void UpdateSettings();
@@ -35,7 +35,7 @@ public:
   GPUBackendDrawLineCommand* NewDrawLineCommand(u32 num_vertices);
 
   void PushCommand(GPUBackendCommand* cmd);
-  void Sync();
+  virtual void Sync();
 
   /// Processes all pending GPU commands.
   void RunGPULoop();
@@ -59,8 +59,6 @@ protected:
   virtual void DrawingAreaChanged() = 0;
 
   void HandleCommand(const GPUBackendCommand* cmd);
-
-  u16* m_vram_ptr = nullptr;
 
   Common::Rectangle<u32> m_drawing_area{};
 
