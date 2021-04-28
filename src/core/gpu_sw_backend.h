@@ -62,7 +62,7 @@ public:
   using DitherLUT = std::array<std::array<std::array<u8, 512>, DITHER_MATRIX_SIZE>, DITHER_MATRIX_SIZE>;
   static constexpr DitherLUT ComputeDitherLUT();
 
-  void Sync(bool allow_sleep) override;
+  void Sync() override;
 
 protected:
   union VRAMPixel

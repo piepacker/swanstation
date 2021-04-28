@@ -1049,8 +1049,8 @@ void GPU_SW_Backend::ReadVRAM(u32 x, u32 y, u32 width, u32 height)
   for (u32 yoffs = 0; yoffs < height; yoffs++)
   {
     const u32 row = (y + yoffs) % VRAM_HEIGHT;
-    const u16* src = UPRAM_ACCESSOR + (row * VRAM_UPRENDER_SIZE_X);
-          u16* dst = shadow_ptr     + (row);
+    const u16* src = UPRAM_ACCESSOR + ((row * RESOLUTION_SCALE) * VRAM_UPRENDER_SIZE_X);
+          u16* dst = shadow_ptr     + ((row * 1               ) * VRAM_WIDTH);
     for (u32 xoffs = 0; xoffs < width; xoffs++)
     {
       const u32 col = (x + xoffs) % VRAM_WIDTH;
@@ -1060,9 +1060,9 @@ void GPU_SW_Backend::ReadVRAM(u32 x, u32 y, u32 width, u32 height)
 
 }
 
-void GPU_SW_Backend::Sync(bool allow_sleep) 
+void GPU_SW_Backend::Sync() 
 {
-  GPUBackend::Sync(allow_sleep);
+  GPUBackend::Sync();
   ReadVRAM(0, 0, VRAM_WIDTH, VRAM_HEIGHT);
 }
 
