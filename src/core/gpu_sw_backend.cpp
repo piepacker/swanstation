@@ -87,28 +87,9 @@ constexpr GPU_SW_Backend::DitherLUT GPU_SW_Backend::ComputeDitherLUT()
 static constexpr GPU_SW_Backend::DitherLUT s_dither_lut = GPU_SW_Backend::ComputeDitherLUT();
 
 
-s32 ApplyTextureWindow(const GPUBackendDrawCommand* cmd, s32 coords)
-{
-  return (coords & cmd->window.and_x) | cmd->window.or_x;
-}
-
-s32 ApplyUpscaledTextureWindow(const GPUBackendDrawCommand* cmd, s32 coords)
-{
-  auto native_coords = coords / RESOLUTION_SCALE;
-  auto coords_offset = coords % RESOLUTION_SCALE;
-  return (ApplyTextureWindow(cmd, native_coords) * RESOLUTION_SCALE) + coords_offset;
-}
-
-s32 FloatToIntegerCoord(float coord)
-{
-  // With the vertex offset applied at 1x resolution scale, we want to round the texture coordinates.
-  // Floor them otherwise, as it currently breaks when upscaling as the vertex offset is not applied.
-  return (RESOLUTION_SCALE == 1u) ? roundf(coord) : floorf(coord);
-}
-
 template<bool texture_enable, bool raw_texture_enable, bool transparency_enable, bool dithering_enable>
 void ALWAYS_INLINE_RELEASE GPU_SW_Backend::ShadePixel(const GPUBackendDrawCommand* cmd, s32 x, s32 y, u8 color_r,
-                                                      u8 color_g, u8 color_b, float texcoord_x_f32, float texcoord_y_f32)
+                                                      u8 color_g, u8 color_b, u8 texcoord_x_u8, u8 texcoord_y_u8)
 {
   VRAMPixel color;
   bool transparent;
@@ -116,14 +97,8 @@ void ALWAYS_INLINE_RELEASE GPU_SW_Backend::ShadePixel(const GPUBackendDrawComman
   {
     // Apply texture window
     // TODO: Precompute the second half
-    //float texcoord_x = (texcoord_x & cmd->window.and_x) | cmd->window.or_x;
-    //float texcoord_y = (texcoord_y & cmd->window.and_y) | cmd->window.or_y;
-
-    //auto texcoord_x = ApplyUpscaledTextureWindow(cmd, FloatToIntegerCoord(texcoord_x_f32));
-    //auto texcoord_y = ApplyUpscaledTextureWindow(cmd, FloatToIntegerCoord(texcoord_y_f32));
-
-    auto texcoord_x = ApplyTextureWindow(cmd, FloatToIntegerCoord(texcoord_x_f32));
-    auto texcoord_y = ApplyTextureWindow(cmd, FloatToIntegerCoord(texcoord_y_f32));
+    int texcoord_x = (texcoord_x_u8 & cmd->window.and_x) | cmd->window.or_x;
+    int texcoord_y = (texcoord_y_u8 & cmd->window.and_y) | cmd->window.or_y;
 
     VRAMPixel texture_color;
     switch (cmd->draw_mode.texture_mode)
@@ -243,7 +218,6 @@ void ALWAYS_INLINE_RELEASE GPU_SW_Backend::ShadePixel(const GPUBackendDrawComman
     return;
 
   UPRAM_ACCESSOR[VRAM_UPRENDER_SIZE_X * y + x] = (color.bits | cmd->params.GetMaskOR());
-  //SetPixel(static_cast<u32>(x), static_cast<u32>(y), color.bits | cmd->params.GetMaskOR());
 }
 
 template<bool texture_enable, bool raw_texture_enable, bool transparency_enable>
