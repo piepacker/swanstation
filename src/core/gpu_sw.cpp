@@ -332,8 +332,22 @@ void GPU_SW::CopyOut24Bit(u32 src_x_native, u32 src_y_native, u32 skip_x_native,
   u8* dst_ptr;
   u32 dst_stride;
 
-  auto width_up  = width_native  * RESOLUTION_SCALE;
-  auto height_up = height_native * RESOLUTION_SCALE;
+  auto width_up   = width_native  * RESOLUTION_SCALE;
+  auto height_up  = height_native * RESOLUTION_SCALE;
+  auto src_x_up   = src_x_native  * RESOLUTION_SCALE;
+  auto src_y_up   = src_y_native  * RESOLUTION_SCALE;
+  auto skip_x_up  = skip_x_native * RESOLUTION_SCALE;
+
+  // FIXME: 24 bit modes must be sampled either from a native res staging buffer, or by
+  // adapting logic to handle the upres swizzle (due to PSX VMEM being 16-bits natively):
+  //
+  //  1  2  3  4  5  6  7  8  9  10
+  //  RG RG BR BR GB GB RG RG BR BR
+  //  RG RG BR BR GB GB RG RG BR BR
+  //
+
+  // lazily read into vram shadow for now. Slower? maybe. Easier? yes.
+  m_backend.ReadVRAM(src_x_native, src_y_native, width_native, height_native);
 
   using OutputPixelType = std::conditional_t<
     display_format == HostDisplayPixelFormat::RGBA8 || display_format == HostDisplayPixelFormat::BGRA8, u32, u16>;
@@ -356,87 +370,63 @@ void GPU_SW::CopyOut24Bit(u32 src_x_native, u32 src_y_native, u32 skip_x_native,
   const u8 interlaced_shift = BoolToUInt8(interlaced);
   const u8 interleaved_shift = BoolToUInt8(interleaved);
   const u32 rows_native = height_native >> interlaced_shift;
-  const u32 rows = height_up >> interlaced_shift;
 
   dst_stride <<= interlaced_shift;
 
-  auto src_x_up   = src_x_native  * RESOLUTION_SCALE;
-  auto src_y_up   = src_y_native  * RESOLUTION_SCALE;
-  auto skip_x_up  = skip_x_native * RESOLUTION_SCALE;
-
-  // FIXME: 24 bit modes must be sampled either from a native res staging buffer, or by
-  // adapting logic to handle the upres swizzle (due to PSX VMEM being 16-bits natively):
-  //
-  //  1  2  3  4  5  6  7  8  9  10
-  //  RG RG BR BR GB GB RG RG BR BR
-  //  RG RG BR BR GB GB RG RG BR BR
-  //
-
-  auto m_vram_ptr = GetVramDisplayMemPtr();
+  auto shadow_ptr = m_backend.GetVRAMshadowPtr();
 
   if ((src_x_native + width_native) <= VRAM_WIDTH && (src_y_native + (rows_native << interleaved_shift)) <= VRAM_HEIGHT)
   {
-    const u8* src_ptr = reinterpret_cast<const u8*>(&m_vram_ptr[src_y_up * VRAM_UPRENDER_SIZE_X + src_x_up]) + (skip_x_up * 3);
-    const u32 src_stride = (VRAM_UPRENDER_SIZE_X << interleaved_shift) * sizeof(u16);
-    for (u32 row = 0; row < rows; row++)
+    const u8* src_ptr = reinterpret_cast<const u8*>(&shadow_ptr[src_y_native * VRAM_WIDTH + src_x_native]) + (skip_x_native * 3);
+    const u32 src_stride = (VRAM_WIDTH << interleaved_shift) * sizeof(u16);
+    for (u32 row = 0; row < rows_native; row++, src_ptr += src_stride)
     {
-      if constexpr (display_format == HostDisplayPixelFormat::RGBA8)
+      for (int uy = 0; uy < RESOLUTION_SCALE; ++uy, dst_ptr += dst_stride)
       {
         const u8* src_row_ptr = src_ptr;
-        u8* dst_row_ptr = reinterpret_cast<u8*>(dst_ptr);
-        for (u32 col = 0; col < width_up; col++)
+              u8* dst_row_ptr = reinterpret_cast<u8*>(dst_ptr);
+      
+        for (u32 col = 0; col < width_native; col++, src_row_ptr+=3)
         {
-          *(dst_row_ptr++) = *(src_row_ptr++);
-          *(dst_row_ptr++) = *(src_row_ptr++);
-          *(dst_row_ptr++) = *(src_row_ptr++);
-          *(dst_row_ptr++) = 0xFF;
+          for (int ux = 0; ux < RESOLUTION_SCALE; ++ux)
+          {
+            if constexpr (display_format == HostDisplayPixelFormat::RGBA8)
+            {
+              *(dst_row_ptr++) = src_row_ptr[0];
+              *(dst_row_ptr++) = src_row_ptr[1];
+              *(dst_row_ptr++) = src_row_ptr[2];
+              *(dst_row_ptr++) = 0xFF;
+            }
+            else if constexpr (display_format == HostDisplayPixelFormat::BGRA8)
+            {
+              *(dst_row_ptr++) = src_row_ptr[2];
+              *(dst_row_ptr++) = src_row_ptr[1];
+              *(dst_row_ptr++) = src_row_ptr[0];
+              *(dst_row_ptr++) = 0xFF;
+            }
+            else if constexpr (display_format == HostDisplayPixelFormat::RGB565)
+            {
+              *(dst_row_ptr++) = ((static_cast<u16>(src_row_ptr[0]) >> 3) << 11) |
+                                  ((static_cast<u16>(src_row_ptr[1]) >> 2) << 5) | (static_cast<u16>(src_row_ptr[2]) >> 3);
+              src_row_ptr += 3;
+            }
+            else if constexpr (display_format == HostDisplayPixelFormat::RGBA5551)
+            {
+              *(dst_row_ptr++) = ((static_cast<u16>(src_row_ptr[0]) >> 3) << 10) |
+                                  ((static_cast<u16>(src_row_ptr[1]) >> 3) << 5) | (static_cast<u16>(src_row_ptr[2]) >> 3);
+              src_row_ptr += 3;
+            }
+          }
         }
       }
-      else if constexpr (display_format == HostDisplayPixelFormat::BGRA8)
-      {
-        const u8* src_row_ptr = src_ptr;
-        u8* dst_row_ptr = reinterpret_cast<u8*>(dst_ptr);
-        for (u32 col = 0; col < width_up; col++)
-        {
-          *(dst_row_ptr++) = src_row_ptr[2];
-          *(dst_row_ptr++) = src_row_ptr[1];
-          *(dst_row_ptr++) = src_row_ptr[0];
-          *(dst_row_ptr++) = 0xFF;
-          src_row_ptr += 3;
-        }
-      }
-      else if constexpr (display_format == HostDisplayPixelFormat::RGB565)
-      {
-        const u8* src_row_ptr = src_ptr;
-        u16* dst_row_ptr = reinterpret_cast<u16*>(dst_ptr);
-        for (u32 col = 0; col < width_up; col++)
-        {
-          *(dst_row_ptr++) = ((static_cast<u16>(src_row_ptr[0]) >> 3) << 11) |
-                             ((static_cast<u16>(src_row_ptr[1]) >> 2) << 5) | (static_cast<u16>(src_row_ptr[2]) >> 3);
-          src_row_ptr += 3;
-        }
-      }
-      else if constexpr (display_format == HostDisplayPixelFormat::RGBA5551)
-      {
-        const u8* src_row_ptr = src_ptr;
-        u16* dst_row_ptr = reinterpret_cast<u16*>(dst_ptr);
-        for (u32 col = 0; col < width_up; col++)
-        {
-          *(dst_row_ptr++) = ((static_cast<u16>(src_row_ptr[0]) >> 3) << 10) |
-                             ((static_cast<u16>(src_row_ptr[1]) >> 3) << 5) | (static_cast<u16>(src_row_ptr[2]) >> 3);
-          src_row_ptr += 3;
-        }
-      }
-
-      src_ptr += src_stride;
-      dst_ptr += dst_stride;
     }
   }
   else
   {
-    for (u32 row = 0; row < rows; row++)
+    // FIXME : UPRENDER : This has not been implemented yet.
+    for (u32 row = 0; row < rows_native; row++)
     {
-      const u16* src_row_ptr = &m_vram_ptr[(src_y_up % VRAM_UPRENDER_SIZE_Y) * VRAM_UPRENDER_SIZE_X];
+      const u16* src_row_ptr = &shadow_ptr[(src_y_native % VRAM_HEIGHT) * VRAM_WIDTH];
       OutputPixelType* dst_row_ptr = reinterpret_cast<OutputPixelType*>(dst_ptr);
 
       for (u32 col = 0; col < width_up; col++)
