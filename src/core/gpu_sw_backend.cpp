@@ -10,7 +10,8 @@ Log_SetChannel(GPU_SW_Backend);
 #define SCALE_ALL_VERTEX 1
 #ifdef _MSC_VER
 #pragma warning(push)
-#pragma warning(disable : 4244) // warning C4324: 'GPUBackend': structure was padded due to alignment specifier
+#pragma warning(disable : 4244) // warning C4324: structure was padded due to alignment specifier
+#pragma warning(disable : 4189) // warning C4189: local variable is initialized but not referenced
 #endif
 
 GPU_SW_Backend::GPU_SW_Backend() : GPUBackend()
