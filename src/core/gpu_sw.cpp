@@ -408,13 +408,11 @@ void GPU_SW::CopyOut24Bit(u32 src_x_native, u32 src_y_native, u32 skip_x_native,
             {
               *(dst_row_ptr++) = ((static_cast<u16>(src_row_ptr[0]) >> 3) << 11) |
                                   ((static_cast<u16>(src_row_ptr[1]) >> 2) << 5) | (static_cast<u16>(src_row_ptr[2]) >> 3);
-              src_row_ptr += 3;
             }
             else if constexpr (display_format == HostDisplayPixelFormat::RGBA5551)
             {
               *(dst_row_ptr++) = ((static_cast<u16>(src_row_ptr[0]) >> 3) << 10) |
                                   ((static_cast<u16>(src_row_ptr[1]) >> 3) << 5) | (static_cast<u16>(src_row_ptr[2]) >> 3);
-              src_row_ptr += 3;
             }
           }
         }
