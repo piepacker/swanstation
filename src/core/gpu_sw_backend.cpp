@@ -1002,13 +1002,15 @@ void GPU_SW_Backend::UpdateVRAM(u32 x, u32 y, u32 width, u32 height, const void*
 
     for (u32 row = 0; row < height;)
     {
-      u16* dst_row_ptr = &UPRAM_ACCESSOR[((y + row++) % VRAM_HEIGHT) * VRAM_WIDTH];
+      auto dsty = (y + row++) % VRAM_HEIGHT;
       for (u32 col = 0; col < width;)
       {
         // TODO: Handle unaligned reads...
-        u16* pixel_ptr = &dst_row_ptr[(x + col++) % VRAM_WIDTH];
-        if (((*pixel_ptr) & mask_and) == 0)
-          *pixel_ptr = *(src_ptr++) | mask_or;
+        auto dstx = (x + col++) % VRAM_WIDTH;
+
+        auto pixel = GetPixel(dstx,dsty);
+        if ((pixel & mask_and) == 0)
+          SetPixel(dstx, dsty, *(src_ptr++) | mask_or);
       }
     }
   }
@@ -1085,15 +1087,17 @@ void GPU_SW_Backend::CopyVRAM(u32 src_x, u32 src_y, u32 dst_x, u32 dst_y, u32 wi
   {
     for (u32 row = 0; row < height; row++)
     {
-      const u16* src_row_ptr = &UPRAM_ACCESSOR[((src_y + row) % VRAM_HEIGHT) * VRAM_WIDTH];
-      u16* dst_row_ptr = &UPRAM_ACCESSOR[((dst_y + row) % VRAM_HEIGHT) * VRAM_WIDTH];
+      auto sy = (src_y + row) % VRAM_HEIGHT;
+      auto dy = (dst_y + row) % VRAM_HEIGHT;
 
       for (s32 col = static_cast<s32>(width - 1); col >= 0; col--)
       {
-        const u16 src_pixel = src_row_ptr[(src_x + static_cast<u32>(col)) % VRAM_WIDTH];
-        u16* dst_pixel_ptr = &dst_row_ptr[(dst_x + static_cast<u32>(col)) % VRAM_WIDTH];
-        if ((*dst_pixel_ptr & mask_and) == 0)
-          *dst_pixel_ptr = src_pixel | mask_or;
+        auto sx = (src_x + static_cast<u32>(col)) % VRAM_WIDTH;
+        auto dx = (dst_x + static_cast<u32>(col)) % VRAM_WIDTH;
+        auto src_pixel = GetPixel(sx, sy);
+        auto dst_pixel = GetPixel(dx, dy);
+        if ((dst_pixel & mask_and) == 0)
+          SetPixel(dx, dy, src_pixel | mask_or);
       }
     }
   }
@@ -1101,15 +1105,17 @@ void GPU_SW_Backend::CopyVRAM(u32 src_x, u32 src_y, u32 dst_x, u32 dst_y, u32 wi
   {
     for (u32 row = 0; row < height; row++)
     {
-      const u16* src_row_ptr = &UPRAM_ACCESSOR[((src_y + row) % VRAM_HEIGHT) * VRAM_WIDTH];
-      u16* dst_row_ptr = &UPRAM_ACCESSOR[((dst_y + row) % VRAM_HEIGHT) * VRAM_WIDTH];
+      auto sy = (src_y + row) % VRAM_HEIGHT;
+      auto dy = (dst_y + row) % VRAM_HEIGHT;
 
       for (u32 col = 0; col < width; col++)
       {
-        const u16 src_pixel = src_row_ptr[(src_x + col) % VRAM_WIDTH];
-        u16* dst_pixel_ptr = &dst_row_ptr[(dst_x + col) % VRAM_WIDTH];
-        if ((*dst_pixel_ptr & mask_and) == 0)
-          *dst_pixel_ptr = src_pixel | mask_or;
+        auto sx = (src_x + static_cast<u32>(col)) % VRAM_WIDTH;
+        auto dx = (dst_x + static_cast<u32>(col)) % VRAM_WIDTH;
+        auto src_pixel = GetPixel(sx, sy);
+        auto dst_pixel = GetPixel(dx, dy);
+        if ((dst_pixel & mask_and) == 0)
+          SetPixel(dx, dy, src_pixel | mask_or);
       }
     }
   }
