@@ -212,6 +212,11 @@ u32 GetMediaSubImageIndexForTitle(const std::string_view& title);
 /// Returns the path to the specified playlist index.
 std::string GetMediaSubImageTitle(u32 index);
 
+#if defined(LIBRETRO)
+/// Returns the sub-image path corresponding to the specified playlist index.
+std::string GetMediaSubImagePath(u32 index);
+#endif
+
 /// Switches to the specified media/disc playlist index.
 bool SwitchMediaSubImage(u32 index);
 

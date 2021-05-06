@@ -42,6 +42,8 @@ static retro_log_callback s_libretro_log_callback = {};
 static bool s_libretro_log_callback_valid = false;
 static bool s_libretro_log_callback_registered = false;
 
+static bool s_libretro_sub_image_ejected = false;
+
 static void LibretroLogCallback(void* pUserParam, const char* channelName, const char* functionName, LOGLEVEL level,
                                 const char* message)
 {
@@ -68,13 +70,13 @@ LibretroHostInterface::~LibretroHostInterface()
 void LibretroHostInterface::retro_set_environment()
 {
   SetCoreOptions();
-  InitDiskControlInterface();
   InitLogging();
 }
 
 void LibretroHostInterface::InitInterfaces()
 {
   InitRumbleInterface();
+  InitDiskControlInterface();
 
   unsigned dummy = 0;
   m_supports_input_bitmasks = g_retro_environment_callback(RETRO_ENVIRONMENT_GET_INPUT_BITMASKS, &dummy);
@@ -99,6 +101,11 @@ bool LibretroHostInterface::Initialize()
 {
   if (!HostInterface::Initialize())
     return false;
+
+  /* Must reset this here, otherwise the
+   * last set value will persist between
+   * successive core initialisations... */
+  P_THIS->m_next_disc_index = 0;
 
   InitInterfaces();
   LibretroSettingsInterface si;
@@ -1427,81 +1434,91 @@ void LibretroHostInterface::SwitchToSoftwareRenderer()
 bool LibretroHostInterface::DiskControlSetEjectState(bool ejected)
 {
   if (System::IsShutdown())
-  {
-    Log_ErrorPrintf("DiskControlSetEjectState() - no system");
     return false;
-  }
 
-  Log_DevPrintf("DiskControlSetEjectState(%u)", static_cast<unsigned>(ejected));
+  /* 1) We do not support disk swapping when using
+   *    single-disk images
+   * 2) Since removing multi-disk media wipes all
+   *    record of the sub-image file list, we
+   *    perform a 'virtual' eject */
+  if (!System::HasMedia() || !System::HasMediaSubImages())
+    return false;
 
   if (ejected)
   {
-    if (!System::HasMedia())
+    if (s_libretro_sub_image_ejected)
       return false;
 
-    System::RemoveMedia();
-    return true;
+    s_libretro_sub_image_ejected = true;
   }
   else
   {
+    if (!s_libretro_sub_image_ejected)
+      return false;
+
     const u32 image_to_insert = P_THIS->m_next_disc_index.value_or(0);
-    Log_DevPrintf("Inserting image %u", image_to_insert);
-    return System::SwitchMediaSubImage(image_to_insert);
+
+    if (!System::SwitchMediaSubImage(image_to_insert))
+      return false;
+
+    s_libretro_sub_image_ejected = false;
   }
+
+  return true;
 }
 
 bool LibretroHostInterface::DiskControlGetEjectState()
 {
   if (System::IsShutdown())
-  {
-    Log_ErrorPrintf("DiskControlGetEjectState() - no system");
     return false;
-  }
 
-  Log_DevPrintf("DiskControlGetEjectState() -> %u", static_cast<unsigned>(System::HasMedia()));
-  return System::HasMedia();
+  if (System::HasMediaSubImages())
+    return s_libretro_sub_image_ejected;
+
+  return !System::HasMedia();
 }
 
 unsigned LibretroHostInterface::DiskControlGetImageIndex()
 {
-  if (System::IsShutdown())
+  if (System::IsShutdown() || !System::HasMedia())
+    return 0;
+
+  if (System::HasMediaSubImages())
   {
-    Log_ErrorPrintf("DiskControlGetImageIndex() - no system");
-    return false;
+    const u32 index = P_THIS->m_next_disc_index.value_or(System::GetMediaSubImageIndex());
+    return index;
   }
 
-  const u32 index = P_THIS->m_next_disc_index.value_or(System::GetMediaSubImageIndex());
-  Log_DevPrintf("DiskControlGetImageIndex() -> %u", index);
-  return index;
+  return 0;
 }
 
 bool LibretroHostInterface::DiskControlSetImageIndex(unsigned index)
 {
-  if (System::IsShutdown())
+  if (System::IsShutdown() || !System::HasMedia())
+    return false;
+
+  if (System::HasMediaSubImages())
   {
-    Log_ErrorPrintf("DiskControlSetImageIndex() - no system");
-    return false;
+    if (index >= System::GetMediaSubImageCount())
+      return false;
+
+    P_THIS->m_next_disc_index = index;
   }
-
-  Log_DevPrintf("DiskControlSetImageIndex(%u)", index);
-
-  if (index >= System::GetMediaSubImageCount())
+  else if (index > 0)
     return false;
 
-  P_THIS->m_next_disc_index = index;
   return true;
 }
 
 unsigned LibretroHostInterface::DiskControlGetNumImages()
 {
-  if (System::IsShutdown())
-  {
-    Log_ErrorPrintf("DiskControlGetNumImages() - no system");
-    return false;
-  }
+  if (System::IsShutdown() || !System::HasMedia())
+    return 0;
 
-  Log_DevPrintf("DiskControlGetNumImages() -> %u", System::GetMediaSubImageCount());
-  return static_cast<unsigned>(System::GetMediaSubImageCount());
+  if (System::HasMediaSubImages())
+    return static_cast<unsigned>(System::GetMediaSubImageCount());
+  else
+    return 1;
 }
 
 // bool LibretroHostInterface::DiskControlReplaceImageIndex(unsigned index, const retro_game_info* info)
@@ -1534,37 +1551,78 @@ unsigned LibretroHostInterface::DiskControlGetNumImages()
 
 bool LibretroHostInterface::DiskControlSetInitialImage(unsigned index, const char* path)
 {
-  Log_DevPrintf("DiskControlSetInitialImage(%u, %s)", index, path);
   P_THIS->m_next_disc_index = index;
   return true;
 }
 
 bool LibretroHostInterface::DiskControlGetImagePath(unsigned index, char* path, size_t len)
 {
-  if (System::IsShutdown() || index >= System::GetMediaSubImageCount())
+  if (System::IsShutdown() || !System::HasMedia())
     return false;
 
-  const std::string& image_path = System::GetMediaSubImageTitle(index);
-  Log_DevPrintf("DiskControlGetImagePath(%u) -> %s", index, image_path.c_str());
-  if (image_path.empty())
-    return false;
+  if (System::HasMediaSubImages())
+  {
+    if (index >= System::GetMediaSubImageCount())
+      return false;
 
-  StringUtil::Strlcpy(path, image_path.c_str(), len);
+    const std::string& sub_image_path = System::GetMediaSubImagePath(index);
+
+    if (sub_image_path.empty())
+      return false;
+
+    StringUtil::Strlcpy(path, sub_image_path.c_str(), len);
+  }
+  else
+  {
+    if (index > 0)
+      return false;
+
+    const std::string& image_path = System::GetMediaFileName();
+
+    if (image_path.empty())
+      return false;
+
+    StringUtil::Strlcpy(path, image_path.c_str(), len);
+  }
+
   return true;
 }
 
 bool LibretroHostInterface::DiskControlGetImageLabel(unsigned index, char* label, size_t len)
 {
-  if (System::IsShutdown() || index >= System::GetMediaSubImageCount())
+  if (System::IsShutdown() || !System::HasMedia())
     return false;
 
-  const std::string& image_path = System::GetMediaSubImageTitle(index);
-  if (image_path.empty())
-    return false;
+  if (System::HasMediaSubImages())
+  {
+    if (index >= System::GetMediaSubImageCount())
+      return false;
 
-  const std::string_view title = System::GetTitleForPath(label);
-  StringUtil::Strlcpy(label, title, len);
-  Log_DevPrintf("DiskControlGetImagePath(%u) -> %s", index, label);
+    const std::string& sub_image_title = System::GetMediaSubImageTitle(index);
+
+    if (sub_image_title.empty())
+      return false;
+
+    StringUtil::Strlcpy(label, sub_image_title.c_str(), len);
+  }
+  else
+  {
+    if (index > 0)
+      return false;
+
+    const std::string& image_path = System::GetMediaFileName();
+
+    if (image_path.empty())
+      return false;
+
+    const std::string_view image_title = System::GetTitleForPath(image_path.c_str());
+
+    if (image_title.empty())
+      return false;
+
+    StringUtil::Strlcpy(label, image_title, len);
+  }
+
   return true;
 }
 

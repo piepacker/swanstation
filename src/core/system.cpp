@@ -2034,6 +2034,17 @@ std::string GetMediaSubImageTitle(u32 index)
   return cdi->GetSubImageMetadata(index, "title");
 }
 
+#if defined(LIBRETRO)
+std::string GetMediaSubImagePath(u32 index)
+{
+  const CDImage* cdi = g_cdrom.GetMedia();
+  if (!cdi)
+    return {};
+
+  return cdi->GetSubImageMetadata(index, "file_path");
+}
+#endif
+
 bool SwitchMediaSubImage(u32 index)
 {
   if (!g_cdrom.HasMedia())
