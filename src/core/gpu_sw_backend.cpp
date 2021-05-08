@@ -86,8 +86,59 @@ constexpr GPU_SW_Backend::DitherLUT GPU_SW_Backend::ComputeDitherLUT()
 
 static constexpr GPU_SW_Backend::DitherLUT s_dither_lut = GPU_SW_Backend::ComputeDitherLUT();
 
+static ALWAYS_INLINE_RELEASE u16 PlotPixelBlend(GPUTransparencyMode blendMode, u16 bg_pix, u16 fore_pix)
+{
+  /*
+  * fore_pix - foreground -  the screen
+  * bg_pix   - background  - the texture
+  */
 
-template<bool texture_enable, bool raw_texture_enable, bool transparency_enable, bool dithering_enable>
+  u32 sum, carry;
+
+  /* Efficient 15bpp pixel math algorithms from blargg */
+  switch(blendMode)
+  {
+    /* 0.5 x B + 0.5 x F */
+    case GPUTransparencyMode::HalfBackgroundPlusHalfForeground: {
+      bg_pix   |= 0x8000;
+      return ((fore_pix + bg_pix) - ((fore_pix ^ bg_pix) & 0x0421)) >> 1;
+    }
+
+    /* 1.0 x B + 1.0 x F */
+    case GPUTransparencyMode::BackgroundPlusForeground: {
+      bg_pix   &= ~0x8000;
+      sum       = fore_pix + bg_pix;
+      carry     = (sum - ((fore_pix ^ bg_pix) & 0x8421)) & 0x8420;
+      return (sum - carry) | (carry - (carry >> 5));
+    }
+    /* 1.0 x B - 1.0 x F */
+
+    case GPUTransparencyMode::BackgroundMinusForeground: {
+      uint32_t diff;
+      uint32_t borrow;
+
+      bg_pix    |= 0x8000;
+      fore_pix &= ~0x8000;
+      diff       = bg_pix - fore_pix + 0x108420;
+      borrow     = (diff  - ((bg_pix ^ fore_pix) & 0x108420)) & 0x108420;
+      return (diff  - borrow) & (borrow - (borrow >> 5));
+    }
+
+    /* 1.0 x B + 0.25 * F */
+    case GPUTransparencyMode::BackgroundPlusQuarterForeground: {
+      bg_pix   &= ~0x8000;
+      fore_pix = ((fore_pix >> 2) & 0x1CE7) | 0x8000;
+      sum       = fore_pix + bg_pix;
+      carry     = (sum - ((fore_pix ^ bg_pix) & 0x8421)) & 0x8420;
+      return (sum - carry) | (carry - (carry >> 5));
+    }
+
+    default:
+      UnreachableCode();
+  }
+}
+
+template<bool texture_enable, bool raw_texture_enable, bool transparency_enable, bool dithering_enable, bool mask_and_enable, bool mask_or_enable>
 void ALWAYS_INLINE_RELEASE GPU_SW_Backend::ShadePixel(const GPUBackendDrawCommand* cmd, s32 x, s32 y, u8 color_r,
                                                       u8 color_g, u8 color_b, u8 texcoord_x_u8, u8 texcoord_y_u8)
 {
@@ -166,58 +217,68 @@ void ALWAYS_INLINE_RELEASE GPU_SW_Backend::ShadePixel(const GPUBackendDrawComman
                  (ZeroExtend16(s_dither_lut[dither_y][dither_x][color_b]) << 10);
   }
 
-  //const VRAMPixel bg_color{GetPixel(x, y)};
-  const VRAMPixel bg_color { UPRAM_ACCESSOR[VRAM_UPRENDER_SIZE_X * y + x] };
-
-  if constexpr (transparency_enable)
+  if constexpr (transparency_enable || mask_and_enable)
   {
-    if (transparent)
+    if constexpr (mask_and_enable)
     {
-#define BLEND_AVERAGE(bg, fg) Truncate8(std::min<u32>((ZeroExtend32(bg) / 2) + (ZeroExtend32(fg) / 2), 0x1F))
-#define BLEND_ADD(bg, fg) Truncate8(std::min<u32>(ZeroExtend32(bg) + ZeroExtend32(fg), 0x1F))
-#define BLEND_SUBTRACT(bg, fg) Truncate8((bg > fg) ? ((bg) - (fg)) : 0)
-#define BLEND_QUARTER(bg, fg) Truncate8(std::min<u32>(ZeroExtend32(bg) + ZeroExtend32(fg / 4), 0x1F))
+      const u16 mask_and = cmd->params.GetMaskAND();
+      if ((UPRAM_ACCESSOR[VRAM_UPRENDER_SIZE_X * y + x] & mask_and) != 0)
+        return;
+    }
 
-#define BLEND_RGB(func)                                                                                                \
-  color.Set(func(bg_color.r.GetValue(), color.r.GetValue()), func(bg_color.g.GetValue(), color.g.GetValue()),          \
-            func(bg_color.b.GetValue(), color.b.GetValue()), color.c.GetValue())
-
-      switch (cmd->draw_mode.transparency_mode)
+    if constexpr (transparency_enable)
+    {
+      if (transparent)
       {
-        case GPUTransparencyMode::HalfBackgroundPlusHalfForeground:
-          BLEND_RGB(BLEND_AVERAGE);
-          break;
-        case GPUTransparencyMode::BackgroundPlusForeground:
-          BLEND_RGB(BLEND_ADD);
-          break;
-        case GPUTransparencyMode::BackgroundMinusForeground:
-          BLEND_RGB(BLEND_SUBTRACT);
-          break;
-        case GPUTransparencyMode::BackgroundPlusQuarterForeground:
-          BLEND_RGB(BLEND_QUARTER);
-          break;
-        default:
-          break;
+        //PlotPixelBlend
+        const VRAMPixel bg_color { UPRAM_ACCESSOR[VRAM_UPRENDER_SIZE_X * y + x] };
+  #define BLEND_AVERAGE(bg, fg) Truncate8(std::min<u32>((ZeroExtend32(bg) / 2) + (ZeroExtend32(fg) / 2), 0x1F))
+  #define BLEND_ADD(bg, fg) Truncate8(std::min<u32>(ZeroExtend32(bg) + ZeroExtend32(fg), 0x1F))
+  #define BLEND_SUBTRACT(bg, fg) Truncate8((bg > fg) ? ((bg) - (fg)) : 0)
+  #define BLEND_QUARTER(bg, fg) Truncate8(std::min<u32>(ZeroExtend32(bg) + ZeroExtend32(fg / 4), 0x1F))
+
+  #define BLEND_RGB(func)                                                                                                \
+    color.Set(func(bg_color.r.GetValue(), color.r.GetValue()), func(bg_color.g.GetValue(), color.g.GetValue()),          \
+              func(bg_color.b.GetValue(), color.b.GetValue()), color.c.GetValue())
+
+        switch (cmd->draw_mode.transparency_mode)
+        {
+          case GPUTransparencyMode::HalfBackgroundPlusHalfForeground:
+            BLEND_RGB(BLEND_AVERAGE);
+            break;
+          case GPUTransparencyMode::BackgroundPlusForeground:
+            BLEND_RGB(BLEND_ADD);
+            break;
+          case GPUTransparencyMode::BackgroundMinusForeground:
+            BLEND_RGB(BLEND_SUBTRACT);
+            break;
+          case GPUTransparencyMode::BackgroundPlusQuarterForeground:
+            BLEND_RGB(BLEND_QUARTER);
+            break;
+          default:
+            break;
+        }
+
+  #undef BLEND_RGB
+
+  #undef BLEND_QUARTER
+  #undef BLEND_SUBTRACT
+  #undef BLEND_ADD
+  #undef BLEND_AVERAGE
       }
-
-#undef BLEND_RGB
-
-#undef BLEND_QUARTER
-#undef BLEND_SUBTRACT
-#undef BLEND_ADD
-#undef BLEND_AVERAGE
+    }
+    else
+    {
+      UNREFERENCED_VARIABLE(transparent);
     }
   }
-  else
-  {
-    UNREFERENCED_VARIABLE(transparent);
-  }
 
-  const u16 mask_and = cmd->params.GetMaskAND();
-  if ((bg_color.bits & mask_and) != 0)
-    return;
+  u16 result = color.bits;
 
-  UPRAM_ACCESSOR[VRAM_UPRENDER_SIZE_X * y + x] = (color.bits | cmd->params.GetMaskOR());
+  if constexpr (mask_or_enable)
+    result |= cmd->params.GetMaskOR();
+
+  UPRAM_ACCESSOR[VRAM_UPRENDER_SIZE_X * y + x] = result;
 }
 
 template<bool texture_enable, bool raw_texture_enable, bool transparency_enable>
@@ -256,7 +317,7 @@ void GPU_SW_Backend::DrawRectangle(const GPUBackendDrawRectangleCommand* cmd)
       // for rectangle draws.
       const u8 texcoord_x = Truncate8(ZeroExtend32(origin_texcoord_x) + (offset_x / RESOLUTION_SCALE));
 
-      ShadePixel<texture_enable, raw_texture_enable, transparency_enable, false>(
+      ShadePixel<texture_enable, raw_texture_enable, transparency_enable, false, true, true>(
         cmd, static_cast<u32>(x_up), static_cast<u32>(y_up), r, g, b, texcoord_x, texcoord_y);
     }
   }
@@ -335,36 +396,36 @@ bool ALWAYS_INLINE_RELEASE GPU_SW_Backend::CalcIDeltas(i_deltas& idl, const GPUB
 }
 
 template<bool shading_enable, bool texture_enable, typename I_GROUP>
-void ALWAYS_INLINE_RELEASE GPU_SW_Backend::AddIDeltas_DX(I_GROUP& ig, const i_deltas& idl, float count /*= 1*/)
+void ALWAYS_INLINE_RELEASE GPU_SW_Backend::AddIDeltas_DX(I_GROUP& ig, const i_deltas& idl, AddDeltasScalar_t count /*= 1*/)
 {
   if constexpr (shading_enable)
   {
-    ig.r += idl.dr_dx * count;
-    ig.g += idl.dg_dx * count;
-    ig.b += idl.db_dx * count;
+    ig.r += (idl.dr_dx * count);
+    ig.g += (idl.dg_dx * count);
+    ig.b += (idl.db_dx * count);
   }
 
   if constexpr (texture_enable)
   {
-    ig.u += idl.du_dx * count;
-    ig.v += idl.dv_dx * count;
+    ig.u += (idl.du_dx * count);
+    ig.v += (idl.dv_dx * count);
   }
 }
 
 template<bool shading_enable, bool texture_enable, typename I_GROUP>
-void ALWAYS_INLINE_RELEASE GPU_SW_Backend::AddIDeltas_DY(I_GROUP& ig, const i_deltas& idl, float count /*= 1*/)
+void ALWAYS_INLINE_RELEASE GPU_SW_Backend::AddIDeltas_DY(I_GROUP& ig, const i_deltas& idl, AddDeltasScalar_t count /*= 1*/)
 {
   if constexpr (shading_enable)
   {
-    ig.r += idl.dr_dy * count;
-    ig.g += idl.dg_dy * count;
-    ig.b += idl.db_dy * count;
+    ig.r += (idl.dr_dy * count);
+    ig.g += (idl.dg_dy * count);
+    ig.b += (idl.db_dy * count);
   }
 
   if constexpr (texture_enable)
   {
-    ig.u += idl.du_dy * count;
-    ig.v += idl.dv_dy * count;
+    ig.u += (idl.du_dy * count);
+    ig.v += (idl.dv_dy * count);
   }
 }
 
@@ -374,11 +435,9 @@ struct i_group_float
   float r, g, b;
 };
 
-#define USE_FLOAT_STEP 0
-#define USE_INT_STEP   1
 
 template<bool shading_enable, bool texture_enable, bool raw_texture_enable, bool transparency_enable,
-         bool dithering_enable>
+         bool dithering_enable, bool mask_and_enable, bool mask_or_enable>
 void GPU_SW_Backend::DrawSpan(const GPUBackendDrawPolygonCommand* cmd, s32 y_up, s32 x_start_up, s32 x_bound_up, i_group igi,
                               const i_deltas& idl)
 {
@@ -444,13 +503,13 @@ void GPU_SW_Backend::DrawSpan(const GPUBackendDrawPolygonCommand* cmd, s32 y_up,
 #endif
 
 #if USE_INT_STEP
-  AddIDeltas_DX<shading_enable, texture_enable>(igi, idl, (float)x_ig_adjust / (SCALE_ALL_VERTEX ? 1 : RESOLUTION_SCALE));
-  AddIDeltas_DY<shading_enable, texture_enable>(igi, idl, (float)y_up        / (SCALE_ALL_VERTEX ? 1 : RESOLUTION_SCALE));
+  AddIDeltas_DX<shading_enable, texture_enable>(igi, idl, x_ig_adjust / (SCALE_ALL_VERTEX ? 1 : RESOLUTION_SCALE));
+  AddIDeltas_DY<shading_enable, texture_enable>(igi, idl, y_up        / (SCALE_ALL_VERTEX ? 1 : RESOLUTION_SCALE));
 #endif
 
   do
   {
-    Assert(x_up <= static_cast<s32>(m_drawing_area.right+1) * RESOLUTION_SCALE);
+    DebugAssert(x_up <= static_cast<s32>(m_drawing_area.right+1) * RESOLUTION_SCALE);
 
 #if USE_FLOAT_STEP
     auto r = Truncate8((int)floorf(igf.r));
@@ -461,20 +520,20 @@ void GPU_SW_Backend::DrawSpan(const GPUBackendDrawPolygonCommand* cmd, s32 y_up,
 #endif
 
 #if USE_INT_STEP
-    auto ri = Truncate8(igi.r >> (COORD_FBS + COORD_POST_PADDING)); // + RESOLUTION_SHIFT);
-    auto gi = Truncate8(igi.g >> (COORD_FBS + COORD_POST_PADDING)); // + RESOLUTION_SHIFT);
-    auto bi = Truncate8(igi.b >> (COORD_FBS + COORD_POST_PADDING)); // + RESOLUTION_SHIFT);
-    auto ui = Truncate8(igi.u >> (COORD_FBS + COORD_POST_PADDING)); // + RESOLUTION_SHIFT);
-    auto vi = Truncate8(igi.v >> (COORD_FBS + COORD_POST_PADDING)); // + RESOLUTION_SHIFT);
+    auto ri = Truncate8(igi.r >> (COORD_FBS + COORD_POST_PADDING));
+    auto gi = Truncate8(igi.g >> (COORD_FBS + COORD_POST_PADDING));
+    auto bi = Truncate8(igi.b >> (COORD_FBS + COORD_POST_PADDING));
+    auto ui = Truncate8(igi.u >> (COORD_FBS + COORD_POST_PADDING));
+    auto vi = Truncate8(igi.v >> (COORD_FBS + COORD_POST_PADDING));
 #endif
 
-    //Assert(r == ri && u == ui);
-    //Assert(g == gi && v == vi);
-    //Assert(b == bi);
+    //DebugAssert(r == ri && u == ui);
+    //DebugAssert(g == gi && v == vi);
+    //DebugAssert(b == bi);
 
     // FIXME: also need to clip uprender right edge.
     if (x_up >= 0) {
-      ShadePixel<texture_enable, raw_texture_enable, transparency_enable, dithering_enable>(
+      ShadePixel<texture_enable, raw_texture_enable, transparency_enable, dithering_enable, mask_and_enable, mask_or_enable>(
         cmd, x_up, y_up,
 #if USE_INT_STEP
         ri, gi, bi, ui, vi
@@ -490,129 +549,19 @@ void GPU_SW_Backend::DrawSpan(const GPUBackendDrawPolygonCommand* cmd, s32 y_up,
 #endif
 
 #if USE_INT_STEP
-    AddIDeltas_DX<shading_enable, texture_enable>(igi, idl, 1.0f / (SCALE_ALL_VERTEX ? 1 : RESOLUTION_SCALE));
+    AddIDeltas_DX<shading_enable, texture_enable>(igi, idl, SCALE_ALL_VERTEX ? 1 : RESOLUTION_SCALE);
 #endif
 
   } while (--w_up > 0);
 }
 
 template<bool shading_enable, bool texture_enable, bool raw_texture_enable, bool transparency_enable,
-         bool dithering_enable>
+         bool dithering_enable, bool mask_and_enable, bool mask_or_enable>
 void GPU_SW_Backend::DrawTriangle(const GPUBackendDrawPolygonCommand* cmd,
                                   const GPUBackendDrawPolygonCommand::Vertex* v0n,
                                   const GPUBackendDrawPolygonCommand::Vertex* v1n,
                                   const GPUBackendDrawPolygonCommand::Vertex* v2n)
 {
-  u32 core_vertex;
-  {
-    u32 cvtemp = 0;
-
-    if (v1n->x <= v0n->x)
-    {
-      if (v2n->x <= v1n->x)
-        cvtemp = (1 << 2);
-      else
-        cvtemp = (1 << 1);
-    }
-    else if (v2n->x < v0n->x)
-      cvtemp = (1 << 2);
-    else
-      cvtemp = (1 << 0);
-
-    if (v2n->y < v1n->y)
-    {
-      std::swap(v2n, v1n);
-      cvtemp = ((cvtemp >> 1) & 0x2) | ((cvtemp << 1) & 0x4) | (cvtemp & 0x1);
-    }
-
-    if (v1n->y < v0n->y)
-    {
-      std::swap(v1n, v0n);
-      cvtemp = ((cvtemp >> 1) & 0x1) | ((cvtemp << 1) & 0x2) | (cvtemp & 0x4);
-    }
-
-    if (v2n->y < v1n->y)
-    {
-      std::swap(v2n, v1n);
-      cvtemp = ((cvtemp >> 1) & 0x2) | ((cvtemp << 1) & 0x4) | (cvtemp & 0x1);
-    }
-
-    core_vertex = cvtemp >> 1;
-  }
-
-  if (v0n->y == v2n->y)
-    return;
-
-  if (static_cast<u32>(std::abs(v2n->x - v0n->x)) >= MAX_PRIMITIVE_WIDTH ||
-      static_cast<u32>(std::abs(v2n->x - v1n->x)) >= MAX_PRIMITIVE_WIDTH ||
-      static_cast<u32>(std::abs(v1n->x - v0n->x)) >= MAX_PRIMITIVE_WIDTH ||
-      static_cast<u32>(v2n->y - v0n->y) >= MAX_PRIMITIVE_HEIGHT)
-  {
-    return;
-  }
-
-  s64 bound_coord_us;
-  s64 bound_coord_ls;
-  bool right_facing;
-
-  GPUBackendDrawPolygonCommand::Vertex up_v0 = *v0n;
-  GPUBackendDrawPolygonCommand::Vertex up_v1 = *v1n;
-  GPUBackendDrawPolygonCommand::Vertex up_v2 = *v2n;
-
-  GPUBackendDrawPolygonCommand::Vertex* v0 = &up_v0;
-  GPUBackendDrawPolygonCommand::Vertex* v1 = &up_v1;
-  GPUBackendDrawPolygonCommand::Vertex* v2 = &up_v2;
-
-#if SCALE_ALL_VERTEX
-  v0->x *= RESOLUTION_SCALE;
-  v0->y *= RESOLUTION_SCALE;
-  v1->x *= RESOLUTION_SCALE;
-  v1->y *= RESOLUTION_SCALE;
-  v2->x *= RESOLUTION_SCALE;
-  v2->y *= RESOLUTION_SCALE;
-#endif
-
-  s64 base_coord = MakePolyXFP(v0->x);
-  s64 base_step = MakePolyXFPStep((v2->x - v0->x), (v2->y - v0->y));
-
-  if (v1->y == v0->y)
-  {
-    bound_coord_us = 0;
-    right_facing = (bool)(v1->x > v0->x);
-  }
-  else
-  {
-    bound_coord_us = MakePolyXFPStep((v1->x - v0->x), (v1->y - v0->y));
-    right_facing = (bool)(bound_coord_us > base_step);
-  }
-
-  if (v2->y == v1->y)
-    bound_coord_ls = 0;
-  else
-    bound_coord_ls = MakePolyXFPStep((v2->x - v1->x), (v2->y - v1->y));
-
-  i_deltas idl;
-  if (!CalcIDeltas<shading_enable, texture_enable>(idl, v0, v1, v2))
-    return;
-
-  const GPUBackendDrawPolygonCommand::Vertex* vertices[3] = {v0, v1, v2};
-  int upshift = SCALE_ALL_VERTEX ? RESOLUTION_SHIFT : 0;
-  int upmul = 1; //RESOLUTION_SCALE;
-
-  i_group ig;
-  if constexpr (texture_enable)
-  {
-    ig.u = (COORD_MF_INT(vertices[core_vertex]->u * upmul) + (1 << (COORD_FBS - 1 - upshift))) << COORD_POST_PADDING;
-    ig.v = (COORD_MF_INT(vertices[core_vertex]->v * upmul) + (1 << (COORD_FBS - 1 - upshift))) << COORD_POST_PADDING;
-  }
-
-  ig.r = (COORD_MF_INT(vertices[core_vertex]->r * upmul) + (1 << (COORD_FBS - 1 - upshift))) << COORD_POST_PADDING;
-  ig.g = (COORD_MF_INT(vertices[core_vertex]->g * upmul) + (1 << (COORD_FBS - 1 - upshift))) << COORD_POST_PADDING;
-  ig.b = (COORD_MF_INT(vertices[core_vertex]->b * upmul) + (1 << (COORD_FBS - 1 - upshift))) << COORD_POST_PADDING;
-
-  AddIDeltas_DX<shading_enable, texture_enable>(ig, idl, -vertices[core_vertex]->x);
-  AddIDeltas_DY<shading_enable, texture_enable>(ig, idl, -vertices[core_vertex]->y);
-
   struct TriangleHalf
   {
     u64 x_coord[2];
@@ -624,36 +573,153 @@ void GPU_SW_Backend::DrawTriangle(const GPUBackendDrawPolygonCommand* cmd,
     bool dec_mode;
   } tripart[2];
 
-  u32 vo = 0;
-  u32 vp = 0;
-  if (core_vertex != 0)
-    vo = 1;
-  if (core_vertex == 2)
-    vp = 3;
+  i_group ig;
+  i_deltas idl;
 
+  if (1)
   {
-    TriangleHalf* tp = &tripart[vo];
-    tp->y_coord = vertices[0 ^ vo]->y;
-    tp->y_bound = vertices[1 ^ vo]->y;
-    tp->x_coord[right_facing] = MakePolyXFP(vertices[0 ^ vo]->x);
-    tp->x_step[right_facing] = bound_coord_us;
-    tp->x_coord[!right_facing] = base_coord + ((vertices[vo]->y - vertices[0]->y) * base_step);
-    tp->x_step[!right_facing] = base_step;
-    tp->dec_mode = vo;
+    u32 core_vertex;
+    {
+      u32 cvtemp = 0;
+
+      if (v1n->x <= v0n->x)
+      {
+        if (v2n->x <= v1n->x)
+          cvtemp = (1 << 2);
+        else
+          cvtemp = (1 << 1);
+      }
+      else if (v2n->x < v0n->x)
+        cvtemp = (1 << 2);
+      else
+        cvtemp = (1 << 0);
+
+      if (v2n->y < v1n->y)
+      {
+        std::swap(v2n, v1n);
+        cvtemp = ((cvtemp >> 1) & 0x2) | ((cvtemp << 1) & 0x4) | (cvtemp & 0x1);
+      }
+
+      if (v1n->y < v0n->y)
+      {
+        std::swap(v1n, v0n);
+        cvtemp = ((cvtemp >> 1) & 0x1) | ((cvtemp << 1) & 0x2) | (cvtemp & 0x4);
+      }
+
+      if (v2n->y < v1n->y)
+      {
+        std::swap(v2n, v1n);
+        cvtemp = ((cvtemp >> 1) & 0x2) | ((cvtemp << 1) & 0x4) | (cvtemp & 0x1);
+      }
+
+      core_vertex = cvtemp >> 1;
+    }
+
+    if (v0n->y == v2n->y)
+      return;
+
+    if (static_cast<u32>(std::abs(v2n->x - v0n->x)) >= MAX_PRIMITIVE_WIDTH ||
+        static_cast<u32>(std::abs(v2n->x - v1n->x)) >= MAX_PRIMITIVE_WIDTH ||
+        static_cast<u32>(std::abs(v1n->x - v0n->x)) >= MAX_PRIMITIVE_WIDTH ||
+        static_cast<u32>(v2n->y - v0n->y) >= MAX_PRIMITIVE_HEIGHT)
+    {
+      return;
+    }
+
+    s64 bound_coord_us;
+    s64 bound_coord_ls;
+    bool right_facing;
+
+    GPUBackendDrawPolygonCommand::Vertex up_v0 = *v0n;
+    GPUBackendDrawPolygonCommand::Vertex up_v1 = *v1n;
+    GPUBackendDrawPolygonCommand::Vertex up_v2 = *v2n;
+
+    GPUBackendDrawPolygonCommand::Vertex* v0 = &up_v0;
+    GPUBackendDrawPolygonCommand::Vertex* v1 = &up_v1;
+    GPUBackendDrawPolygonCommand::Vertex* v2 = &up_v2;
+
+  #if SCALE_ALL_VERTEX
+    v0->x *= RESOLUTION_SCALE;
+    v0->y *= RESOLUTION_SCALE;
+    v1->x *= RESOLUTION_SCALE;
+    v1->y *= RESOLUTION_SCALE;
+    v2->x *= RESOLUTION_SCALE;
+    v2->y *= RESOLUTION_SCALE;
+  #endif
+
+    s64 base_coord = MakePolyXFP(v0->x);
+    s64 base_step = MakePolyXFPStep((v2->x - v0->x), (v2->y - v0->y));
+
+    if (v1->y == v0->y)
+    {
+      bound_coord_us = 0;
+      right_facing = (bool)(v1->x > v0->x);
+    }
+    else
+    {
+      bound_coord_us = MakePolyXFPStep((v1->x - v0->x), (v1->y - v0->y));
+      right_facing = (bool)(bound_coord_us > base_step);
+    }
+
+    if (v2->y == v1->y)
+      bound_coord_ls = 0;
+    else
+      bound_coord_ls = MakePolyXFPStep((v2->x - v1->x), (v2->y - v1->y));
+
+    if (!CalcIDeltas<shading_enable, texture_enable>(idl, v0, v1, v2))
+      return;
+
+    const GPUBackendDrawPolygonCommand::Vertex* vertices[3] = {v0, v1, v2};
+    int upshift = SCALE_ALL_VERTEX ? RESOLUTION_SHIFT : 0;
+    int upmul = 1; //RESOLUTION_SCALE;
+
+    if constexpr (texture_enable)
+    {
+      ig.u = (COORD_MF_INT(vertices[core_vertex]->u * upmul) + (1 << (COORD_FBS - 1 - upshift))) << COORD_POST_PADDING;
+      ig.v = (COORD_MF_INT(vertices[core_vertex]->v * upmul) + (1 << (COORD_FBS - 1 - upshift))) << COORD_POST_PADDING;
+    }
+
+    ig.r = (COORD_MF_INT(vertices[core_vertex]->r * upmul) + (1 << (COORD_FBS - 1 - upshift))) << COORD_POST_PADDING;
+    ig.g = (COORD_MF_INT(vertices[core_vertex]->g * upmul) + (1 << (COORD_FBS - 1 - upshift))) << COORD_POST_PADDING;
+    ig.b = (COORD_MF_INT(vertices[core_vertex]->b * upmul) + (1 << (COORD_FBS - 1 - upshift))) << COORD_POST_PADDING;
+
+    AddIDeltas_DX<shading_enable, texture_enable>(ig, idl, -vertices[core_vertex]->x);
+    AddIDeltas_DY<shading_enable, texture_enable>(ig, idl, -vertices[core_vertex]->y);
+
+    u32 vo = 0;
+    u32 vp = 0;
+    if (core_vertex != 0)
+      vo = 1;
+    if (core_vertex == 2)
+      vp = 3;
+
+    {
+      TriangleHalf* tp = &tripart[vo];
+      tp->y_coord = vertices[0 ^ vo]->y;
+      tp->y_bound = vertices[1 ^ vo]->y;
+      tp->x_coord[right_facing] = MakePolyXFP(vertices[0 ^ vo]->x);
+      tp->x_step[right_facing] = bound_coord_us;
+      tp->x_coord[!right_facing] = base_coord + ((vertices[vo]->y - vertices[0]->y) * base_step);
+      tp->x_step[!right_facing] = base_step;
+      tp->dec_mode = vo;
+    }
+
+    {
+      TriangleHalf* tp = &tripart[vo ^ 1];
+      tp->y_coord = vertices[1 ^ vp]->y;
+      tp->y_bound = vertices[2 ^ vp]->y;
+      tp->x_coord[right_facing] = MakePolyXFP(vertices[1 ^ vp]->x);
+      tp->x_step[right_facing] = bound_coord_ls;
+      tp->x_coord[!right_facing] =
+        base_coord + ((vertices[1 ^ vp]->y - vertices[0]->y) *
+                      base_step); // base_coord + ((vertices[1].y - vertices[0].y) * base_step);
+      tp->x_step[!right_facing] = base_step;
+      tp->dec_mode = vp;
+    }
   }
 
-  {
-    TriangleHalf* tp = &tripart[vo ^ 1];
-    tp->y_coord = vertices[1 ^ vp]->y;
-    tp->y_bound = vertices[2 ^ vp]->y;
-    tp->x_coord[right_facing] = MakePolyXFP(vertices[1 ^ vp]->x);
-    tp->x_step[right_facing] = bound_coord_ls;
-    tp->x_coord[!right_facing] =
-      base_coord + ((vertices[1 ^ vp]->y - vertices[0]->y) *
-                    base_step); // base_coord + ((vertices[1].y - vertices[0].y) * base_step);
-    tp->x_step[!right_facing] = base_step;
-    tp->dec_mode = vp;
-  }
+  // TODO: none of the code above this line depends on template parameters.
+  // We could generalize that code and then 
 
   for (u32 i = 0; i < 2; i++)
   {
@@ -684,7 +750,7 @@ void GPU_SW_Backend::DrawTriangle(const GPUBackendDrawPolygonCommand* cmd,
         if (y > (static_cast<s32>(m_drawing_area.bottom) * RESOLUTION_SCALE) + 1)
           continue;
 
-        DrawSpan<shading_enable, texture_enable, raw_texture_enable, transparency_enable, dithering_enable>(
+        DrawSpan<shading_enable, texture_enable, raw_texture_enable, transparency_enable, dithering_enable, mask_and_enable, mask_or_enable>(
           cmd, yi, GetPolyXFP_Int(lc), GetPolyXFP_Int(rc), ig, idl);
       }
     }
@@ -699,7 +765,7 @@ void GPU_SW_Backend::DrawTriangle(const GPUBackendDrawPolygonCommand* cmd,
 
         if (y >= static_cast<s32>(m_drawing_area.top)* RESOLUTION_SCALE)
         {
-          DrawSpan<shading_enable, texture_enable, raw_texture_enable, transparency_enable, dithering_enable>(
+          DrawSpan<shading_enable, texture_enable, raw_texture_enable, transparency_enable, dithering_enable, mask_and_enable, mask_or_enable>(
             cmd, yi, GetPolyXFP_Int(lc), GetPolyXFP_Int(rc), ig, idl);
         }
 
@@ -717,7 +783,7 @@ GPU_SW_Backend::DrawTriangleFunction GPU_SW_Backend::GetDrawTriangleFunction(boo
                                                                              bool dithering_enable)
 {
 #define F(SHADING, TEXTURE, RAW_TEXTURE, TRANSPARENCY, DITHERING)                                                      \
-  &GPU_SW_Backend::DrawTriangle<SHADING, TEXTURE, RAW_TEXTURE, TRANSPARENCY, DITHERING>
+  &GPU_SW_Backend::DrawTriangle<SHADING, TEXTURE, RAW_TEXTURE, TRANSPARENCY, DITHERING, false, false>
 
   static constexpr DrawTriangleFunction funcs[2][2][2][2][2] = {
     {{{{F(false, false, false, false, false), F(false, false, false, false, true)},
@@ -853,7 +919,7 @@ void GPU_SW_Backend::DrawLine(const GPUBackendDrawLineCommand* cmd, const GPUBac
       {
         for (int xu=0; xu<RESOLUTION_SCALE; ++xu)
         {
-          ShadePixel<false, false, transparency_enable, dithering_enable>(cmd,
+          ShadePixel<false, false, transparency_enable, dithering_enable, true, true>(cmd,
             static_cast<u32>((x * RESOLUTION_SCALE) + xu),
             static_cast<u32>((y * RESOLUTION_SCALE) + yu),
             r, g, b, 0, 0

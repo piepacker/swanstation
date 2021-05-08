@@ -10,6 +10,16 @@ static const int VRAM_UPRENDER_SIZE_X = VRAM_WIDTH  * RESOLUTION_SCALE; //RESOLU
 static const int VRAM_UPRENDER_SIZE_Y = VRAM_HEIGHT * RESOLUTION_SCALE; //RESOLUTION_SCALE;
 
 #define SW_GPU_VRAM_BOUNDS_CHECK  0
+#define USE_FLOAT_STEP 0
+#define USE_INT_STEP   1
+
+#if USE_FLOAT_STEP
+using AddDeltasScalar_t = float;
+#endif
+
+#if USE_INT_STEP
+using AddDeltasScalar_t = int;
+#endif
 
 #if SW_GPU_VRAM_BOUNDS_CHECK
 #define UPRAM_ACCESSOR m_upram
@@ -142,7 +152,7 @@ protected:
   //////////////////////////////////////////////////////////////////////////
   // Rasterization
   //////////////////////////////////////////////////////////////////////////
-  template<bool texture_enable, bool raw_texture_enable, bool transparency_enable, bool dithering_enable>
+  template<bool texture_enable, bool raw_texture_enable, bool transparency_enable, bool dithering_enable, bool mask_and_enable, bool mask_or_enable>
   void ShadePixel(const GPUBackendDrawCommand* cmd, s32 x, s32 y, u8 color_r, u8 color_g, u8 color_b, u8 texcoord_x,
                   u8 texcoord_y);
 
@@ -176,18 +186,18 @@ protected:
                    const GPUBackendDrawPolygonCommand::Vertex* B, const GPUBackendDrawPolygonCommand::Vertex* C);
 
   template<bool shading_enable, bool texture_enable, typename I_GROUP>
-  void AddIDeltas_DX(I_GROUP& ig, const i_deltas& idl, float count = 1);
+  void AddIDeltas_DX(I_GROUP& ig, const i_deltas& idl, AddDeltasScalar_t count = 1);
 
   template<bool shading_enable, bool texture_enable, typename I_GROUP>
-  void AddIDeltas_DY(I_GROUP& ig, const i_deltas& idl, float count = 1);
+  void AddIDeltas_DY(I_GROUP& ig, const i_deltas& idl, AddDeltasScalar_t count = 1);
 
   template<bool shading_enable, bool texture_enable, bool raw_texture_enable, bool transparency_enable,
-           bool dithering_enable>
+           bool dithering_enable, bool mask_and_enable, bool mask_or_enable>
   void DrawSpan(const GPUBackendDrawPolygonCommand* cmd, s32 y, s32 x_start, s32 x_bound, i_group ig,
                 const i_deltas& idl);
 
   template<bool shading_enable, bool texture_enable, bool raw_texture_enable, bool transparency_enable,
-           bool dithering_enable>
+           bool dithering_enable, bool mask_and_enable, bool mask_or_enable>
   void DrawTriangle(const GPUBackendDrawPolygonCommand* cmd, const GPUBackendDrawPolygonCommand::Vertex* v0,
                     const GPUBackendDrawPolygonCommand::Vertex* v1, const GPUBackendDrawPolygonCommand::Vertex* v2);
 
