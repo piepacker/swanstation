@@ -869,7 +869,7 @@ std::string CDImagePBP::GetSubImageMetadata(u32 index, const std::string_view& t
   else if (type == "file_path")
   {
     if (!m_filename.empty())
-      return StringUtil::StdStringFromFormat("%s (Disc %u)", m_filename, index + 1);
+      return StringUtil::StdStringFromFormat("%s (Disc %u)", m_filename.c_str(), index + 1);
   }
 #endif
 
