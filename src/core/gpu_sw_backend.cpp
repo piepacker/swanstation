@@ -7,7 +7,6 @@
 #include <algorithm>
 Log_SetChannel(GPU_SW_Backend);
 
-#define SCALE_ALL_VERTEX 1
 #ifdef _MSC_VER
 #pragma warning(push)
 #pragma warning(disable : 4244) // warning C4324: structure was padded due to alignment specifier
@@ -527,15 +526,15 @@ void GPU_SW_Backend::DrawSpan(const GPUBackendDrawPolygonCommand* cmd, s32 y_up,
   igf.u = (float)igi.u / (1ll << (COORD_FBS + COORD_POST_PADDING));
   igf.v = (float)igi.v / (1ll << (COORD_FBS + COORD_POST_PADDING));
 
-  float postpad_scalar = 1ll << (COORD_FBS + COORD_POST_PADDING + (SCALE_ALL_VERTEX ? 0 : RESOLUTION_SHIFT));
+  float postpad_scalar = 1ll << (COORD_FBS + COORD_POST_PADDING;
 
   AddIDeltas_DX<shading_enable, texture_enable>(igf, idl, (float)x_ig_adjust / postpad_scalar);
   AddIDeltas_DY<shading_enable, texture_enable>(igf, idl, (float)y_up        / postpad_scalar);
 #endif
 
 #if USE_INT_STEP
-  AddIDeltas_DX<shading_enable, texture_enable>(igi, idl, x_ig_adjust / (SCALE_ALL_VERTEX ? 1 : RESOLUTION_SCALE));
-  AddIDeltas_DY<shading_enable, texture_enable>(igi, idl, y_up        / (SCALE_ALL_VERTEX ? 1 : RESOLUTION_SCALE));
+  AddIDeltas_DX<shading_enable, texture_enable>(igi, idl, x_ig_adjust);
+  AddIDeltas_DY<shading_enable, texture_enable>(igi, idl, y_up       );
 #endif
 
   do
@@ -589,7 +588,7 @@ void GPU_SW_Backend::DrawSpan(const GPUBackendDrawPolygonCommand* cmd, s32 y_up,
 #endif
 
 #if USE_INT_STEP
-    AddIDeltas_DX<shading_enable, texture_enable>(igi, idl, SCALE_ALL_VERTEX ? 1 : RESOLUTION_SCALE);
+    AddIDeltas_DX<shading_enable, texture_enable>(igi, idl);
 #endif
 
   } while (--w_up > 0);
@@ -685,14 +684,12 @@ void GPU_SW_Backend::DrawTriangle(const GPUBackendDrawPolygonCommand* cmd,
     GPUBackendDrawPolygonCommand::Vertex* v1 = &up_v1;
     GPUBackendDrawPolygonCommand::Vertex* v2 = &up_v2;
 
-  #if SCALE_ALL_VERTEX
     v0->x *= RESOLUTION_SCALE;
     v0->y *= RESOLUTION_SCALE;
     v1->x *= RESOLUTION_SCALE;
     v1->y *= RESOLUTION_SCALE;
     v2->x *= RESOLUTION_SCALE;
     v2->y *= RESOLUTION_SCALE;
-  #endif
 
     s64 base_coord = MakePolyXFP(v0->x);
     s64 base_step = MakePolyXFPStep((v2->x - v0->x), (v2->y - v0->y));
@@ -717,18 +714,17 @@ void GPU_SW_Backend::DrawTriangle(const GPUBackendDrawPolygonCommand* cmd,
       return;
 
     const GPUBackendDrawPolygonCommand::Vertex* vertices[3] = {v0, v1, v2};
-    int upshift = SCALE_ALL_VERTEX ? RESOLUTION_SHIFT : 0;
-    int upmul = 1; //RESOLUTION_SCALE;
+    int upshift = RESOLUTION_SHIFT;
 
     if constexpr (texture_enable)
     {
-      ig.u = (COORD_MF_INT(vertices[core_vertex]->u * upmul) + (1 << (COORD_FBS - 1 - upshift))) << COORD_POST_PADDING;
-      ig.v = (COORD_MF_INT(vertices[core_vertex]->v * upmul) + (1 << (COORD_FBS - 1 - upshift))) << COORD_POST_PADDING;
+      ig.u = (COORD_MF_INT(vertices[core_vertex]->u) + (1 << (COORD_FBS - 1 - upshift))) << COORD_POST_PADDING;
+      ig.v = (COORD_MF_INT(vertices[core_vertex]->v) + (1 << (COORD_FBS - 1 - upshift))) << COORD_POST_PADDING;
     }
 
-    ig.r = (COORD_MF_INT(vertices[core_vertex]->r * upmul) + (1 << (COORD_FBS - 1 - upshift))) << COORD_POST_PADDING;
-    ig.g = (COORD_MF_INT(vertices[core_vertex]->g * upmul) + (1 << (COORD_FBS - 1 - upshift))) << COORD_POST_PADDING;
-    ig.b = (COORD_MF_INT(vertices[core_vertex]->b * upmul) + (1 << (COORD_FBS - 1 - upshift))) << COORD_POST_PADDING;
+    ig.r = (COORD_MF_INT(vertices[core_vertex]->r) + (1 << (COORD_FBS - 1 - upshift))) << COORD_POST_PADDING;
+    ig.g = (COORD_MF_INT(vertices[core_vertex]->g) + (1 << (COORD_FBS - 1 - upshift))) << COORD_POST_PADDING;
+    ig.b = (COORD_MF_INT(vertices[core_vertex]->b) + (1 << (COORD_FBS - 1 - upshift))) << COORD_POST_PADDING;
 
     AddIDeltas_DX<shading_enable, texture_enable>(ig, idl, -vertices[core_vertex]->x);
     AddIDeltas_DY<shading_enable, texture_enable>(ig, idl, -vertices[core_vertex]->y);
@@ -770,15 +766,13 @@ void GPU_SW_Backend::DrawTriangle(const GPUBackendDrawPolygonCommand* cmd,
 
   for (u32 i = 0; i < 2; i++)
   {
-    auto scalar = SCALE_ALL_VERTEX ? 1 : RESOLUTION_SCALE;
+    s32 yi = tripart[i].y_coord;
+    s32 yb = tripart[i].y_bound;
 
-    s32 yi = tripart[i].y_coord * scalar;
-    s32 yb = tripart[i].y_bound * scalar;
-
-    u64 lc = tripart[i].x_coord[0] * scalar;
+    u64 lc = tripart[i].x_coord[0];
     u64 ls = tripart[i].x_step[0];
 
-    u64 rc = tripart[i].x_coord[1] * scalar;
+    u64 rc = tripart[i].x_coord[1];
     u64 rs = tripart[i].x_step[1];
 
     if (tripart[i].dec_mode)
