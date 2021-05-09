@@ -29,6 +29,16 @@ using AddDeltasScalar_t = int;
 
 class GPU_SW_Backend final : public GPUBackend
 {
+protected:
+  static constexpr u32 TShaderParam_ShadingEnable        = (1<<0);
+  static constexpr u32 TShaderParam_TextureEnable        = (1<<1);
+  static constexpr u32 TShaderParam_RawTextureEnable     = (1<<2);
+  static constexpr u32 TShaderParam_TransparencyEnable   = (1<<3);
+  static constexpr u32 TShaderParam_DitheringEnable      = (1<<4);
+  static constexpr u32 TShaderParam_MaskAndEnable        = (1<<5);
+  static constexpr u32 TShaderParam_MaskOrEnable         = (1<<6);
+  static constexpr u32 TShaderParams_MAX                 = (1<<7);
+
 public:
   GPU_SW_Backend();
   ~GPU_SW_Backend() override;
@@ -152,7 +162,7 @@ protected:
   //////////////////////////////////////////////////////////////////////////
   // Rasterization
   //////////////////////////////////////////////////////////////////////////
-  template<bool texture_enable, bool raw_texture_enable, bool transparency_enable, bool dithering_enable, bool mask_and_enable, bool mask_or_enable>
+  template<u32 TShaderParams>
   void ShadePixel(const GPUBackendDrawCommand* cmd, s32 x, s32 y, u8 color_r, u8 color_g, u8 color_b, u8 texcoord_x,
                   u8 texcoord_y);
 
@@ -191,13 +201,11 @@ protected:
   template<bool shading_enable, bool texture_enable, typename I_GROUP>
   void AddIDeltas_DY(I_GROUP& ig, const i_deltas& idl, AddDeltasScalar_t count = 1);
 
-  template<bool shading_enable, bool texture_enable, bool raw_texture_enable, bool transparency_enable,
-           bool dithering_enable, bool mask_and_enable, bool mask_or_enable>
+  template<u32 TShaderParam>
   void DrawSpan(const GPUBackendDrawPolygonCommand* cmd, s32 y, s32 x_start, s32 x_bound, i_group ig,
                 const i_deltas& idl);
 
-  template<bool shading_enable, bool texture_enable, bool raw_texture_enable, bool transparency_enable,
-           bool dithering_enable, bool mask_and_enable, bool mask_or_enable>
+  template<u32 TShaderParam>
   void DrawTriangle(const GPUBackendDrawPolygonCommand* cmd, const GPUBackendDrawPolygonCommand::Vertex* v0,
                     const GPUBackendDrawPolygonCommand::Vertex* v1, const GPUBackendDrawPolygonCommand::Vertex* v2);
 
@@ -205,8 +213,7 @@ protected:
                                                         const GPUBackendDrawPolygonCommand::Vertex* v0,
                                                         const GPUBackendDrawPolygonCommand::Vertex* v1,
                                                         const GPUBackendDrawPolygonCommand::Vertex* v2);
-  DrawTriangleFunction GetDrawTriangleFunction(bool shading_enable, bool texture_enable, bool raw_texture_enable,
-                                               bool transparency_enable, bool dithering_enable);
+  DrawTriangleFunction GetDrawTriangleFunction(u32 shaderParams);
 
   template<bool shading_enable, bool transparency_enable, bool dithering_enable>
   void DrawLine(const GPUBackendDrawLineCommand* cmd, const GPUBackendDrawLineCommand::Vertex* p0,

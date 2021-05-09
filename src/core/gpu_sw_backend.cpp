@@ -40,8 +40,15 @@ void GPU_SW_Backend::DrawPolygon(const GPUBackendDrawPolygonCommand* cmd)
   const GPURenderCommand rc{cmd->rc.bits};
   const bool dithering_enable = rc.IsDitheringEnabled() && cmd->draw_mode.dither_enable;
 
-  const DrawTriangleFunction DrawFunction = GetDrawTriangleFunction(
-    rc.shading_enable, rc.texture_enable, rc.raw_texture_enable, rc.transparency_enable, dithering_enable);
+  const DrawTriangleFunction DrawFunction = GetDrawTriangleFunction(0 
+    | (!!rc.shading_enable       )  * TShaderParam_ShadingEnable
+    | (!!rc.texture_enable       )  * TShaderParam_TextureEnable
+    | (!!rc.raw_texture_enable   )  * TShaderParam_RawTextureEnable
+    | (!!rc.transparency_enable  )  * TShaderParam_TransparencyEnable
+    | (dithering_enable          )  * TShaderParam_DitheringEnable
+    | (!!cmd->params.GetMaskAND())  * TShaderParam_MaskAndEnable
+    | (!!cmd->params.GetMaskOR ())  * TShaderParam_MaskOrEnable
+  );
 
   (this->*DrawFunction)(cmd, &cmd->vertices[0], &cmd->vertices[1], &cmd->vertices[2]);
   if (rc.quad_polygon)
@@ -138,10 +145,19 @@ static ALWAYS_INLINE_RELEASE u16 PlotPixelBlend(GPUTransparencyMode blendMode, u
   }
 }
 
-template<bool texture_enable, bool raw_texture_enable, bool transparency_enable, bool dithering_enable, bool mask_and_enable, bool mask_or_enable>
+template<u32 TShaderParams>
 void ALWAYS_INLINE_RELEASE GPU_SW_Backend::ShadePixel(const GPUBackendDrawCommand* cmd, s32 x, s32 y, u8 color_r,
                                                       u8 color_g, u8 color_b, u8 texcoord_x_u8, u8 texcoord_y_u8)
 {
+// shading parameter is ignored for ShadePixel (should always be 0)
+//constexpr bool shading_enable       = (TShaderParams & TShaderParam_ShadingEnable     ) == TShaderParam_ShadingEnable     ;
+  constexpr bool texture_enable       = (TShaderParams & TShaderParam_TextureEnable     ) == TShaderParam_TextureEnable     ;
+  constexpr bool raw_texture_enable   = (TShaderParams & TShaderParam_RawTextureEnable  ) == TShaderParam_RawTextureEnable  ;
+  constexpr bool transparency_enable  = (TShaderParams & TShaderParam_TransparencyEnable) == TShaderParam_TransparencyEnable;
+  constexpr bool dithering_enable     = (TShaderParams & TShaderParam_DitheringEnable   ) == TShaderParam_DitheringEnable   ;
+  constexpr bool mask_and_enable      = (TShaderParams & TShaderParam_MaskAndEnable     ) == TShaderParam_MaskAndEnable     ;
+  constexpr bool mask_or_enable       = (TShaderParams & TShaderParam_MaskOrEnable      ) == TShaderParam_MaskOrEnable      ;
+
   VRAMPixel color;
   bool transparent;
   if constexpr (texture_enable)
@@ -317,7 +333,16 @@ void GPU_SW_Backend::DrawRectangle(const GPUBackendDrawRectangleCommand* cmd)
       // for rectangle draws.
       const u8 texcoord_x = Truncate8(ZeroExtend32(origin_texcoord_x) + (offset_x / RESOLUTION_SCALE));
 
-      ShadePixel<texture_enable, raw_texture_enable, transparency_enable, false, true, true>(
+      constexpr u32 ShaderParams = 
+        TShaderParam_ShadingEnable      * 0                   |
+        TShaderParam_TextureEnable      * texture_enable      |
+        TShaderParam_RawTextureEnable   * raw_texture_enable  |
+        TShaderParam_TransparencyEnable * transparency_enable |
+        TShaderParam_DitheringEnable    * 0                   |
+        TShaderParam_MaskAndEnable      * 1                   |
+        TShaderParam_MaskOrEnable       * 1                   ;
+
+      ShadePixel<ShaderParams>(
         cmd, static_cast<u32>(x_up), static_cast<u32>(y_up), r, g, b, texcoord_x, texcoord_y);
     }
   }
@@ -435,12 +460,18 @@ struct i_group_float
   float r, g, b;
 };
 
-
-template<bool shading_enable, bool texture_enable, bool raw_texture_enable, bool transparency_enable,
-         bool dithering_enable, bool mask_and_enable, bool mask_or_enable>
+template<u32 TShaderParams>
 void GPU_SW_Backend::DrawSpan(const GPUBackendDrawPolygonCommand* cmd, s32 y_up, s32 x_start_up, s32 x_bound_up, i_group igi,
                               const i_deltas& idl)
 {
+  constexpr bool shading_enable       = (TShaderParams & TShaderParam_ShadingEnable     ) == TShaderParam_ShadingEnable     ;
+  constexpr bool texture_enable       = (TShaderParams & TShaderParam_TextureEnable     ) == TShaderParam_TextureEnable     ;
+  constexpr bool raw_texture_enable   = (TShaderParams & TShaderParam_RawTextureEnable  ) == TShaderParam_RawTextureEnable  ;
+  constexpr bool transparency_enable  = (TShaderParams & TShaderParam_TransparencyEnable) == TShaderParam_TransparencyEnable;
+  constexpr bool dithering_enable     = (TShaderParams & TShaderParam_DitheringEnable   ) == TShaderParam_DitheringEnable   ;
+  constexpr bool mask_and_enable      = (TShaderParams & TShaderParam_MaskAndEnable     ) == TShaderParam_MaskAndEnable     ;
+  constexpr bool mask_or_enable       = (TShaderParams & TShaderParam_MaskOrEnable      ) == TShaderParam_MaskOrEnable      ;
+
   auto y_native       = y_up       / RESOLUTION_SCALE;
   auto x_start_native = x_start_up / RESOLUTION_SCALE;
   auto x_bound_native = x_bound_up / RESOLUTION_SCALE;
@@ -531,9 +562,18 @@ void GPU_SW_Backend::DrawSpan(const GPUBackendDrawPolygonCommand* cmd, s32 y_up,
     //DebugAssert(g == gi && v == vi);
     //DebugAssert(b == bi);
 
+    constexpr u32 ShaderParams = 
+      TShaderParam_ShadingEnable      * 0                   |
+      TShaderParam_TextureEnable      * texture_enable      |
+      TShaderParam_RawTextureEnable   * raw_texture_enable  |
+      TShaderParam_TransparencyEnable * transparency_enable |
+      TShaderParam_DitheringEnable    * dithering_enable    |
+      TShaderParam_MaskAndEnable      * mask_and_enable     |
+      TShaderParam_MaskOrEnable       * mask_or_enable      ;
+
     // FIXME: also need to clip uprender right edge.
     if (x_up >= 0) {
-      ShadePixel<texture_enable, raw_texture_enable, transparency_enable, dithering_enable, mask_and_enable, mask_or_enable>(
+      ShadePixel<ShaderParams>(
         cmd, x_up, y_up,
 #if USE_INT_STEP
         ri, gi, bi, ui, vi
@@ -555,13 +595,20 @@ void GPU_SW_Backend::DrawSpan(const GPUBackendDrawPolygonCommand* cmd, s32 y_up,
   } while (--w_up > 0);
 }
 
-template<bool shading_enable, bool texture_enable, bool raw_texture_enable, bool transparency_enable,
-         bool dithering_enable, bool mask_and_enable, bool mask_or_enable>
+template<u32 TShaderParams>
 void GPU_SW_Backend::DrawTriangle(const GPUBackendDrawPolygonCommand* cmd,
                                   const GPUBackendDrawPolygonCommand::Vertex* v0n,
                                   const GPUBackendDrawPolygonCommand::Vertex* v1n,
                                   const GPUBackendDrawPolygonCommand::Vertex* v2n)
 {
+  constexpr bool shading_enable       = (TShaderParams & TShaderParam_ShadingEnable     ) == TShaderParam_ShadingEnable     ;
+  constexpr bool texture_enable       = (TShaderParams & TShaderParam_TextureEnable     ) == TShaderParam_TextureEnable     ;
+  constexpr bool raw_texture_enable   = (TShaderParams & TShaderParam_RawTextureEnable  ) == TShaderParam_RawTextureEnable  ;
+  constexpr bool transparency_enable  = (TShaderParams & TShaderParam_TransparencyEnable) == TShaderParam_TransparencyEnable;
+  constexpr bool dithering_enable     = (TShaderParams & TShaderParam_DitheringEnable   ) == TShaderParam_DitheringEnable   ;
+  constexpr bool mask_and_enable      = (TShaderParams & TShaderParam_MaskAndEnable     ) == TShaderParam_MaskAndEnable     ;
+  constexpr bool mask_or_enable       = (TShaderParams & TShaderParam_MaskOrEnable      ) == TShaderParam_MaskOrEnable      ;
+
   struct TriangleHalf
   {
     u64 x_coord[2];
@@ -750,7 +797,7 @@ void GPU_SW_Backend::DrawTriangle(const GPUBackendDrawPolygonCommand* cmd,
         if (y > (static_cast<s32>(m_drawing_area.bottom) * RESOLUTION_SCALE) + 1)
           continue;
 
-        DrawSpan<shading_enable, texture_enable, raw_texture_enable, transparency_enable, dithering_enable, mask_and_enable, mask_or_enable>(
+        DrawSpan<TShaderParams>(
           cmd, yi, GetPolyXFP_Int(lc), GetPolyXFP_Int(rc), ig, idl);
       }
     }
@@ -765,7 +812,7 @@ void GPU_SW_Backend::DrawTriangle(const GPUBackendDrawPolygonCommand* cmd,
 
         if (y >= static_cast<s32>(m_drawing_area.top)* RESOLUTION_SCALE)
         {
-          DrawSpan<shading_enable, texture_enable, raw_texture_enable, transparency_enable, dithering_enable, mask_and_enable, mask_or_enable>(
+          DrawSpan<TShaderParams>(
             cmd, yi, GetPolyXFP_Int(lc), GetPolyXFP_Int(rc), ig, idl);
         }
 
@@ -777,36 +824,33 @@ void GPU_SW_Backend::DrawTriangle(const GPUBackendDrawPolygonCommand* cmd,
   }
 }
 
-GPU_SW_Backend::DrawTriangleFunction GPU_SW_Backend::GetDrawTriangleFunction(bool shading_enable, bool texture_enable,
-                                                                             bool raw_texture_enable,
-                                                                             bool transparency_enable,
-                                                                             bool dithering_enable)
+GPU_SW_Backend::DrawTriangleFunction GPU_SW_Backend::GetDrawTriangleFunction(u32 shaderParams)
 {
-#define F(SHADING, TEXTURE, RAW_TEXTURE, TRANSPARENCY, DITHERING)                                                      \
-  &GPU_SW_Backend::DrawTriangle<SHADING, TEXTURE, RAW_TEXTURE, TRANSPARENCY, DITHERING, false, false>
 
-  static constexpr DrawTriangleFunction funcs[2][2][2][2][2] = {
-    {{{{F(false, false, false, false, false), F(false, false, false, false, true)},
-       {F(false, false, false, true, false), F(false, false, false, true, true)}},
-      {{F(false, false, true, false, false), F(false, false, true, false, true)},
-       {F(false, false, true, true, false), F(false, false, true, true, true)}}},
-     {{{F(false, true, false, false, false), F(false, true, false, false, true)},
-       {F(false, true, false, true, false), F(false, true, false, true, true)}},
-      {{F(false, true, true, false, false), F(false, true, true, false, true)},
-       {F(false, true, true, true, false), F(false, true, true, true, true)}}}},
-    {{{{F(true, false, false, false, false), F(true, false, false, false, true)},
-       {F(true, false, false, true, false), F(true, false, false, true, true)}},
-      {{F(true, false, true, false, false), F(true, false, true, false, true)},
-       {F(true, false, true, true, false), F(true, false, true, true, true)}}},
-     {{{F(true, true, false, false, false), F(true, true, false, false, true)},
-       {F(true, true, false, true, false), F(true, true, false, true, true)}},
-      {{F(true, true, true, false, false), F(true, true, true, false, true)},
-       {F(true, true, true, true, false), F(true, true, true, true, true)}}}}};
+#define F(bmask) &GPU_SW_Backend::DrawTriangle<bmask>
 
+  static constexpr DrawTriangleFunction funcs[TShaderParams_MAX] = 
+  {
+    F(0x000),F(0x001),F(0x002),F(0x003),F(0x004),F(0x005),F(0x006),F(0x007),
+    F(0x008),F(0x009),F(0x00a),F(0x00b),F(0x00c),F(0x00d),F(0x00e),F(0x00f),
+    F(0x010),F(0x011),F(0x012),F(0x013),F(0x014),F(0x015),F(0x016),F(0x017),
+    F(0x018),F(0x019),F(0x01a),F(0x01b),F(0x01c),F(0x01d),F(0x01e),F(0x01f),
+    F(0x020),F(0x021),F(0x022),F(0x023),F(0x024),F(0x025),F(0x026),F(0x027),
+    F(0x028),F(0x029),F(0x02a),F(0x02b),F(0x02c),F(0x02d),F(0x02e),F(0x02f),
+    F(0x030),F(0x031),F(0x032),F(0x033),F(0x034),F(0x035),F(0x036),F(0x037),
+    F(0x038),F(0x039),F(0x03a),F(0x03b),F(0x03c),F(0x03d),F(0x03e),F(0x03f),
+    F(0x040),F(0x041),F(0x042),F(0x043),F(0x044),F(0x045),F(0x046),F(0x047),
+    F(0x048),F(0x049),F(0x04a),F(0x04b),F(0x04c),F(0x04d),F(0x04e),F(0x04f),
+    F(0x050),F(0x051),F(0x052),F(0x053),F(0x054),F(0x055),F(0x056),F(0x057),
+    F(0x058),F(0x059),F(0x05a),F(0x05b),F(0x05c),F(0x05d),F(0x05e),F(0x05f),
+    F(0x060),F(0x061),F(0x062),F(0x063),F(0x064),F(0x065),F(0x066),F(0x067),
+    F(0x068),F(0x069),F(0x06a),F(0x06b),F(0x06c),F(0x06d),F(0x06e),F(0x06f),
+    F(0x070),F(0x071),F(0x072),F(0x073),F(0x074),F(0x075),F(0x076),F(0x077),
+    F(0x078),F(0x079),F(0x07a),F(0x07b),F(0x07c),F(0x07d),F(0x07e),F(0x07f),
+  };
 #undef F
 
-  return funcs[u8(shading_enable)][u8(texture_enable)][u8(raw_texture_enable)][u8(transparency_enable)]
-              [u8(dithering_enable)];
+  return funcs[shaderParams];
 }
 
 enum
@@ -919,7 +963,16 @@ void GPU_SW_Backend::DrawLine(const GPUBackendDrawLineCommand* cmd, const GPUBac
       {
         for (int xu=0; xu<RESOLUTION_SCALE; ++xu)
         {
-          ShadePixel<false, false, transparency_enable, dithering_enable, true, true>(cmd,
+          constexpr u32 ShaderParams = 
+            TShaderParam_ShadingEnable      * 0                   |
+            TShaderParam_TextureEnable      * 0                   |
+            TShaderParam_RawTextureEnable   * 0                   |
+            TShaderParam_TransparencyEnable * transparency_enable |
+            TShaderParam_DitheringEnable    * dithering_enable    |
+            TShaderParam_MaskAndEnable      * 1                   |
+            TShaderParam_MaskOrEnable       * 1                   ;
+
+          ShadePixel<ShaderParams>(cmd,
             static_cast<u32>((x * RESOLUTION_SCALE) + xu),
             static_cast<u32>((y * RESOLUTION_SCALE) + yu),
             r, g, b, 0, 0
