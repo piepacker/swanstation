@@ -92,56 +92,108 @@ constexpr GPU_SW_Backend::DitherLUT GPU_SW_Backend::ComputeDitherLUT()
 
 static constexpr GPU_SW_Backend::DitherLUT s_dither_lut = GPU_SW_Backend::ComputeDitherLUT();
 
-static ALWAYS_INLINE_RELEASE u16 PlotPixelBlend(GPUTransparencyMode blendMode, u16 bg_pix, u16 fore_pix)
+GPU_SW_Backend::VRAMPixel ALWAYS_INLINE_RELEASE GPU_SW_Backend::PlotPixelBlend(GPUTransparencyMode blendMode, VRAMPixel bg_pixel, VRAMPixel fg_pixel)
 {
   /*
-  * fore_pix - foreground -  the screen
-  * bg_pix   - background  - the texture
-  */
+   * fg_pixel - foreground -  the screen
+   * bg_pixe  - background  - the texture
+   */
+#define BLEND_AVERAGE(bg, fg) Truncate8(std::min<u32>((ZeroExtend32(bg) / 2) + (ZeroExtend32(fg) / 2), 0x1F))
+#define BLEND_ADD(bg, fg) Truncate8(std::min<u32>(ZeroExtend32(bg) + ZeroExtend32(fg), 0x1F))
+#define BLEND_SUBTRACT(bg, fg) Truncate8((bg > fg) ? ((bg) - (fg)) : 0)
+#define BLEND_QUARTER(bg, fg) Truncate8(std::min<u32>(ZeroExtend32(bg) + ZeroExtend32(fg / 4), 0x1F))
 
-  u32 sum, carry;
+#define BLEND_RGB(func)                                                                                                         \
+  VRAMPixel::Create(func(bg_pixel.r.GetValue(), fg_pixel.r.GetValue()), func(bg_pixel.g.GetValue(), fg_pixel.g.GetValue()),     \
+                    func(bg_pixel.b.GetValue(), fg_pixel.b.GetValue()), fg_pixel.c.GetValue())
+
+// optimized implementation uses twos-compliment overflow tricks to perform 16-bit arithmetic 'in-place'
+// reference implementation is a little more readable.
+#define USE_BLEND_REFERENCE   0
+
+#if USE_BLEND_REFERENCE
+
+  switch (blendMode)
+  {
+    case GPUTransparencyMode::HalfBackgroundPlusHalfForeground: return BLEND_RGB(BLEND_AVERAGE);   
+    case GPUTransparencyMode::BackgroundPlusForeground:         return BLEND_RGB(BLEND_ADD);
+    case GPUTransparencyMode::BackgroundMinusForeground:        return BLEND_RGB(BLEND_SUBTRACT);
+    case GPUTransparencyMode::BackgroundPlusQuarterForeground:  return BLEND_RGB(BLEND_QUARTER);
+    default:
+      UnreachableCode();    // FIXME this macro should __assume(0), and then the following return can be removed.
+      return {0};
+      break;
+  }
+
+#else
 
   /* Efficient 15bpp pixel math algorithms from blargg */
+
+  auto bg_pix = bg_pixel.bits;
+  auto fg_pix = fg_pixel.bits;
+  u32 sum, carry;
   switch(blendMode)
   {
     /* 0.5 x B + 0.5 x F */
     case GPUTransparencyMode::HalfBackgroundPlusHalfForeground: {
       bg_pix   |= 0x8000;
-      return ((fore_pix + bg_pix) - ((fore_pix ^ bg_pix) & 0x0421)) >> 1;
+      VRAMPixel resnew { Truncate16(((fg_pix + bg_pix) - ((fg_pix ^ bg_pix) & 0x0421)) >> 1) };
+      //VRAMPixel resref{ BLEND_RGB(BLEND_AVERAGE) };
+      //Assert(resref.bits == resnew.bits);
+      return resnew;
     }
 
     /* 1.0 x B + 1.0 x F */
     case GPUTransparencyMode::BackgroundPlusForeground: {
+      //return BLEND_RGB(BLEND_ADD);
       bg_pix   &= ~0x8000;
-      sum       = fore_pix + bg_pix;
-      carry     = (sum - ((fore_pix ^ bg_pix) & 0x8421)) & 0x8420;
-      return (sum - carry) | (carry - (carry >> 5));
+      sum       = fg_pix + bg_pix;
+      carry     = (sum - ((fg_pix ^ bg_pix) & 0x8421)) & 0x8420;
+      VRAMPixel resnew { Truncate16((sum - carry) | (carry - (carry >> 5))) };
+      //VRAMPixel resref{ BLEND_RGB(BLEND_ADD) };
+      //Assert(resref.bits == resnew.bits);
+      return resnew;
     }
-    /* 1.0 x B - 1.0 x F */
 
+    /* 1.0 x B - 1.0 x F */
     case GPUTransparencyMode::BackgroundMinusForeground: {
-      uint32_t diff;
-      uint32_t borrow;
+      u32 diff;
+      u32 borrow;
 
       bg_pix    |= 0x8000;
-      fore_pix &= ~0x8000;
-      diff       = bg_pix - fore_pix + 0x108420;
-      borrow     = (diff  - ((bg_pix ^ fore_pix) & 0x108420)) & 0x108420;
-      return (diff  - borrow) & (borrow - (borrow >> 5));
+      fg_pix    &= ~0x8000;
+      diff       = bg_pix - fg_pix + 0x108420;
+      borrow     = (diff  - ((bg_pix ^ fg_pix) & 0x108420)) & 0x108420;
+      VRAMPixel resnew { Truncate16((diff  - borrow) & (borrow - (borrow >> 5))) };
+      //VRAMPixel resref{ BLEND_RGB(BLEND_SUBTRACT) };
+      //Assert(resref.bits == resnew.bits);
+      return resnew;
     }
 
     /* 1.0 x B + 0.25 * F */
     case GPUTransparencyMode::BackgroundPlusQuarterForeground: {
       bg_pix   &= ~0x8000;
-      fore_pix = ((fore_pix >> 2) & 0x1CE7) | 0x8000;
-      sum       = fore_pix + bg_pix;
-      carry     = (sum - ((fore_pix ^ bg_pix) & 0x8421)) & 0x8420;
-      return (sum - carry) | (carry - (carry >> 5));
+      fg_pix    = ((fg_pix >> 2) & 0x1CE7) | 0x8000;
+      sum       = fg_pix + bg_pix;
+      carry     = (sum - ((fg_pix ^ bg_pix) & 0x8421)) & 0x8420;
+      VRAMPixel resnew { Truncate16((sum - carry) | (carry - (carry >> 5))) };
+      //VRAMPixel resref{ BLEND_RGB(BLEND_QUARTER) };
+      //Assert(resref.bits == resnew.bits);
+      return resnew;
     }
 
     default:
-      UnreachableCode();
+      UnreachableCode();    // FIXME this macro should __assume(0), and then the following return can be removed.
+      return {0};
   }
+#endif
+
+#undef BLEND_RGB
+#undef BLEND_QUARTER
+#undef BLEND_SUBTRACT
+#undef BLEND_ADD
+#undef BLEND_AVERAGE
+
 }
 
 template<u32 TShaderParams>
@@ -158,7 +210,6 @@ void ALWAYS_INLINE_RELEASE GPU_SW_Backend::ShadePixel(const GPUBackendDrawComman
   constexpr bool mask_or_enable       = (TShaderParams & TShaderParam_MaskOrEnable      ) == TShaderParam_MaskOrEnable      ;
 
   VRAMPixel color;
-  bool transparent;
   if constexpr (texture_enable)
   {
     // Apply texture window
@@ -203,8 +254,6 @@ void ALWAYS_INLINE_RELEASE GPU_SW_Backend::ShadePixel(const GPUBackendDrawComman
     if (texture_color.bits == 0)
       return;
 
-    transparent = texture_color.c;
-
     if constexpr (raw_texture_enable)
     {
       color.bits = texture_color.bits;
@@ -222,14 +271,15 @@ void ALWAYS_INLINE_RELEASE GPU_SW_Backend::ShadePixel(const GPUBackendDrawComman
   }
   else
   {
-    transparent = true;
+    // untextured.
 
     const u32 dither_y = (dithering_enable) ? (y & 3u) : 2u;
     const u32 dither_x = (dithering_enable) ? (x & 3u) : 3u;
 
     color.bits = (ZeroExtend16(s_dither_lut[dither_y][dither_x][color_r]) << 0) |
                  (ZeroExtend16(s_dither_lut[dither_y][dither_x][color_g]) << 5) |
-                 (ZeroExtend16(s_dither_lut[dither_y][dither_x][color_b]) << 10);
+                 (ZeroExtend16(s_dither_lut[dither_y][dither_x][color_b]) << 10) |
+                 0x8000;    // feign transparency, clear it later. Fast blending depends on this.
   }
 
   if constexpr (transparency_enable || mask_and_enable)
@@ -243,52 +293,18 @@ void ALWAYS_INLINE_RELEASE GPU_SW_Backend::ShadePixel(const GPUBackendDrawComman
 
     if constexpr (transparency_enable)
     {
-      if (transparent)
+      if (color.bits & 0x8000)
       {
-        //PlotPixelBlend
         const VRAMPixel bg_color { UPRAM_ACCESSOR[VRAM_UPRENDER_SIZE_X * y + x] };
-  #define BLEND_AVERAGE(bg, fg) Truncate8(std::min<u32>((ZeroExtend32(bg) / 2) + (ZeroExtend32(fg) / 2), 0x1F))
-  #define BLEND_ADD(bg, fg) Truncate8(std::min<u32>(ZeroExtend32(bg) + ZeroExtend32(fg), 0x1F))
-  #define BLEND_SUBTRACT(bg, fg) Truncate8((bg > fg) ? ((bg) - (fg)) : 0)
-  #define BLEND_QUARTER(bg, fg) Truncate8(std::min<u32>(ZeroExtend32(bg) + ZeroExtend32(fg / 4), 0x1F))
-
-  #define BLEND_RGB(func)                                                                                                \
-    color.Set(func(bg_color.r.GetValue(), color.r.GetValue()), func(bg_color.g.GetValue(), color.g.GetValue()),          \
-              func(bg_color.b.GetValue(), color.b.GetValue()), color.c.GetValue())
-
-        switch (cmd->draw_mode.transparency_mode)
-        {
-          case GPUTransparencyMode::HalfBackgroundPlusHalfForeground:
-            BLEND_RGB(BLEND_AVERAGE);
-            break;
-          case GPUTransparencyMode::BackgroundPlusForeground:
-            BLEND_RGB(BLEND_ADD);
-            break;
-          case GPUTransparencyMode::BackgroundMinusForeground:
-            BLEND_RGB(BLEND_SUBTRACT);
-            break;
-          case GPUTransparencyMode::BackgroundPlusQuarterForeground:
-            BLEND_RGB(BLEND_QUARTER);
-            break;
-          default:
-            break;
-        }
-
-  #undef BLEND_RGB
-
-  #undef BLEND_QUARTER
-  #undef BLEND_SUBTRACT
-  #undef BLEND_ADD
-  #undef BLEND_AVERAGE
+        color.bits = PlotPixelBlend(cmd->draw_mode.transparency_mode, bg_color, color).bits;
       }
-    }
-    else
-    {
-      UNREFERENCED_VARIABLE(transparent);
     }
   }
 
   u16 result = color.bits;
+
+  if constexpr (!texture_enable)
+    result &= 0x7fff;   // clear transparency bit that was applied by us earlier.
 
   if constexpr (mask_or_enable)
     result |= cmd->params.GetMaskOR();

@@ -99,6 +99,13 @@ protected:
       bits = (ZeroExtend16(r_)) | (ZeroExtend16(g_) << 5) | (ZeroExtend16(b_) << 10) | (static_cast<u16>(c_) << 15);
     }
 
+    static VRAMPixel Create(u8 r_, u8 g_, u8 b_, bool c_ = false)
+    {
+      VRAMPixel result;
+      result.Set(r_, g_, b_, c_);
+      return result;
+    }
+
     void ClampAndSet(u8 r_, u8 g_, u8 b_, bool c_ = false)
     {
       Set(std::min<u8>(r_, 0x1F), std::min<u8>(g_, 0x1F), std::min<u8>(b_, 0x1F), c_);
@@ -172,6 +179,8 @@ protected:
   using DrawRectangleFunction = void (GPU_SW_Backend::*)(const GPUBackendDrawRectangleCommand* cmd);
   DrawRectangleFunction GetDrawRectangleFunction(bool texture_enable, bool raw_texture_enable,
                                                  bool transparency_enable);
+
+  VRAMPixel PlotPixelBlend(GPUTransparencyMode blendMode, VRAMPixel bg_pix, VRAMPixel fore_pix);
 
   //////////////////////////////////////////////////////////////////////////
   // Polygon and line rasterization ported from Mednafen
