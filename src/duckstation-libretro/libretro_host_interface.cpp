@@ -42,8 +42,6 @@ static retro_log_callback s_libretro_log_callback = {};
 static bool s_libretro_log_callback_valid = false;
 static bool s_libretro_log_callback_registered = false;
 
-static bool s_libretro_sub_image_ejected = false;
-
 static void LibretroLogCallback(void* pUserParam, const char* channelName, const char* functionName, LOGLEVEL level,
                                 const char* message)
 {
@@ -102,10 +100,14 @@ bool LibretroHostInterface::Initialize()
   if (!HostInterface::Initialize())
     return false;
 
-  /* Must reset this here, otherwise the
-   * last set value will persist between
-   * successive core initialisations... */
-  P_THIS->m_next_disc_index = 0;
+  /* Reset disk control info struct */
+  P_THIS->m_disk_control_info.has_sub_images      = false;
+  P_THIS->m_disk_control_info.initial_image_index = 0;
+  P_THIS->m_disk_control_info.image_index         = 0;
+  P_THIS->m_disk_control_info.image_count         = 0;
+  P_THIS->m_disk_control_info.sub_images_parent_path.clear();
+  P_THIS->m_disk_control_info.image_paths.clear();
+  P_THIS->m_disk_control_info.image_labels.clear();
 
   InitInterfaces();
   LibretroSettingsInterface si;
@@ -122,6 +124,15 @@ bool LibretroHostInterface::Initialize()
 void LibretroHostInterface::Shutdown()
 {
   HostInterface::Shutdown();
+
+  /* Reset disk control info struct */
+  P_THIS->m_disk_control_info.has_sub_images      = false;
+  P_THIS->m_disk_control_info.initial_image_index = 0;
+  P_THIS->m_disk_control_info.image_index         = 0;
+  P_THIS->m_disk_control_info.image_count         = 0;
+  P_THIS->m_disk_control_info.sub_images_parent_path.clear();
+  P_THIS->m_disk_control_info.image_paths.clear();
+  P_THIS->m_disk_control_info.image_labels.clear();
 }
 
 void LibretroHostInterface::ReportError(const char* message)
@@ -322,7 +333,7 @@ bool LibretroHostInterface::retro_load_game(const struct retro_game_info* game)
 {
   SystemBootParameters bp;
   bp.filename = game->path;
-  bp.media_playlist_index = m_next_disc_index.value_or(0);
+  bp.media_playlist_index = P_THIS->m_disk_control_info.initial_image_index;
   bp.force_software_renderer = !m_hw_render_callback_valid;
 
   struct retro_input_descriptor desc[] = {
@@ -364,6 +375,54 @@ bool LibretroHostInterface::retro_load_game(const struct retro_game_info* game)
       RequestHardwareRendererContext();
     else
       SwitchToHardwareRenderer();
+  }
+
+  /* Initialise disk control info struct */
+  if (System::HasMedia())
+  {
+    if (System::HasMediaSubImages())
+    {
+      const std::string& parent_path = System::GetMediaFileName();
+      if (parent_path.empty())
+        return false;
+
+      P_THIS->m_disk_control_info.has_sub_images         = true;
+      P_THIS->m_disk_control_info.image_index            = System::GetMediaSubImageIndex();
+      P_THIS->m_disk_control_info.image_count            = System::GetMediaSubImageCount();
+      P_THIS->m_disk_control_info.sub_images_parent_path = parent_path;
+
+      for (u32 i = 0; i < P_THIS->m_disk_control_info.image_count; i++)
+      {
+        const std::string& sub_image_path = System::GetMediaSubImagePath(i);
+        if (sub_image_path.empty())
+          return false;
+
+        const std::string& sub_image_label = System::GetMediaSubImageTitle(i);
+        if (sub_image_label.empty())
+          return false;
+
+        P_THIS->m_disk_control_info.image_paths.push_back(sub_image_path);
+        P_THIS->m_disk_control_info.image_labels.push_back(sub_image_label);
+      }
+    }
+    else
+    {
+      const std::string& image_path = System::GetMediaFileName();
+      if (image_path.empty())
+        return false;
+
+      const std::string_view image_label = System::GetTitleForPath(image_path.c_str());
+      if (image_label.empty())
+        return false;
+
+      P_THIS->m_disk_control_info.has_sub_images = false;
+      P_THIS->m_disk_control_info.image_index    = 0;
+      P_THIS->m_disk_control_info.image_count    = 1;
+      P_THIS->m_disk_control_info.sub_images_parent_path.clear();
+
+      P_THIS->m_disk_control_info.image_paths.push_back(image_path);
+      P_THIS->m_disk_control_info.image_labels.push_back(std::string(image_label));
+    }
   }
 
   return true;
@@ -1436,32 +1495,28 @@ bool LibretroHostInterface::DiskControlSetEjectState(bool ejected)
   if (System::IsShutdown())
     return false;
 
-  /* 1) We do not support disk swapping when using
-   *    single-disk images
-   * 2) Since removing multi-disk media wipes all
-   *    record of the sub-image file list, we
-   *    perform a 'virtual' eject */
-  if (!System::HasMedia() || !System::HasMediaSubImages())
-    return false;
-
   if (ejected)
   {
-    if (s_libretro_sub_image_ejected)
+    if (!System::HasMedia())
       return false;
 
-    s_libretro_sub_image_ejected = true;
+    System::RemoveMedia();
   }
   else
   {
-    if (!s_libretro_sub_image_ejected)
+    if (System::HasMedia())
       return false;
 
-    const u32 image_to_insert = P_THIS->m_next_disc_index.value_or(0);
+    if (P_THIS->m_disk_control_info.has_sub_images)
+    {
+      if (!System::InsertMedia(P_THIS->m_disk_control_info.sub_images_parent_path.c_str()))
+        return false;
 
-    if (!System::SwitchMediaSubImage(image_to_insert))
+      if (!System::SwitchMediaSubImage(P_THIS->m_disk_control_info.image_index))
+        return false;
+    }
+    else if (!System::InsertMedia(P_THIS->m_disk_control_info.image_paths[P_THIS->m_disk_control_info.image_index].c_str()))
       return false;
-
-    s_libretro_sub_image_ejected = false;
   }
 
   return true;
@@ -1472,157 +1527,128 @@ bool LibretroHostInterface::DiskControlGetEjectState()
   if (System::IsShutdown())
     return false;
 
-  if (System::HasMediaSubImages())
-    return s_libretro_sub_image_ejected;
-
   return !System::HasMedia();
 }
 
 unsigned LibretroHostInterface::DiskControlGetImageIndex()
 {
-  if (System::IsShutdown() || !System::HasMedia())
-    return 0;
-
-  if (System::HasMediaSubImages())
-  {
-    const u32 index = P_THIS->m_next_disc_index.value_or(System::GetMediaSubImageIndex());
-    return index;
-  }
-
-  return 0;
+  return (unsigned)P_THIS->m_disk_control_info.image_index;
 }
 
 bool LibretroHostInterface::DiskControlSetImageIndex(unsigned index)
 {
-  if (System::IsShutdown() || !System::HasMedia())
+  if (System::IsShutdown() ||
+      System::HasMedia() ||
+      (index >= P_THIS->m_disk_control_info.image_count))
     return false;
 
-  if (System::HasMediaSubImages())
-  {
-    if (index >= System::GetMediaSubImageCount())
-      return false;
-
-    P_THIS->m_next_disc_index = index;
-  }
-  else if (index > 0)
-    return false;
-
+  P_THIS->m_disk_control_info.image_index = (u32)index;
   return true;
 }
 
 unsigned LibretroHostInterface::DiskControlGetNumImages()
 {
-  if (System::IsShutdown() || !System::HasMedia())
-    return 0;
-
-  if (System::HasMediaSubImages())
-    return static_cast<unsigned>(System::GetMediaSubImageCount());
-  else
-    return 1;
+  return (unsigned)P_THIS->m_disk_control_info.image_count;
 }
 
-// bool LibretroHostInterface::DiskControlReplaceImageIndex(unsigned index, const retro_game_info* info)
-// {
-//   if (System::IsShutdown())
-//   {
-//     Log_ErrorPrintf("DiskControlReplaceImageIndex() - no system");
-//     return false;
-//   }
+bool LibretroHostInterface::DiskControlReplaceImageIndex(unsigned index, const retro_game_info* info)
+{
+#ifdef _MSC_VER
+#define CASE_COMPARE _stricmp
+#else
+#define CASE_COMPARE strcasecmp
+#endif
 
-//   Log_DevPrintf("DiskControlReplaceImageIndex(%u, %s)", index, info ? info->path : "null");
-//   if (info && info->path)
-//     return System::ReplaceMediaPathFromPlaylist(index, info->path);
-//   else
-//     return System::RemoveMediaPathFromPlaylist(index);
-// }
+  if (System::IsShutdown() ||
+      System::HasMedia() ||
+      (index >= P_THIS->m_disk_control_info.image_count))
+    return false;
 
-// bool LibretroHostInterface::DiskControlAddImageIndex()
-// {
-//   if (System::IsShutdown())
-//   {
-//     Log_ErrorPrintf("DiskControlAddImageIndex() - no system");
-//     return false;
-//   }
+  /* Multi-image content cannot be modified */
+  if (P_THIS->m_disk_control_info.has_sub_images)
+    return false;
 
-//   Log_DevPrintf("DiskControlAddImageIndex() -> %u", System::GetMediaSubImageCount());
-//   System::AddMediaPathToPlaylist({});
-//   return true;
-// }
+  if (!info)
+  {
+    /* Remove specified image */
+    P_THIS->m_disk_control_info.image_count--;
+
+    if (index < P_THIS->m_disk_control_info.image_index)
+      P_THIS->m_disk_control_info.image_index--;
+
+    P_THIS->m_disk_control_info.image_paths.erase(
+        P_THIS->m_disk_control_info.image_paths.begin() + index);
+    P_THIS->m_disk_control_info.image_labels.erase(
+        P_THIS->m_disk_control_info.image_labels.begin() + index);
+    return true;
+  }
+
+  if (!info->path)
+    return false;
+
+  const char *extension = std::strrchr(info->path, '.');
+  if (!extension)
+    return false;
+
+  /* We cannot 'insert' an M3U file
+   * > New image must be 'single disk' content */
+  if (CASE_COMPARE(extension, ".m3u") == 0)
+    return false;
+
+  const std::string_view image_label = System::GetTitleForPath(info->path);
+  if (image_label.empty())
+    return false;
+
+  P_THIS->m_disk_control_info.image_paths[index]  = info->path;
+  P_THIS->m_disk_control_info.image_labels[index] = std::string(image_label);
+  return true;
+}
+
+bool LibretroHostInterface::DiskControlAddImageIndex()
+{
+  if (System::IsShutdown())
+    return false;
+
+  /* Multi-image content cannot be modified */
+  if (P_THIS->m_disk_control_info.has_sub_images)
+    return false;
+
+  P_THIS->m_disk_control_info.image_count++;
+  P_THIS->m_disk_control_info.image_paths.push_back("");
+  P_THIS->m_disk_control_info.image_labels.push_back("");
+  return true;
+}
 
 bool LibretroHostInterface::DiskControlSetInitialImage(unsigned index, const char* path)
 {
-  P_THIS->m_next_disc_index = index;
+  /* Note: 'path' is ignored, since we cannot
+   * determine the actual set path until after
+   * content is loaded by the core emulation
+   * code (at which point it is too late to
+   * compare it with the value supplied here) */
+  P_THIS->m_disk_control_info.initial_image_index = index;
   return true;
 }
 
 bool LibretroHostInterface::DiskControlGetImagePath(unsigned index, char* path, size_t len)
 {
-  if (System::IsShutdown() || !System::HasMedia())
+  if ((index >= P_THIS->m_disk_control_info.image_count) ||
+      (index >= P_THIS->m_disk_control_info.image_paths.size()) ||
+      P_THIS->m_disk_control_info.image_paths[index].empty())
     return false;
 
-  if (System::HasMediaSubImages())
-  {
-    if (index >= System::GetMediaSubImageCount())
-      return false;
-
-    const std::string& sub_image_path = System::GetMediaSubImagePath(index);
-
-    if (sub_image_path.empty())
-      return false;
-
-    StringUtil::Strlcpy(path, sub_image_path.c_str(), len);
-  }
-  else
-  {
-    if (index > 0)
-      return false;
-
-    const std::string& image_path = System::GetMediaFileName();
-
-    if (image_path.empty())
-      return false;
-
-    StringUtil::Strlcpy(path, image_path.c_str(), len);
-  }
-
+  StringUtil::Strlcpy(path, P_THIS->m_disk_control_info.image_paths[index].c_str(), len);
   return true;
 }
 
 bool LibretroHostInterface::DiskControlGetImageLabel(unsigned index, char* label, size_t len)
 {
-  if (System::IsShutdown() || !System::HasMedia())
+  if ((index >= P_THIS->m_disk_control_info.image_count) ||
+      (index >= P_THIS->m_disk_control_info.image_labels.size()) ||
+      P_THIS->m_disk_control_info.image_labels[index].empty())
     return false;
 
-  if (System::HasMediaSubImages())
-  {
-    if (index >= System::GetMediaSubImageCount())
-      return false;
-
-    const std::string& sub_image_title = System::GetMediaSubImageTitle(index);
-
-    if (sub_image_title.empty())
-      return false;
-
-    StringUtil::Strlcpy(label, sub_image_title.c_str(), len);
-  }
-  else
-  {
-    if (index > 0)
-      return false;
-
-    const std::string& image_path = System::GetMediaFileName();
-
-    if (image_path.empty())
-      return false;
-
-    const std::string_view image_title = System::GetTitleForPath(image_path.c_str());
-
-    if (image_title.empty())
-      return false;
-
-    StringUtil::Strlcpy(label, image_title, len);
-  }
-
+  StringUtil::Strlcpy(label, P_THIS->m_disk_control_info.image_labels[index].c_str(), len);
   return true;
 }
 
@@ -1634,8 +1660,8 @@ void LibretroHostInterface::InitDiskControlInterface()
     retro_disk_control_ext_callback ext_cb = {
       &LibretroHostInterface::DiskControlSetEjectState, &LibretroHostInterface::DiskControlGetEjectState,
       &LibretroHostInterface::DiskControlGetImageIndex, &LibretroHostInterface::DiskControlSetImageIndex,
-      &LibretroHostInterface::DiskControlGetNumImages,  NULL,
-      NULL, &LibretroHostInterface::DiskControlSetInitialImage,
+      &LibretroHostInterface::DiskControlGetNumImages,  &LibretroHostInterface::DiskControlReplaceImageIndex,
+      &LibretroHostInterface::DiskControlAddImageIndex, &LibretroHostInterface::DiskControlSetInitialImage,
       &LibretroHostInterface::DiskControlGetImagePath,  &LibretroHostInterface::DiskControlGetImageLabel};
     if (g_retro_environment_callback(RETRO_ENVIRONMENT_SET_DISK_CONTROL_EXT_INTERFACE, &ext_cb))
       return;
@@ -1644,8 +1670,8 @@ void LibretroHostInterface::InitDiskControlInterface()
   retro_disk_control_callback cb = {
     &LibretroHostInterface::DiskControlSetEjectState, &LibretroHostInterface::DiskControlGetEjectState,
     &LibretroHostInterface::DiskControlGetImageIndex, &LibretroHostInterface::DiskControlSetImageIndex,
-    &LibretroHostInterface::DiskControlGetNumImages,  NULL,
-    NULL};
+    &LibretroHostInterface::DiskControlGetNumImages,  &LibretroHostInterface::DiskControlReplaceImageIndex,
+    &LibretroHostInterface::DiskControlAddImageIndex};
   if (!g_retro_environment_callback(RETRO_ENVIRONMENT_SET_DISK_CONTROL_INTERFACE, &cb))
     Log_WarningPrint("Failed to set disk control interface");
 }
