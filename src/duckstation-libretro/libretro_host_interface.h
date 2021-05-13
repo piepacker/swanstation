@@ -5,6 +5,8 @@
 #include <limits>
 #include <optional>
 #include <memory>
+#include <vector>
+#include <string>
 
 namespace GameSettings
 {
@@ -14,6 +16,18 @@ struct Entry;
 class LibretroHostInterface final : public HostInterface
 {
 public:
+
+  struct DiskControlInfo
+  {
+    bool has_sub_images;
+    u32 initial_image_index;
+    u32 image_index;
+    u32 image_count;
+    std::string sub_images_parent_path;
+    std::vector<std::string> image_paths;
+    std::vector<std::string> image_labels;
+  };
+
   LibretroHostInterface();
   ~LibretroHostInterface() override;
 
@@ -110,11 +124,12 @@ private:
   std::unique_ptr<HostDisplay> m_hw_render_display;
   bool m_hw_render_callback_valid = false;
   bool m_using_hardware_renderer = false;
-  std::optional<u32> m_next_disc_index;
 
   retro_rumble_interface m_rumble_interface = {};
   bool m_rumble_interface_valid = false;
   bool m_supports_input_bitmasks = false;
+
+  DiskControlInfo m_disk_control_info = {};
 };
 
 extern LibretroHostInterface g_libretro_host_interface;

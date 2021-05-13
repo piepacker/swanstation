@@ -1,3 +1,4 @@
+#include "assert.h"
 #include "cd_image.h"
 #include "cd_subchannel_replacement.h"
 #include "error.h"
@@ -22,8 +23,15 @@ public:
 
   bool Open(const char* filename, Common::Error* error);
 
-  bool ReadSubChannelQ(SubChannelQ* subq) override;
+  bool ReadSubChannelQ(SubChannelQ* subq, const Index& index, LBA lba_in_index) override;
   bool HasNonStandardSubchannel() const override;
+
+  bool HasSubImages() const override;
+  u32 GetSubImageCount() const override;
+  u32 GetCurrentSubImage() const override;
+  bool SwitchSubImage(u32 index, Common::Error* error) override;
+  std::string GetMetadata(const std::string_view& type) const override;
+  std::string GetSubImageMetadata(u32 index, const std::string_view& type) const override;
 
 protected:
   bool ReadSectorFromIndex(void* buffer, const Index& index, LBA lba_in_index) override;
@@ -54,6 +62,8 @@ private:
 
   bool OpenDisc(u32 index, Common::Error* error);
 
+  static const std::string* LookupStringSFOTableEntry(const char* key, const SFOTable& table);
+
   FILE* m_file = nullptr;
 
   PBPHeader m_pbp_header;
@@ -63,6 +73,7 @@ private:
 
   // Absolute offsets to ISO headers, size is the number of discs in the file
   std::vector<u32> m_disc_offsets;
+  u32 m_current_disc = 0;
 
   // Absolute offsets and sizes of blocks in m_file
   std::array<BlockInfo, BLOCK_TABLE_NUM_ENTRIES> m_blockinfo_table;
@@ -537,6 +548,7 @@ bool CDImagePBP::OpenDisc(u32 index, Common::Error* error)
   // that isn't 2 seconds long. We don't have a good way to validate this, and have to assume the TOC is giving us
   // correct pregap lengths...
 
+  ClearTOC();
   m_lba_count = sectors_on_file;
   LBA track1_pregap_frames = 0;
   for (u32 curr_track = 1; curr_track <= last_track; curr_track++)
@@ -654,7 +666,21 @@ bool CDImagePBP::OpenDisc(u32 index, Common::Error* error)
   else
     m_sbi.LoadSBI(FileSystem::ReplaceExtension(m_filename, "sbi").c_str());
 
+  m_current_disc = index;
   return Seek(1, Position{0, 0, 0});
+}
+
+const std::string* CDImagePBP::LookupStringSFOTableEntry(const char* key, const SFOTable& table)
+{
+  auto iter = table.find(key);
+  if (iter == table.end())
+    return nullptr;
+
+  const SFOTableDataValue& data_value = iter->second;
+  if (!std::holds_alternative<std::string>(data_value))
+    return nullptr;
+
+  return &std::get<std::string>(data_value);
 }
 
 bool CDImagePBP::InitDecompressionStream()
@@ -698,12 +724,12 @@ bool CDImagePBP::DecompressBlock(BlockInfo block_info)
   return true;
 }
 
-bool CDImagePBP::ReadSubChannelQ(SubChannelQ* subq)
+bool CDImagePBP::ReadSubChannelQ(SubChannelQ* subq, const Index& index, LBA lba_in_index)
 {
-  if (m_sbi.GetReplacementSubChannelQ(m_position_on_disc, subq))
+  if (m_sbi.GetReplacementSubChannelQ(index.start_lba_on_disc + lba_in_index, subq))
     return true;
 
-  return CDImage::ReadSubChannelQ(subq);
+  return CDImage::ReadSubChannelQ(subq, index, lba_in_index);
 }
 
 bool CDImagePBP::HasNonStandardSubchannel() const
@@ -787,6 +813,68 @@ void CDImagePBP::PrintSFOTable(const SFOTable& sfo_table)
   }
 }
 #endif
+
+bool CDImagePBP::HasSubImages() const
+{
+  return m_disc_offsets.size() > 1;
+}
+
+std::string CDImagePBP::GetMetadata(const std::string_view& type) const
+{
+  if (type == "title")
+  {
+    const std::string* title = LookupStringSFOTableEntry("TITLE", m_sfo_table);
+    if (title && !title->empty())
+      return *title;
+  }
+
+  return CDImage::GetMetadata(type);
+}
+
+u32 CDImagePBP::GetSubImageCount() const
+{
+  return static_cast<u32>(m_disc_offsets.size());
+}
+
+u32 CDImagePBP::GetCurrentSubImage() const
+{
+  return m_current_disc;
+}
+
+bool CDImagePBP::SwitchSubImage(u32 index, Common::Error* error)
+{
+  if (index >= m_disc_offsets.size())
+    return false;
+
+  const u32 old_disc = m_current_disc;
+  if (!OpenDisc(index, error))
+  {
+    // return to old disc, this should never fail... in theory.
+    if (!OpenDisc(old_disc, nullptr))
+      Panic("Failed to reopen old disc after switch.");
+  }
+
+  return true;
+}
+
+std::string CDImagePBP::GetSubImageMetadata(u32 index, const std::string_view& type) const
+{
+  if (type == "title")
+  {
+    const std::string* title = LookupStringSFOTableEntry("TITLE", m_sfo_table);
+    if (title && !title->empty())
+      return StringUtil::StdStringFromFormat("%s (Disc %u)", title->c_str(), index + 1);
+  }
+#if defined(LIBRETRO)
+  else if (type == "file_path")
+  {
+    if (!m_filename.empty())
+      return StringUtil::StdStringFromFormat("%s (Disc %u)", m_filename.c_str(), index + 1);
+  }
+#endif
+
+  return CDImage::GetSubImageMetadata(index, type);
+}
 
 std::unique_ptr<CDImage> CDImage::OpenPBPImage(const char* filename, Common::Error* error)
 {
