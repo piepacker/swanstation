@@ -106,6 +106,7 @@ struct Settings
   std::string gpu_adapter;
   std::string display_post_process_chain;
   u32 gpu_resolution_scale = 1;
+  u32 gpu_sw_uprender_scale = 1;
   u32 gpu_multisamples = 1;
   bool gpu_use_thread = true;
   bool gpu_threaded_presentation = true;
@@ -113,7 +114,6 @@ struct Settings
   bool gpu_per_sample_shading = false;
   bool gpu_true_color = true;
   bool gpu_scaled_dithering = false;
-  int  gpu_sw_uprender_scale = 1;
 
   GPUTextureFilter gpu_texture_filter = GPUTextureFilter::Nearest;
   GPUDownsampleMode gpu_downsample_mode = GPUDownsampleMode::Disabled;

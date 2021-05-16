@@ -52,9 +52,9 @@ public:
   ~GPU_SW_Backend() override;
 
   void SetUprenderScale(int scale);
-
   bool Initialize() override;
   void Reset(bool clear_vram) override;
+  void UpdateSettings() override;
 
   ALWAYS_INLINE u16* GetUPRAM() const { return m_upram_ptr; }
   ALWAYS_INLINE u16* GetVRAMshadowPtr() override { return m_vram.data(); }

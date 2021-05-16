@@ -5,6 +5,8 @@
 #include "host_display.h"
 #include "system.h"
 #include <algorithm>
+#include <cmath>
+
 Log_SetChannel(GPU_SW_Backend);
 
 #ifdef _MSC_VER
@@ -51,7 +53,11 @@ void GPU_SW_Backend::SetUprenderScale(int scale)
     m_upram = nullptr;
   }
 
-  m_uprender_shift = log2(scale);
+  auto new_upshift = log2(scale);
+  if (m_uprender_shift == new_upshift)
+    return;
+
+  m_uprender_shift = new_upshift;
 
   if (scale == 1)
   {
@@ -61,8 +67,9 @@ void GPU_SW_Backend::SetUprenderScale(int scale)
   {
     auto upram_size_bytes = VRAM_WIDTH * VRAM_HEIGHT * sizeof(u16) * scale;
     m_upram = (u16*)malloc(upram_size_bytes);
-    memset(m_upram, 0, upram_size_bytes);
     m_upram_ptr = m_upram;
+
+    UpdateVRAM(0, 0, VRAM_WIDTH, VRAM_HEIGHT, GetVRAMshadowPtr(), {});
   }
 }
 
@@ -72,6 +79,14 @@ bool GPU_SW_Backend::Initialize()
 {
   SetUprenderScale(g_settings.gpu_sw_uprender_scale);
   return GPUBackend::Initialize();
+}
+
+void GPU_SW_Backend::UpdateSettings()
+{
+  GPUBackend::UpdateSettings();   // invokes Sync()  [inheritance style coding caveat]
+
+  // function internally shortcuts out if setting is up-to-date.
+  SetUprenderScale(g_settings.gpu_sw_uprender_scale);
 }
 
 void GPU_SW_Backend::Reset(bool clear_vram)

@@ -630,11 +630,11 @@ void HostInterface::FixIncompatibleSettings(bool display_osd_messages)
     g_settings.cpu_overclock_enable = false;
     g_settings.cpu_overclock_active = false;
     g_settings.gpu_resolution_scale = 1;
+    g_settings.gpu_sw_uprender_scale = 1;
     g_settings.gpu_multisamples = 1;
     g_settings.gpu_per_sample_shading = false;
     g_settings.gpu_true_color = false;
     g_settings.gpu_scaled_dithering = false;
-    g_settings.gpu_sw_uprender_scale = false;
     g_settings.gpu_texture_filter = GPUTextureFilter::Nearest;
     g_settings.gpu_disable_interlacing = false;
     g_settings.gpu_force_ntsc_timings = false;
