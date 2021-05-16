@@ -233,9 +233,9 @@ void GPU_SW::CopyOut15Bit(u32 src_x_native, u32 src_y_native, u32 width_native, 
   // and not part of any monolithic class. But hat would cause huge diff-changes across this module so for now I'm just replicating a
   // bunch of GPU_SW_BACH paramaters into local var space so we can do what we need to do.
 
-  auto uprender_scale       = m_backend.uprender_scale();
-  auto VRAM_UPRENDER_SIZE_X = VRAM_WIDTH  * uprender_scale;
-  auto VRAM_UPRENDER_SIZE_Y = VRAM_HEIGHT * uprender_scale;
+  auto uprender_scale   = m_backend.uprender_scale();
+  auto vram_upsize_x    = VRAM_WIDTH  * uprender_scale;
+  auto vram_upsize_y    = VRAM_HEIGHT * uprender_scale;
 
   auto width_up  = width_native  * uprender_scale;
   auto height_up = height_native * uprender_scale;
@@ -272,8 +272,8 @@ void GPU_SW::CopyOut15Bit(u32 src_x_native, u32 src_y_native, u32 width_native, 
     const u32 rows = height_up >> interlaced_shift;
     dst_stride <<= interlaced_shift;
 
-    const u16* src_ptr = &m_vram_ptr[src_y_up * VRAM_UPRENDER_SIZE_X + src_x_up];
-    const u32 src_step = VRAM_UPRENDER_SIZE_X << interleaved_shift;
+    const u16* src_ptr = &m_vram_ptr[src_y_up * vram_upsize_x + src_x_up];
+    const u32 src_step = vram_upsize_x << interleaved_shift;
     for (u32 row = 0; row < rows; row++)
     {
       CopyOutRow16<display_format>(src_ptr, reinterpret_cast<OutputPixelType*>(dst_ptr), width_up);
@@ -289,11 +289,11 @@ void GPU_SW::CopyOut15Bit(u32 src_x_native, u32 src_y_native, u32 width_native, 
     const u32 end_x_up = src_x_up + width_up;
     for (u32 row = 0; row < rows; row++)
     {
-      const u16* src_row_ptr = &m_vram_ptr[(src_y_up % VRAM_UPRENDER_SIZE_Y) * VRAM_UPRENDER_SIZE_X];
+      const u16* src_row_ptr = &m_vram_ptr[(src_y_up % vram_upsize_y) * vram_upsize_x];
       OutputPixelType* dst_row_ptr = reinterpret_cast<OutputPixelType*>(dst_ptr);
 
       for (u32 col = src_x_up; col < end_x_up; col++)
-        *(dst_row_ptr++) = VRAM16ToOutput<display_format, OutputPixelType>(src_row_ptr[col % VRAM_UPRENDER_SIZE_X]);
+        *(dst_row_ptr++) = VRAM16ToOutput<display_format, OutputPixelType>(src_row_ptr[col % vram_upsize_x]);
 
       src_y_up += (1 << interleaved_shift);
       dst_ptr += dst_stride;
@@ -340,8 +340,8 @@ void GPU_SW::CopyOut24Bit(u32 src_x_native, u32 src_y_native, u32 skip_x_native,
   u32 dst_stride;
 
   auto uprender_scale = m_backend.uprender_scale();
-  auto VRAM_UPRENDER_SIZE_X = VRAM_WIDTH  * uprender_scale;
-  auto VRAM_UPRENDER_SIZE_Y = VRAM_HEIGHT * uprender_scale;
+  auto vram_upsize_x = VRAM_WIDTH  * uprender_scale;
+  auto vram_upsize_y = VRAM_HEIGHT * uprender_scale;
 
   auto width_up   = width_native  * uprender_scale;
   auto height_up  = height_native * uprender_scale;
@@ -512,8 +512,8 @@ void GPU_SW::UpdateDisplay()
   m_backend.Sync();
 
   auto uprender_scale = m_backend.uprender_scale();
-  auto VRAM_UPRENDER_SIZE_X = VRAM_WIDTH  * uprender_scale;
-  auto VRAM_UPRENDER_SIZE_Y = VRAM_HEIGHT * uprender_scale;
+  auto vram_upsize_x  = VRAM_WIDTH  * uprender_scale;
+  auto vram_upsize_y  = VRAM_HEIGHT * uprender_scale;
 
   if (!g_settings.debugging.show_vram)
   {
@@ -523,8 +523,8 @@ void GPU_SW::UpdateDisplay()
       return;
     }
 
-    const u32 vram_offset_y = m_crtc_state.display_vram_top;
-    const u32 display_width = m_crtc_state.display_vram_width;
+    const u32 vram_offset_y  = m_crtc_state.display_vram_top;
+    const u32 display_width  = m_crtc_state.display_vram_width;
     const u32 display_height = m_crtc_state.display_vram_height;
 
     if (IsInterlacedDisplayEnabled())
@@ -565,8 +565,8 @@ void GPU_SW::UpdateDisplay()
   else
   {
     CopyOut15Bit(m_16bit_display_format, 0, 0, VRAM_WIDTH, VRAM_HEIGHT, 0, false, false);
-    m_host_display->SetDisplayParameters(VRAM_UPRENDER_SIZE_X, VRAM_UPRENDER_SIZE_Y, 0, 0, VRAM_UPRENDER_SIZE_X, VRAM_UPRENDER_SIZE_Y,
-                                         static_cast<float>(VRAM_UPRENDER_SIZE_X) / static_cast<float>(VRAM_UPRENDER_SIZE_Y));
+    m_host_display->SetDisplayParameters(vram_upsize_x, vram_upsize_y, 0, 0, vram_upsize_x, vram_upsize_y,
+                                         static_cast<float>(vram_upsize_x) / static_cast<float>(vram_upsize_y));
   }
 }
 

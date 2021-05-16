@@ -71,55 +71,49 @@ public:
   template <int RESOLUTION_SHIFT>
   ALWAYS_INLINE u16 GetPixel(const int x, const int y) const
   {
-    int constexpr shift = [] {
-      if constexpr (RESOLUTION_SHIFT < 0)
-        return 0;
-      else
-        return RESOLUTION_SHIFT;      
-    } ();
-
-    return UPRAM_ACCESSOR[((y * VRAM_WIDTH) << shift) + (x << shift)];
+    auto upshift = RESOLUTION_SHIFT;
+    auto vram_uprender_size_x = VRAM_WIDTH << upshift;
+    return UPRAM_ACCESSOR[((y * vram_uprender_size_x) << upshift) + (x << upshift)];
   }
 
   ALWAYS_INLINE u16 GetPixelSlow(const int x, const int y) const
   {
-    return GetPixel<-1>(x, y);
+    auto upshift = m_uprender_shift;
+    auto vram_uprender_size_x = VRAM_WIDTH << upshift;
+    return UPRAM_ACCESSOR[((y * vram_uprender_size_x) << upshift) + (x << upshift)];
   }
 
-  template <int RESOLUTION_SHIFT>
-  ALWAYS_INLINE_RELEASE void SetPixel(const int x, const int y, const u16 value)
+  ALWAYS_INLINE void _impl_SetPixel(const int x, const int y, const u16 value, int upshift)
   {
-    int constexpr shift = [] {
-      if constexpr (RESOLUTION_SHIFT < 0)
-        return 0;
-      else
-        return RESOLUTION_SHIFT;      
-    } ();
+    auto upscale = (1<<upshift);
+    auto vram_uprender_size_x = VRAM_WIDTH * upscale;
 
-    auto constexpr scale = (1<<shift);
-    auto constexpr vram_uprender_size_x = VRAM_WIDTH * scale;
-
-    if constexpr (RESOLUTION_SHIFT == 0)
+    if (upshift == 0)
       UPRAM_ACCESSOR[vram_uprender_size_x * y + x] = value;
     else
     {
-  
-  /* Duplicate the pixel as many times as necessary (nearest neighbour upscaling) */
-      for (int dy = 0; dy < scale; dy++)
+      /* Duplicate the pixel as many times as necessary (nearest neighbour upscaling) */
+      for (int dy = 0; dy < upscale; dy++)
       {
-        for (int dx = 0; dx < scale; dx++)
+        for (int dx = 0; dx < upscale; dx++)
         {
-          int y_up = (y * scale) + dy;
-          int x_up = (x * scale) + dx;
+          int y_up = (y * upscale) + dy;
+          int x_up = (x * upscale) + dx;
           UPRAM_ACCESSOR[(y_up * vram_uprender_size_x) + x_up] = value;
         }
       }
     }
   }
 
+  template <int RESOLUTION_SHIFT>
+  ALWAYS_INLINE void SetPixel(const int x, const int y, const u16 value)
+  {
+    _impl_SetPixel(x, y, value, RESOLUTION_SHIFT);
+  }
+
   ALWAYS_INLINE void SetPixelSlow(const int x, const int y, const u16 value)
   {
-    SetPixel<-1>(x, y, value);
+    _impl_SetPixel(x, y, value, m_uprender_shift);
   }
 
   // this is actually (31 * 255) >> 4) == 494, but to simplify addressing we use the next power of two (512)
@@ -283,8 +277,6 @@ protected:
   DrawRectangleFunction GetDrawRectangleFunction  (u32 rectShaderParams, int upshift);
   DrawLineFunction      GetDrawLineFunction       (u32 lineShaderParams, int upshift);
 
-  int VRAM_UPRENDER_SIZE_X = 0;
-  int VRAM_UPRENDER_SIZE_Y = 0;
   int m_uprender_shift;
 
   std::array<u16, VRAM_WIDTH * VRAM_HEIGHT> m_vram;

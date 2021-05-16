@@ -52,8 +52,6 @@ void GPU_SW_Backend::SetUprenderScale(int scale)
   }
 
   m_uprender_shift = log2(scale);
-  VRAM_UPRENDER_SIZE_X = VRAM_WIDTH  * scale;
-  VRAM_UPRENDER_SIZE_Y = VRAM_HEIGHT * scale;
 
   if (scale == 1)
   {
@@ -61,7 +59,7 @@ void GPU_SW_Backend::SetUprenderScale(int scale)
   }
   else
   {
-    auto upram_size_bytes = VRAM_UPRENDER_SIZE_X * VRAM_UPRENDER_SIZE_Y * sizeof(u16);
+    auto upram_size_bytes = VRAM_WIDTH * VRAM_HEIGHT * sizeof(u16) * scale;
     m_upram = (u16*)malloc(upram_size_bytes);
     memset(m_upram, 0, upram_size_bytes);
     m_upram_ptr = m_upram;
@@ -80,7 +78,7 @@ void GPU_SW_Backend::Reset(bool clear_vram)
 {
   GPUBackend::Reset(clear_vram);
 
-  auto upram_size_bytes = VRAM_UPRENDER_SIZE_X * VRAM_UPRENDER_SIZE_Y * sizeof(u16);
+  auto upram_size_bytes = VRAM_WIDTH * VRAM_HEIGHT * sizeof(u16) * uprender_scale();
 
   if (clear_vram)
     memset(m_upram_ptr, 0, upram_size_bytes);
@@ -264,7 +262,7 @@ GPU_SW_Backend::VRAMPixel ALWAYS_INLINE_RELEASE GPU_SW_Backend::PlotPixelBlend(G
 
 }
 
-template<u32 TShaderParams, int RESOLUTION_SHIFT>
+template<u32 TShaderParams, int TUprenderShift>
 void ALWAYS_INLINE_RELEASE GPU_SW_Backend::ShadePixel(const GPUBackendDrawCommand* cmd, s32 x, s32 y, u8 color_r,
                                                       u8 color_g, u8 color_b, u8 texcoord_x_u8, u8 texcoord_y_u8)
 {
@@ -291,30 +289,30 @@ void ALWAYS_INLINE_RELEASE GPU_SW_Backend::ShadePixel(const GPUBackendDrawComman
       case GPUTextureMode::Palette4Bit:
       {
         const u16 palette_value =
-          GetPixel<RESOLUTION_SHIFT>((cmd->draw_mode.GetTexturePageBaseX() + (texcoord_x / 4)) % VRAM_WIDTH,
-                   (cmd->draw_mode.GetTexturePageBaseY() + (texcoord_y / 1)) % VRAM_HEIGHT);
+          GetPixel<TUprenderShift>((cmd->draw_mode.GetTexturePageBaseX() + (texcoord_x / 4)) % VRAM_WIDTH,
+                                     (cmd->draw_mode.GetTexturePageBaseY() + (texcoord_y / 1)) % VRAM_HEIGHT);
         const u16 palette_index = (palette_value >> ((texcoord_x % 4) * 4)) & 0x0Fu;
 
         texture_color.bits =
-          GetPixel<RESOLUTION_SHIFT>((cmd->palette.GetXBase() + (palette_index)) % VRAM_WIDTH, cmd->palette.GetYBase());
+          GetPixel<TUprenderShift>((cmd->palette.GetXBase() + (palette_index)) % VRAM_WIDTH, cmd->palette.GetYBase());
       }
       break;
 
       case GPUTextureMode::Palette8Bit:
       {
         const u16 palette_value =
-          GetPixel<RESOLUTION_SHIFT>((cmd->draw_mode.GetTexturePageBaseX() + (texcoord_x / 2)) % VRAM_WIDTH,
-                   (cmd->draw_mode.GetTexturePageBaseY() + (texcoord_y / 1)) % VRAM_HEIGHT);
+          GetPixel<TUprenderShift>((cmd->draw_mode.GetTexturePageBaseX() + (texcoord_x / 2)) % VRAM_WIDTH,
+                                     (cmd->draw_mode.GetTexturePageBaseY() + (texcoord_y / 1)) % VRAM_HEIGHT);
         const u16 palette_index = (palette_value >> ((texcoord_x % 2) * 8)) & 0xFFu;
         texture_color.bits =
-          GetPixel<RESOLUTION_SHIFT>((cmd->palette.GetXBase() + (palette_index)) % VRAM_WIDTH, cmd->palette.GetYBase());
+          GetPixel<TUprenderShift>((cmd->palette.GetXBase() + (palette_index)) % VRAM_WIDTH, cmd->palette.GetYBase());
       }
       break;
 
       default:
       {
-        texture_color.bits = GetPixel<RESOLUTION_SHIFT>((cmd->draw_mode.GetTexturePageBaseX() + (texcoord_x)) % VRAM_WIDTH,
-                                      (cmd->draw_mode.GetTexturePageBaseY() + (texcoord_y)) % VRAM_HEIGHT);
+        texture_color.bits = GetPixel<TUprenderShift>((cmd->draw_mode.GetTexturePageBaseX() + (texcoord_x)) % VRAM_WIDTH,
+                                                        (cmd->draw_mode.GetTexturePageBaseY() + (texcoord_y)) % VRAM_HEIGHT);
       }
       break;
     }
@@ -350,12 +348,14 @@ void ALWAYS_INLINE_RELEASE GPU_SW_Backend::ShadePixel(const GPUBackendDrawComman
                  0x8000;    // feign transparency, clear it later. Fast blending depends on this.
   }
 
+  auto constexpr vram_upsize_x  = VRAM_WIDTH << TUprenderShift;
+
   if constexpr (transparency_enable || mask_and_enable)
   {
     if constexpr (mask_and_enable)
     {
       const u16 mask_and = cmd->params.GetMaskAND();
-      if ((UPRAM_ACCESSOR[VRAM_UPRENDER_SIZE_X * y + x] & mask_and) != 0)
+      if ((UPRAM_ACCESSOR[vram_upsize_x * y + x] & mask_and) != 0)
         return;
     }
 
@@ -363,7 +363,7 @@ void ALWAYS_INLINE_RELEASE GPU_SW_Backend::ShadePixel(const GPUBackendDrawComman
     {
       if (color.bits & 0x8000)
       {
-        const VRAMPixel bg_color { UPRAM_ACCESSOR[VRAM_UPRENDER_SIZE_X * y + x] };
+        const VRAMPixel bg_color { UPRAM_ACCESSOR[vram_upsize_x * y + x] };
         color.bits = PlotPixelBlend(cmd->draw_mode.transparency_mode, bg_color, color).bits;
       }
     }
@@ -377,10 +377,10 @@ void ALWAYS_INLINE_RELEASE GPU_SW_Backend::ShadePixel(const GPUBackendDrawComman
   if constexpr (mask_or_enable)
     result |= cmd->params.GetMaskOR();
 
-  UPRAM_ACCESSOR[VRAM_UPRENDER_SIZE_X * y + x] = result;
+  UPRAM_ACCESSOR[vram_upsize_x * y + x] = result;
 }
 
-template<u32 TRectParams, int RESOLUTION_SHIFT>
+template<u32 TRectParams, int TUprenderShift>
 void GPU_SW_Backend::DrawRectangle(const GPUBackendDrawRectangleCommand* cmd)
 {
   constexpr bool texture_enable       = (TRectParams & TRectShader_TextureEnable     ) == TRectShader_TextureEnable     ;
@@ -433,7 +433,7 @@ void GPU_SW_Backend::DrawRectangle(const GPUBackendDrawRectangleCommand* cmd)
         TShaderParam_MaskAndEnable      * 1                   |
         TShaderParam_MaskOrEnable       * 1                   ;
 
-      ShadePixel<ShaderParams, RESOLUTION_SHIFT>(
+      ShadePixel<ShaderParams, TUprenderShift>(
         cmd, static_cast<u32>(x_up), static_cast<u32>(y_up), r, g, b, texcoord_x, texcoord_y);
     }
   }
@@ -551,11 +551,11 @@ struct i_group_float
   float r, g, b;
 };
 
-template<u32 TShaderParams, int RESOLUTION_SHIFT>
+template<u32 TShaderParams, int TUprenderShift>
 void GPU_SW_Backend::DrawSpan(const GPUBackendDrawPolygonCommand* cmd, s32 y_up, s32 x_start_up, s32 x_bound_up, i_group igi,
                               const i_deltas& idl)
 {
-  constexpr int upscale = (1 << RESOLUTION_SHIFT);
+  constexpr int upscale = (1 << TUprenderShift);
 
   constexpr bool shading_enable       = (TShaderParams & TShaderParam_ShadingEnable     ) == TShaderParam_ShadingEnable     ;
   constexpr bool texture_enable       = (TShaderParams & TShaderParam_TextureEnable     ) == TShaderParam_TextureEnable     ;
@@ -576,7 +576,7 @@ void GPU_SW_Backend::DrawSpan(const GPUBackendDrawPolygonCommand* cmd, s32 y_up,
   s32 w_native    = x_bound_native - x_start_native;
   s32 w_up        = x_bound_up     - x_start_up;
   s32 x_native    = SignExtendN<11, s32>(x_start_native);
-  s32 x_up        = SignExtendN<11 + RESOLUTION_SHIFT, s32>(x_start_up);
+  s32 x_up        = SignExtendN<11 + TUprenderShift, s32>(x_start_up);
 
   if (x_up < static_cast<s32>(m_drawing_area.left * upscale))
   {
@@ -666,7 +666,7 @@ void GPU_SW_Backend::DrawSpan(const GPUBackendDrawPolygonCommand* cmd, s32 y_up,
 
     // FIXME: also need to clip uprender right edge.
     if (x_up >= 0) {
-      ShadePixel<ShaderParams, RESOLUTION_SHIFT>(
+      ShadePixel<ShaderParams, TUprenderShift>(
         cmd, x_up, y_up,
 #if USE_INT_STEP
         ri, gi, bi, ui, vi
@@ -688,13 +688,13 @@ void GPU_SW_Backend::DrawSpan(const GPUBackendDrawPolygonCommand* cmd, s32 y_up,
   } while (--w_up > 0);
 }
 
-template<u32 TShaderParams, int RESOLUTION_SHIFT>
+template<u32 TShaderParams, int TUprenderShift>
 void GPU_SW_Backend::DrawTriangle(const GPUBackendDrawPolygonCommand* cmd,
                                   const GPUBackendDrawPolygonCommand::Vertex* v0n,
                                   const GPUBackendDrawPolygonCommand::Vertex* v1n,
                                   const GPUBackendDrawPolygonCommand::Vertex* v2n)
 {
-  int constexpr upscale = (1 << RESOLUTION_SHIFT);
+  int constexpr upscale = (1 << TUprenderShift);
 
   constexpr bool shading_enable       = (TShaderParams & TShaderParam_ShadingEnable     ) == TShaderParam_ShadingEnable     ;
   constexpr bool texture_enable       = (TShaderParams & TShaderParam_TextureEnable     ) == TShaderParam_TextureEnable     ;
@@ -810,7 +810,7 @@ void GPU_SW_Backend::DrawTriangle(const GPUBackendDrawPolygonCommand* cmd,
       return;
 
     const GPUBackendDrawPolygonCommand::Vertex* vertices[3] = {v0, v1, v2};
-    int upshift = RESOLUTION_SHIFT;
+    int upshift = TUprenderShift;
 
     if constexpr (texture_enable)
     {
@@ -879,7 +879,7 @@ void GPU_SW_Backend::DrawTriangle(const GPUBackendDrawPolygonCommand* cmd,
         lc -= ls;
         rc -= rs;
 
-        s32 y = SignExtendN<11 + RESOLUTION_SHIFT, s32>(yi);
+        s32 y = SignExtendN<11 + TUprenderShift, s32>(yi);
 
         if (y < static_cast<s32>(m_drawing_area.top) * upscale)
           break;
@@ -887,7 +887,7 @@ void GPU_SW_Backend::DrawTriangle(const GPUBackendDrawPolygonCommand* cmd,
         if (y > (static_cast<s32>(m_drawing_area.bottom) * upscale) + (upscale/2))
           continue;
 
-        DrawSpan<TShaderParams>(
+        DrawSpan<TShaderParams, TUprenderShift>(
           cmd, yi, GetPolyXFP_Int(lc), GetPolyXFP_Int(rc), ig, idl);
       }
     }
@@ -895,14 +895,14 @@ void GPU_SW_Backend::DrawTriangle(const GPUBackendDrawPolygonCommand* cmd,
     {
       while (yi < yb)
       {
-        s32 y = SignExtendN<11 + RESOLUTION_SHIFT, s32>(yi);
+        s32 y = SignExtendN<11 + TUprenderShift, s32>(yi);
 
         if (y > static_cast<s32>(m_drawing_area.bottom) * upscale)
           break;
 
         if (y >= static_cast<s32>(m_drawing_area.top) * upscale)
         {
-          DrawSpan<TShaderParams>(
+          DrawSpan<TShaderParams, TUprenderShift>(
             cmd, yi, GetPolyXFP_Int(lc), GetPolyXFP_Int(rc), ig, idl);
         }
 
@@ -1017,11 +1017,11 @@ static ALWAYS_INLINE_RELEASE s64 LineDivide(s64 delta, s32 dk)
   return (delta / dk);
 }
 
-template<u32 TLineParams, int RESOLUTION_SHIFT>
+template<u32 TLineParams, int TUprenderShift>
 void GPU_SW_Backend::DrawLine(const GPUBackendDrawLineCommand* cmd, const GPUBackendDrawLineCommand::Vertex* p0,
                               const GPUBackendDrawLineCommand::Vertex* p1)
 {
-  constexpr auto upscale = (1<<RESOLUTION_SHIFT);
+  constexpr auto upscale = (1<<TUprenderShift);
   constexpr bool shading_enable       = (TLineParams & TLineShader_ShadingEnable     ) == TLineShader_ShadingEnable     ;
   constexpr bool transparency_enable  = (TLineParams & TLineShader_TransparencyEnable) == TLineShader_TransparencyEnable;
   constexpr bool dithering_enable     = (TLineParams & TLineShader_DitheringEnable   ) == TLineShader_DitheringEnable   ;
@@ -1110,7 +1110,7 @@ void GPU_SW_Backend::DrawLine(const GPUBackendDrawLineCommand* cmd, const GPUBac
             TShaderParam_MaskAndEnable      * 1                   |
             TShaderParam_MaskOrEnable       * 1                   ;
 
-          ShadePixel<ShaderParams, RESOLUTION_SHIFT>(cmd,
+          ShadePixel<ShaderParams, TUprenderShift>(cmd,
             static_cast<u32>((x * upscale) + xu),
             static_cast<u32>((y * upscale) + yu),
             r, g, b, 0, 0
@@ -1272,7 +1272,7 @@ void GPU_SW_Backend::UpdateVRAM(u32 x, u32 y, u32 width, u32 height, const void*
   if ((x + width) <= VRAM_WIDTH && (y + height) <= VRAM_HEIGHT && !params.IsMaskingEnabled())
   {
     const u16* src_ptr = static_cast<const u16*>(data);
-  if (m_uprender_shift == 0)
+    if (m_uprender_shift == 0)
     {
       u16* dst_ptr = &UPRAM_ACCESSOR[y * VRAM_WIDTH + x];
       for (u32 yoffs = 0; yoffs < height; yoffs++)
