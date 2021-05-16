@@ -50,7 +50,7 @@ public:
   std::string GetBIOSDirectory() override;
   std::unique_ptr<ByteStream> OpenPackageFile(const char* path, u32 flags) override;
 
-  bool UpdateSystemAVInfo(bool use_resolution_scale);
+  bool UpdateSystemAVInfo();
 
   // Called by frontend
   void retro_set_environment();
@@ -88,7 +88,7 @@ private:
   void UpdateControllers();
   void UpdateControllersDigitalController(u32 index);
   void UpdateControllersAnalogController(u32 index);
-  void GetSystemAVInfo(struct retro_system_av_info* info, bool use_resolution_scale);
+  void GetSystemAVInfo(struct retro_system_av_info* info);
   void UpdateGeometry();
   void UpdateLogging();
 

@@ -89,6 +89,13 @@ void GPU_SW::Reset(bool clear_vram)
   m_backend.Reset(clear_vram);
 }
 
+void GPU_SW::UpdateResolutionScale()
+{
+  m_backend.SetUprenderScale(g_settings.gpu_sw_uprender_scale);
+
+  UpdateSettings();
+}
+
 void GPU_SW::UpdateSettings()
 {
   GPU::UpdateSettings();

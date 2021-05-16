@@ -235,17 +235,20 @@ void LibretroHostInterface::AddOSDMessage(std::string message, float duration /*
 
 void LibretroHostInterface::retro_get_system_av_info(struct retro_system_av_info* info)
 {
-  const bool use_resolution_scale = (g_settings.gpu_renderer != GPURenderer::Software);
-  GetSystemAVInfo(info, use_resolution_scale);
+  GetSystemAVInfo(info);
 
   Log_InfoPrintf("base = %ux%u, max = %ux%u, aspect ratio = %.2f, fps = %.2f", info->geometry.base_width,
                  info->geometry.base_height, info->geometry.max_width, info->geometry.max_height,
                  info->geometry.aspect_ratio, info->timing.fps);
 }
 
-void LibretroHostInterface::GetSystemAVInfo(struct retro_system_av_info* info, bool use_resolution_scale)
+void LibretroHostInterface::GetSystemAVInfo(struct retro_system_av_info* info)
 {
-  const u32 resolution_scale = use_resolution_scale ? g_settings.gpu_resolution_scale : 1u;
+  u32 resolution_scale = 1u;
+  if (g_settings.gpu_renderer == GPURenderer::Software)
+    resolution_scale = g_settings.gpu_sw_uprender_scale;
+  else
+    resolution_scale = g_settings.gpu_resolution_scale;
   Assert(System::IsValid());
 
   std::memset(info, 0, sizeof(*info));
@@ -262,10 +265,10 @@ void LibretroHostInterface::GetSystemAVInfo(struct retro_system_av_info* info, b
   info->timing.sample_rate = static_cast<double>(AUDIO_SAMPLE_RATE);
 }
 
-bool LibretroHostInterface::UpdateSystemAVInfo(bool use_resolution_scale)
+bool LibretroHostInterface::UpdateSystemAVInfo()
 {
   struct retro_system_av_info avi;
-  GetSystemAVInfo(&avi, use_resolution_scale);
+  GetSystemAVInfo(&avi);
 
   Log_InfoPrintf("base = %ux%u, max = %ux%u, aspect ratio = %.2f, fps = %.2f", avi.geometry.base_width,
                  avi.geometry.base_height, avi.geometry.max_width, avi.geometry.max_height, avi.geometry.aspect_ratio,
@@ -283,8 +286,7 @@ bool LibretroHostInterface::UpdateSystemAVInfo(bool use_resolution_scale)
 void LibretroHostInterface::UpdateGeometry()
 {
   struct retro_system_av_info avi;
-  const bool use_resolution_scale = (g_settings.gpu_renderer != GPURenderer::Software);
-  GetSystemAVInfo(&avi, use_resolution_scale);
+  GetSystemAVInfo(&avi);
 
   Log_InfoPrintf("base = %ux%u, max = %ux%u, aspect ratio = %.2f", avi.geometry.base_width, avi.geometry.base_height,
                  avi.geometry.max_width, avi.geometry.max_height, avi.geometry.aspect_ratio);
@@ -564,7 +566,7 @@ void LibretroHostInterface::OnSystemDestroyed()
   m_using_hardware_renderer = false;
 }
 
-static std::array<retro_core_option_definition, 56> s_option_definitions = {{
+static std::array<retro_core_option_definition, 57> s_option_definitions = {{
   {"duckstation_Console.Region",
    "Console Region",
    "Determines which region/hardware to emulate. Auto-Detect will use the region of the disc inserted.",
@@ -652,7 +654,7 @@ static std::array<retro_core_option_definition, 56> s_option_definitions = {{
    {{"true", "Enabled"}, {"false", "Disabled"}},
    "true"},
   {"duckstation_GPU.ResolutionScale",
-   "Internal Resolution Scale",
+   "Hardware Renderer Resolution Scale",
    "Scales internal VRAM resolution by the specified multiplier. Larger values are slower. Some games require "
    "1x VRAM resolution or they will have rendering issues.",
    {{"1", "1x"},
@@ -671,6 +673,14 @@ static std::array<retro_core_option_definition, 56> s_option_definitions = {{
     {"14", "14x"},
     {"15", "15x"},
     {"16", "16x"}},
+   "1"},
+  {"duckstation_GPU.SoftwareUprender",
+   "Software Render Resolution Scale",
+   "Scales internal VRAM resolution by the specified multiplier. Larger values are slower. Some games require "
+   "1x VRAM resolution or they will have rendering issues.",
+   {{"1", "1x"},
+    {"2", "2x"},
+    {"4", "4x"}},
    "1"},
   {"duckstation_GPU.MSAA",
    "Multisample Antialiasing",
@@ -1094,7 +1104,7 @@ void LibretroHostInterface::UpdateSettings()
     {
       ReportMessage("Resolution changed, updating system AV info...");
 
-      UpdateSystemAVInfo(true);
+      UpdateSystemAVInfo();
 
       if (!g_settings.IsUsingSoftwareRenderer())
       {
@@ -1106,6 +1116,17 @@ void LibretroHostInterface::UpdateSettings()
 
       // Don't let the base class mess with the GPU.
       old_settings.gpu_resolution_scale = g_settings.gpu_resolution_scale;
+    }
+
+    if (g_settings.gpu_sw_uprender_scale != old_settings.gpu_sw_uprender_scale &&
+        g_settings.gpu_renderer == GPURenderer::Software)
+    {
+      ReportMessage("Resolution changed, updating system AV info...");
+
+      UpdateSystemAVInfo();
+      g_gpu->UpdateResolutionScale(); // Maybe ask user to restart instead
+
+      old_settings.gpu_sw_uprender_scale = g_settings.gpu_sw_uprender_scale;
     }
 
     if (g_settings.gpu_renderer != old_settings.gpu_renderer)
@@ -1383,7 +1404,7 @@ void LibretroHostInterface::HardwareRendererContextReset()
 void LibretroHostInterface::SwitchToHardwareRenderer()
 {
   struct retro_system_av_info avi;
-  g_libretro_host_interface.GetSystemAVInfo(&avi, true);
+  g_libretro_host_interface.GetSystemAVInfo(&avi);
 
   WindowInfo wi;
   wi.type = WindowInfo::Type::Libretro;

@@ -49,7 +49,7 @@ bool LibretroHostDisplay::CheckPixelFormat(retro_pixel_format new_format)
     return false;
   }
 
-  if (!g_libretro_host_interface.UpdateSystemAVInfo(false))
+  if (!g_libretro_host_interface.UpdateSystemAVInfo())
     return false;
 
   m_current_pixel_format = new_format;
