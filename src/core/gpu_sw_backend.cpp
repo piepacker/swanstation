@@ -21,7 +21,7 @@ GPU_SW_Backend::GPU_SW_Backend() : GPUBackend()
 
 static ptrdiff_t getVRAMSizeInBytes(int scale)
 {
-  return VRAM_WIDTH * VRAM_HEIGHT * sizeof(u16) * (scale+scale);
+  return VRAM_WIDTH * VRAM_HEIGHT * sizeof(u16) * (scale*scale);
 }
 
 void GPU_SW_Backend::SetUprenderScale(int scale)
