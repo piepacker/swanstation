@@ -183,7 +183,6 @@ void Settings::Load(SettingsInterface& si)
   gpu_threaded_presentation = si.GetBoolValue("GPU", "ThreadedPresentation", true);
   gpu_true_color = si.GetBoolValue("GPU", "TrueColor", true);
   gpu_scaled_dithering = si.GetBoolValue("GPU", "ScaledDithering", false);
-  gpu_sw_uprender_scale = si.GetIntValue("GPU", "SoftwareUprender", 1);
   gpu_texture_filter =
     ParseTextureFilterName(
       si.GetStringValue("GPU", "TextureFilter", GetTextureFilterName(DEFAULT_GPU_TEXTURE_FILTER)).c_str())
@@ -364,7 +363,6 @@ void Settings::Save(SettingsInterface& si) const
   si.SetBoolValue("GPU", "ThreadedPresentation", gpu_threaded_presentation);
   si.SetBoolValue("GPU", "TrueColor", gpu_true_color);
   si.SetBoolValue("GPU", "ScaledDithering", gpu_scaled_dithering);
-  si.SetIntValue("GPU", "SoftwareUprender", gpu_sw_uprender_scale);
   si.SetStringValue("GPU", "TextureFilter", GetTextureFilterName(gpu_texture_filter));
   si.SetStringValue("GPU", "DownsampleMode", GetDownsampleModeName(gpu_downsample_mode));
   si.SetBoolValue("GPU", "DisableInterlacing", gpu_disable_interlacing);

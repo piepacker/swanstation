@@ -17,7 +17,6 @@ Log_SetChannel(GPU_SW_Backend);
 
 GPU_SW_Backend::GPU_SW_Backend() : GPUBackend()
 {
-  //SetUprenderScale(g_settings.gpu_sw_uprender_scale);
 }
 
 void GPU_SW_Backend::SetUprenderScale(int scale)
@@ -77,7 +76,7 @@ GPU_SW_Backend::~GPU_SW_Backend() = default;
 
 bool GPU_SW_Backend::Initialize()
 {
-  SetUprenderScale(g_settings.gpu_sw_uprender_scale);
+  SetUprenderScale(g_settings.gpu_resolution_scale);
   return GPUBackend::Initialize();
 }
 
@@ -86,7 +85,7 @@ void GPU_SW_Backend::UpdateSettings()
   GPUBackend::UpdateSettings();   // invokes Sync()  [inheritance style coding caveat]
 
   // function internally shortcuts out if setting is up-to-date.
-  SetUprenderScale(g_settings.gpu_sw_uprender_scale);
+  SetUprenderScale(g_settings.gpu_resolution_scale);
 }
 
 void GPU_SW_Backend::Reset(bool clear_vram)
