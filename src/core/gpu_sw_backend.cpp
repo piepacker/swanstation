@@ -19,6 +19,11 @@ GPU_SW_Backend::GPU_SW_Backend() : GPUBackend()
 {
 }
 
+static ptrdiff_t getVRAMSizeInBytes(int scale)
+{
+  return VRAM_WIDTH * VRAM_HEIGHT * sizeof(u16) * (scale+scale);
+}
+
 void GPU_SW_Backend::SetUprenderScale(int scale)
 {
   switch (scale)
@@ -46,15 +51,16 @@ void GPU_SW_Backend::SetUprenderScale(int scale)
 
   // TODO: capture current VRAM and re-upload after resolution change.
 
+
+  auto new_upshift = (int)log2(scale);
+  if (m_upram_ptr && (m_uprender_shift == new_upshift))
+    return;
+
   if (m_upram)
   {
     free(m_upram);
     m_upram = nullptr;
   }
-
-  auto new_upshift = log2(scale);
-  if (m_uprender_shift == new_upshift)
-    return;
 
   m_uprender_shift = new_upshift;
 
@@ -64,8 +70,7 @@ void GPU_SW_Backend::SetUprenderScale(int scale)
   }
   else
   {
-    auto upram_size_bytes = VRAM_WIDTH * VRAM_HEIGHT * sizeof(u16) * scale;
-    m_upram = (u16*)malloc(upram_size_bytes);
+    m_upram = (u16*)malloc(getVRAMSizeInBytes(scale));
     m_upram_ptr = m_upram;
 
     UpdateVRAM(0, 0, VRAM_WIDTH, VRAM_HEIGHT, GetVRAMshadowPtr(), {});
@@ -92,10 +97,8 @@ void GPU_SW_Backend::Reset(bool clear_vram)
 {
   GPUBackend::Reset(clear_vram);
 
-  auto upram_size_bytes = VRAM_WIDTH * VRAM_HEIGHT * sizeof(u16) * uprender_scale();
-
   if (clear_vram)
-    memset(m_upram_ptr, 0, upram_size_bytes);
+    memset(m_upram_ptr, 0, getVRAMSizeInBytes(uprender_scale()));
 }
 
 void GPU_SW_Backend::DrawPolygon(const GPUBackendDrawPolygonCommand* cmd)

@@ -277,7 +277,7 @@ protected:
   DrawRectangleFunction GetDrawRectangleFunction  (u32 rectShaderParams, int upshift);
   DrawLineFunction      GetDrawLineFunction       (u32 lineShaderParams, int upshift);
 
-  int m_uprender_shift;
+  int m_uprender_shift = 0;   // 0 = native, 1 = 2x, 2 = 4x, etc.
 
   std::array<u16, VRAM_WIDTH * VRAM_HEIGHT> m_vram;
   u16* m_upram = nullptr;
