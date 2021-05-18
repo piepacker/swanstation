@@ -418,8 +418,9 @@ void GPU_SW::CopyOut24Bit(u32 src_x_native, u32 src_y_native, u32 skip_x_native,
     {
       for (int uy = 0; uy < uprender_scale; ++uy, dst_ptr += dst_stride)
       {
-        const u8* src_row_ptr = src_ptr;
-              u8* dst_row_ptr = reinterpret_cast<u8*>(dst_ptr);
+        u8  const *src_row_ptr = src_ptr;
+        u8        *dst_row_p8  = reinterpret_cast<u8 *>(dst_ptr);
+        u16       *dst_row_p16 = reinterpret_cast<u16*>(dst_ptr);
       
         for (u32 col = 0; col < width_native; col++, src_row_ptr+=3)
         {
@@ -427,27 +428,27 @@ void GPU_SW::CopyOut24Bit(u32 src_x_native, u32 src_y_native, u32 skip_x_native,
           {
             if constexpr (display_format == HostDisplayPixelFormat::RGBA8)
             {
-              *(dst_row_ptr++) = src_row_ptr[0];
-              *(dst_row_ptr++) = src_row_ptr[1];
-              *(dst_row_ptr++) = src_row_ptr[2];
-              *(dst_row_ptr++) = 0xFF;
+              *(dst_row_p8++) = src_row_ptr[0];
+              *(dst_row_p8++) = src_row_ptr[1];
+              *(dst_row_p8++) = src_row_ptr[2];
+              *(dst_row_p8++) = 0xFF;
             }
             else if constexpr (display_format == HostDisplayPixelFormat::BGRA8)
             {
-              *(dst_row_ptr++) = src_row_ptr[2];
-              *(dst_row_ptr++) = src_row_ptr[1];
-              *(dst_row_ptr++) = src_row_ptr[0];
-              *(dst_row_ptr++) = 0xFF;
+              *(dst_row_p8++) = src_row_ptr[2];
+              *(dst_row_p8++) = src_row_ptr[1];
+              *(dst_row_p8++) = src_row_ptr[0];
+              *(dst_row_p8++) = 0xFF;
             }
             else if constexpr (display_format == HostDisplayPixelFormat::RGB565)
             {
-              *(dst_row_ptr++) = ((static_cast<u16>(src_row_ptr[0]) >> 3) << 11) |
-                                  ((static_cast<u16>(src_row_ptr[1]) >> 2) << 5) | (static_cast<u16>(src_row_ptr[2]) >> 3);
+              *(dst_row_p16++) = ((static_cast<u16>(src_row_ptr[0]) >> 3) << 11) |
+                                 ((static_cast<u16>(src_row_ptr[1]) >> 2) << 5 ) | (static_cast<u16>(src_row_ptr[2]) >> 3);
             }
             else if constexpr (display_format == HostDisplayPixelFormat::RGBA5551)
             {
-              *(dst_row_ptr++) = ((static_cast<u16>(src_row_ptr[0]) >> 3) << 10) |
-                                  ((static_cast<u16>(src_row_ptr[1]) >> 3) << 5) | (static_cast<u16>(src_row_ptr[2]) >> 3);
+              *(dst_row_p16++) = ((static_cast<u16>(src_row_ptr[0]) >> 3) << 10) |
+                                 ((static_cast<u16>(src_row_ptr[1]) >> 3) << 5 ) | (static_cast<u16>(src_row_ptr[2]) >> 3);
             }
           }
         }
