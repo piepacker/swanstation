@@ -77,7 +77,14 @@ void GPU_SW_Backend::SetUprenderScale(int scale)
   }
 }
 
-GPU_SW_Backend::~GPU_SW_Backend() = default;
+GPU_SW_Backend::~GPU_SW_Backend()
+{
+  if (m_upram)
+  {
+    free(m_upram);
+    m_upram = nullptr;
+  }
+}
 
 bool GPU_SW_Backend::Initialize()
 {

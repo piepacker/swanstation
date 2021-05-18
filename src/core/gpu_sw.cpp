@@ -39,6 +39,9 @@ GPU_SW::~GPU_SW()
   m_backend.Shutdown();
   if (m_host_display)
     m_host_display->ClearDisplayTexture();
+
+  if (m_display_texture_buffer)
+    free(m_display_texture_buffer);
 }
 
 bool GPU_SW::IsHardwareRenderer() const
@@ -46,10 +49,33 @@ bool GPU_SW::IsHardwareRenderer() const
   return false;
 }
 
+static ptrdiff_t getDisplayTextureSizeInBytes(int scale)
+{
+  return GPU_MAX_DISPLAY_WIDTH * GPU_MAX_DISPLAY_HEIGHT * scale * scale * sizeof(u32);
+}
+
+
+void GPU_SW::AllocDisplayBuffer()
+{
+  auto backend_uprender = m_backend.uprender_scale();
+
+  // backend will make some choices about what uprender it supports, so make sure it gets init'd first!
+  DebugAssert(backend_uprender >= 1);
+
+  if (m_display_texture_buffer)
+    free(m_display_texture_buffer);
+  m_display_texture_buffer = nullptr;
+
+  m_display_texture_scale  = backend_uprender;
+  m_display_texture_buffer = (u8*)malloc(getDisplayTextureSizeInBytes(m_display_texture_scale));
+}
+
 bool GPU_SW::Initialize(HostDisplay* host_display)
 {
   if (!GPU::Initialize(host_display) || !m_backend.Initialize())
     return false;
+
+  AllocDisplayBuffer();
 
   static constexpr auto formats_for_16bit = make_array(HostDisplayPixelFormat::RGB565, HostDisplayPixelFormat::RGBA5551,
                                                        HostDisplayPixelFormat::RGBA8, HostDisplayPixelFormat::BGRA8);
@@ -93,6 +119,7 @@ void GPU_SW::UpdateSettings()
 {
   GPU::UpdateSettings();
   m_backend.UpdateSettings();
+  AllocDisplayBuffer();
 }
 
 template<HostDisplayPixelFormat out_format, typename out_type>
@@ -253,8 +280,8 @@ void GPU_SW::CopyOut15Bit(u32 src_x_native, u32 src_y_native, u32 width_native, 
   }
   else
   {
-    dst_stride = GPU_MAX_DISPLAY_WIDTH * sizeof(OutputPixelType);
-    dst_ptr = m_display_texture_buffer.data() + (field != 0 ? dst_stride : 0);
+    dst_stride = GPU_MAX_DISPLAY_WIDTH * m_display_texture_scale * sizeof(OutputPixelType);
+    dst_ptr = m_display_texture_buffer + (field != 0 ? dst_stride : 0);
   }
 
   const u32 output_stride = dst_stride;
@@ -306,7 +333,7 @@ void GPU_SW::CopyOut15Bit(u32 src_x_native, u32 src_y_native, u32 width_native, 
   }
   else
   {
-    m_host_display->SetDisplayPixels(display_format, width_up, height_up, m_display_texture_buffer.data(), output_stride);
+    m_host_display->SetDisplayPixels(display_format, width_up, height_up, m_display_texture_buffer, output_stride);
   }
 }
 
@@ -370,8 +397,8 @@ void GPU_SW::CopyOut24Bit(u32 src_x_native, u32 src_y_native, u32 skip_x_native,
   }
   else
   {
-    dst_stride = GPU_MAX_DISPLAY_WIDTH * sizeof(OutputPixelType);
-    dst_ptr = m_display_texture_buffer.data() + (field != 0 ? dst_stride : 0);
+    dst_stride = GPU_MAX_DISPLAY_WIDTH * m_display_texture_scale * sizeof(OutputPixelType);
+    dst_ptr = m_display_texture_buffer + (field != 0 ? dst_stride : 0);
   }
 
   const u32 output_stride = dst_stride;
@@ -472,7 +499,7 @@ void GPU_SW::CopyOut24Bit(u32 src_x_native, u32 src_y_native, u32 skip_x_native,
   }
   else
   {
-    m_host_display->SetDisplayPixels(display_format, width_up, height_up, m_display_texture_buffer.data(), output_stride);
+    m_host_display->SetDisplayPixels(display_format, width_up, height_up, m_display_texture_buffer, output_stride);
   }
 }
 
@@ -501,11 +528,15 @@ void GPU_SW::CopyOut24Bit(HostDisplayPixelFormat display_format, u32 src_x, u32 
 
 void GPU_SW::ClearDisplay()
 {
-  std::memset(m_display_texture_buffer.data(), 0, m_display_texture_buffer.size());
+  if (m_display_texture_buffer)
+    std::memset(m_display_texture_buffer, 0, getDisplayTextureSizeInBytes(m_display_texture_scale));
 }
 
 void GPU_SW::UpdateDisplay()
 {
+  if (!m_display_texture_buffer)
+    return;
+
   // fill display texture
   m_backend.Sync();
 
