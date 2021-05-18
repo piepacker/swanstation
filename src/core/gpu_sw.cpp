@@ -340,8 +340,6 @@ void GPU_SW::CopyOut24Bit(u32 src_x_native, u32 src_y_native, u32 skip_x_native,
   u32 dst_stride;
 
   auto uprender_scale = m_backend.uprender_scale();
-  auto vram_upsize_x = VRAM_WIDTH  * uprender_scale;
-  auto vram_upsize_y = VRAM_HEIGHT * uprender_scale;
 
   auto width_up   = width_native  * uprender_scale;
   auto height_up  = height_native * uprender_scale;
@@ -387,7 +385,7 @@ void GPU_SW::CopyOut24Bit(u32 src_x_native, u32 src_y_native, u32 skip_x_native,
 
   if ((src_x_native + width_native) <= VRAM_WIDTH && (src_y_native + (rows_native << interleaved_shift)) <= VRAM_HEIGHT)
   {
-    const u8* src_ptr = reinterpret_cast<const u8*>(&shadow_ptr[src_y_native * VRAM_WIDTH + src_x_native]) + (skip_x_native * 3);
+    const u8* src_ptr = reinterpret_cast<const u8*>(&shadow_ptr[(src_y_native * VRAM_WIDTH) + src_x_native]) + (skip_x_native * 3);
     const u32 src_stride = (VRAM_WIDTH << interleaved_shift) * sizeof(u16);
     for (u32 row = 0; row < rows_native; row++, src_ptr += src_stride)
     {

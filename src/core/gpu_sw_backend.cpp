@@ -1352,7 +1352,7 @@ void GPU_SW_Backend::ReadVRAM(u32 x, u32 y, u32 width, u32 height)
   for (u32 yoffs = 0; yoffs < height; yoffs++)
   {
     const u32 row = (y + yoffs) % VRAM_HEIGHT;
-    const u16* src = UPRAM_ACCESSOR + (row * VRAM_WIDTH * upscale);
+    const u16* src = UPRAM_ACCESSOR + (row * VRAM_WIDTH * upscale * upscale);		// skip 2 rows, hence 2nd upscale mult
           u16* dst = shadow_ptr     + (row * VRAM_WIDTH);
     for (u32 xoffs = 0; xoffs < width; xoffs++)
     {
