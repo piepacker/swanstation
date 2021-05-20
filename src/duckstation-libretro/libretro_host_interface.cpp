@@ -647,14 +647,13 @@ static std::array<retro_core_option_definition, 56> s_option_definitions = {{
   },
   {"duckstation_GPU.UseThread",
    "Threaded Rendering (Software)",
-   "Uses a second thread for drawing graphics. Currently only available for the software renderer, but can provide a "
-   "significant speed improvement, and is safe to use.",
+   "Uses a second thread for drawing graphics. Currently only available for the software renderer.",
    {{"true", "Enabled"}, {"false", "Disabled"}},
    "true"},
   {"duckstation_GPU.ResolutionScale",
    "Internal Resolution Scale",
    "Scales internal VRAM resolution by the specified multiplier. Larger values are slower. Some games require "
-   "1x VRAM resolution or they will have rendering issues.",
+   "1x VRAM resolution or they will have rendering issues. Software render supports only 1x, 2x, 4x.",
    {{"1", "1x"},
     {"2", "2x"},
     {"3", "3x (for 720p)"},
