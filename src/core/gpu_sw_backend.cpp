@@ -610,9 +610,9 @@ void GPU_SW_Backend::DrawSpan(const GPUBackendDrawPolygonCommand* cmd, s32 y_up,
     w_up        -= delta_up;
   }
 
-  if ((x_up + w_up) > (static_cast<s32>(m_drawing_area.right * upscale) + 2))
+  if ((x_up + w_up) > (static_cast<s32>(m_drawing_area.right * upscale) + upscale))
   {
-    w_up = static_cast<s32>(m_drawing_area.right * upscale) + 2 - x_up;
+    w_up = static_cast<s32>(m_drawing_area.right * upscale) + upscale - x_up;
   }
 
   if (w_up <= 0)
