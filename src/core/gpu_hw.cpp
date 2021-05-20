@@ -31,7 +31,6 @@ ALWAYS_INLINE static bool ShouldUseUVLimits()
 
 GPU_HW::GPU_HW() : GPU()
 {
-  m_vram_ptr = m_vram_shadow.data();
 }
 
 GPU_HW::~GPU_HW() = default;

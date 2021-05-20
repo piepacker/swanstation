@@ -232,6 +232,7 @@ enum class GPUBackendCommandType : u8
 {
   Wraparound,
   Sync,
+  ReadVRAM,
   FillVRAM,
   UpdateVRAM,
   CopyVRAM,
@@ -277,6 +278,14 @@ struct GPUBackendCommand
 
 struct GPUBackendSyncCommand : public GPUBackendCommand
 {
+};
+
+struct GPUBackendReadVRAMCommand : public GPUBackendCommand
+{
+  u16 x;
+  u16 y;
+  u16 width;
+  u16 height;
 };
 
 struct GPUBackendFillVRAMCommand : public GPUBackendCommand
