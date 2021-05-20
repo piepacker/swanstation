@@ -651,7 +651,7 @@ static std::array<retro_core_option_definition, 56> s_option_definitions = {{
    {{"true", "Enabled"}, {"false", "Disabled"}},
    "true"},
   {"duckstation_GPU.ResolutionScale",
-   "Renderer Resolution Scale",
+   "Internal Resolution Scale",
    "Scales internal VRAM resolution by the specified multiplier. Larger values are slower. Some games require "
    "1x VRAM resolution or they will have rendering issues. Software render supports only 1x, 2x, 4x.",
    {{"1", "1x"},
