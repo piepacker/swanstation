@@ -44,9 +44,9 @@ GPU_SW::~GPU_SW()
     free(m_display_texture_buffer);
 }
 
-bool GPU_SW::IsHardwareRenderer() const
+GPURenderer GPU_SW::GetRendererType() const
 {
-  return false;
+  return GPURenderer::Software;
 }
 
 static ptrdiff_t getDisplayTextureSizeInBytes(int scale)
