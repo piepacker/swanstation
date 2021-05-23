@@ -85,7 +85,7 @@ static ALWAYS_INLINE CommonHostInterface* GetHostInterface()
   return static_cast<CommonHostInterface*>(g_host_interface);
 }
 
-static void FormattedError(const char* format, ...)
+static void FormattedError(const char* format, ...) printflike(1, 2);
 {
   std::va_list ap;
   va_start(ap, format);
