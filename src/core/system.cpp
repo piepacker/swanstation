@@ -1823,6 +1823,12 @@ void UpdateMemoryCards()
           card = MemoryCard::Open(g_settings.memory_card_paths[i]);
       }
       break;
+
+      case MemoryCardType::Libretro:
+      {
+        card = MemoryCard::Create();
+      }
+      break;
     }
 
     if (card)
