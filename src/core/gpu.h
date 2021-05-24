@@ -73,7 +73,7 @@ public:
   GPU();
   virtual ~GPU();
 
-  virtual bool IsHardwareRenderer() const = 0;
+  virtual GPURenderer GetRendererType() const = 0;
 
   virtual u16* GetVRAMshadowPtr() = 0;
 
@@ -89,6 +89,7 @@ public:
   // Render statistics debug window.
   void DrawDebugStateWindow();
 
+  bool IsHardwareRenderer();
   void CPUClockChanged();
 
   // MMIO access

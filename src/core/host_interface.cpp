@@ -101,7 +101,7 @@ bool HostInterface::BootSystem(const SystemBootParameters& parameters)
 
   if (!AcquireHostDisplay())
   {
-    ReportFormattedError(g_host_interface->TranslateString("System", "Failed to acquire host display."));
+    ReportError(g_host_interface->TranslateString("System", "Failed to acquire host display."));
     OnSystemDestroyed();
     return false;
   }
@@ -118,7 +118,7 @@ bool HostInterface::BootSystem(const SystemBootParameters& parameters)
   {
     if (!System::IsStartupCancelled())
     {
-      ReportFormattedError(
+      ReportError(
         g_host_interface->TranslateString("System", "System failed to boot. The log may contain more information."));
     }
 
@@ -556,7 +556,7 @@ void HostInterface::SetDefaultSettings(SettingsInterface& si)
   si.SetFloatValue("Display", "MaxFPS", 0.0f);
 
   si.SetBoolValue("CDROM", "ReadThread", true);
-  si.SetBoolValue("CDROM", "RegionCheck", true);
+  si.SetBoolValue("CDROM", "RegionCheck", false);
   si.SetBoolValue("CDROM", "LoadImageToRAM", false);
   si.SetBoolValue("CDROM", "MuteCDAudio", false);
   si.SetIntValue("CDROM", "ReadSpeedup", 1);
