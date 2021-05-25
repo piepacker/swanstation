@@ -74,7 +74,7 @@ Settings::Settings() = default;
 bool Settings::HasAnyPerGameMemoryCards() const
 {
   return std::any_of(memory_card_types.begin(), memory_card_types.end(), [](MemoryCardType t) {
-    return (t == MemoryCardType::PerGame || t == MemoryCardType::PerGameTitle);
+    return (t == MemoryCardType::PerGame || t == MemoryCardType::PerGameTitle || t == MemoryCardType::Libretro);
   });
 }
 
