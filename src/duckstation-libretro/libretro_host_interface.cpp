@@ -496,6 +496,10 @@ void* LibretroHostInterface::retro_get_memory_data(unsigned id)
       return System::IsShutdown() ? nullptr : Bus::g_ram;
 
     case RETRO_MEMORY_SAVE_RAM: {
+      const MemoryCardType type = g_settings.memory_card_types[0];
+      if (System::IsShutdown()  || type != MemoryCardType::Libretro) {
+        return nullptr;
+      }
       auto card = g_pad.GetMemoryCard(0);
       auto& data = card->GetData();
       return data.data();
@@ -514,8 +518,13 @@ size_t LibretroHostInterface::retro_get_memory_size(unsigned id)
     case RETRO_MEMORY_SYSTEM_RAM:
       return Bus::RAM_SIZE;
 
-    case RETRO_MEMORY_SAVE_RAM:
+    case RETRO_MEMORY_SAVE_RAM: {
+      const MemoryCardType type = g_settings.memory_card_types[0];
+      if (System::IsShutdown()  || type != MemoryCardType::Libretro) {
+        return 0;
+      }
       return 128 * 1024;
+    }
 
     default:
       return 0;
@@ -826,7 +835,7 @@ static std::array<retro_core_option_definition, 64> s_option_definitions = {{
    "Memory Card 1 Type",
    "Sets the type of memory card for Slot 1.",
    {{"None", "No Memory Card"},
-    {"Libretro", "Let the libretro frontend handle the Card"},
+    {"Libretro", "Libretro"},
     {"Shared", "Shared Between All Games"},
     {"PerGame", "Separate Card Per Game (Game Code)"},
     {"PerGameTitle", "Separate Card Per Game (Game Title)"}},
