@@ -1,0 +1,24 @@
+name: CI
+
+on:
+  push:
+    branches: [piepacker]
+  pull_request:
+    branches: [piepacker]
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  build_linux:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v2
+        with:
+          submodules: true
+
+      - run: cmake -DCMAKE_BUILD_TYPE=Release -DBUILD_LIBRETRO_CORE=ON .
+      - run: cmake --build . --parallel 2
+
