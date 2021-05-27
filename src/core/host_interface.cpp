@@ -45,7 +45,7 @@ HostInterface::HostInterface()
 HostInterface::~HostInterface()
 {
   // system should be shut down prior to the destructor
-  Assert(System::IsShutdown() && !m_audio_stream && !m_display);
+  // Assert(System::IsShutdown() && !m_audio_stream && !m_display);
   Assert(g_host_interface == this);
   g_host_interface = nullptr;
 }
