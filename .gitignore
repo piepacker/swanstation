@@ -17,6 +17,8 @@ ipch/*
 *.vcxproj.user
 *.VC.opendb
 *.VC.db
+*.tlog
+*.pdb
 
 # cmake stuff
 CMakeCache.txt
@@ -24,6 +26,29 @@ CMakeFiles
 Makefile
 cmake_install.cmake
 install_manifest.txt
+*.cmake
+*.recipe
+*.tcl
+**/ALL_BUILD
+**/ZERO_CHECK
+
+# cmake output dirs...
+**.dir
+
+# for our libretro fork, most vcxproj are generated
+# external sln/vcxproj can still be added explicitly (forced add)
+*.vcxproj
+*.vcxproj.filters
+*.sln
+
+
+# Windows cmake intermediate files
+*.lib
+*.obj
+*.dll
+*.exp
+*.ilk
+*.log
 
 # unix intermediate files
 config.h
@@ -45,3 +70,6 @@ __pycache__
 # UWP crap
 Generated Files
 /packages
+
+# Vim tmp
+.*.sw*
