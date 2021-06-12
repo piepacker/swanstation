@@ -31,3 +31,10 @@ if(${CPU_ARCH} STREQUAL "aarch32" OR ${CPU_ARCH} STREQUAL "aarch64")
   add_subdirectory(vixl)
 endif()
 
+add_subdirectory(icystdlib)
+add_subdirectory(libpsdisc)
+add_subdirectory(psxhlebios)
+
+target_include_directories(icystdlib  PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/icystdlib/icy-app-glue")
+target_include_directories(libpsdisc  PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/icystdlib/icy-app-glue")
+target_include_directories(psxhlebios PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/icystdlib/icy-app-glue")

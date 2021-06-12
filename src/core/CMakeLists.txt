@@ -120,6 +120,9 @@ target_link_libraries(core PUBLIC Threads::Threads common zlib vulkan-loader)
 target_link_libraries(core PRIVATE glad stb xxhash imgui)
 target_compile_definitions(core PUBLIC "-DWITH_IMGUI=1")
 
+# HLE BIOS HACKING
+target_link_libraries(core PRIVATE psxhlebios libpsdisc)
+
 if(WIN32)
   target_sources(core PRIVATE
     gpu_hw_d3d12.cpp

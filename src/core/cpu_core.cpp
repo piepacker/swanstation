@@ -19,7 +19,9 @@ Log_SetChannel(CPU::Core);
 
 namespace CPU {
 
-static void SetPC(u32 new_pc);
+// piepacker
+void SetPC(u32 new_pc);
+
 static void UpdateLoadDelay();
 static void Branch(u32 target);
 static void FlushPipeline();
