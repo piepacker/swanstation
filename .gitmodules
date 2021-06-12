@@ -2,3 +2,12 @@
 	path = dep/msvc/qt
 	url = https://github.com/stenzek/duckstation-ext-qt-minimal.git
 	shallow = true
+[submodule "dep/icystdlib"]
+	path = dep/icystdlib
+	url = http://github.com/jstine35/icystdlib
+[submodule "dep/psxhlebios"]
+	path = dep/psxhlebios
+	url = http://github.com/piepacker/psxhlebios
+[submodule "dep/libpsdisc"]
+	path = dep/libpsdisc
+	url = http://github.com/piepacker/libpsdisc
