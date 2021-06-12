@@ -27,3 +27,9 @@ if(BUILD_LIBRETRO_CORE)
   add_subdirectory(duckstation-libretro)
 endif()
 
+# HLE BIOS HACKING
+if ("${CMAKE_CXX_COMPILER_ID}" MATCHES "MSVC")
+    add_definitions(/FI"fi-platform-defines.h" /FI"fi-printf-redirect.h")
+else()
+    add_definitions(-include fi-platform-defines.h -include fi-printf-redirect.h)
+endif()

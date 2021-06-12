@@ -119,6 +119,9 @@ target_include_directories(core PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/..")
 target_link_libraries(core PUBLIC Threads::Threads common zlib vulkan-loader)
 target_link_libraries(core PRIVATE glad stb xxhash)
 
+# HLE BIOS HACKING
+target_link_libraries(core PRIVATE psxhlebios libpsdisc)
+
 if(NOT BUILD_LIBRETRO_CORE)
   target_link_libraries(core PRIVATE imgui)
   target_compile_definitions(core PRIVATE "WITH_IMGUI=1")

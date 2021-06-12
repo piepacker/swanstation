@@ -1,3 +1,4 @@
+
 #include "system.h"
 #include "bios.h"
 #include "bus.h"
@@ -42,6 +43,12 @@
 #include <fstream>
 #include <limits>
 #include <thread>
+
+#include "psxhle-filesystem.h"
+
+extern void psxBiosInit_StdLib();
+extern void psxBiosInitFull();
+
 Log_SetChannel(System);
 
 SystemBootParameters::SystemBootParameters() = default;

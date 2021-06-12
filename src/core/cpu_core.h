@@ -11,6 +11,9 @@ class StateWrapper;
 
 namespace CPU {
 
+// piepacker
+extern void SetPC(u32 new_pc);
+
 enum : VirtualMemoryAddress
 {
   RESET_VECTOR = UINT32_C(0xBFC00000)
