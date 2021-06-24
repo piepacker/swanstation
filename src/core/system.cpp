@@ -1412,6 +1412,13 @@ void DoRunFrame()
   g_gpu->ResetGraphicsAPIState();
 }
 
+void HleRunRecursive(u32 stopPc)
+{
+    // currently only the block-based CodeCache interpreter is supported.
+    
+    CPU::CodeCache::Execute();
+}
+
 void RunFrame()
 {
   s_frame_timer.Reset();

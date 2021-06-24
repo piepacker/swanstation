@@ -8,6 +8,9 @@
 #include "settings.h"
 #include "system.h"
 #include "timing_event.h"
+
+#include "libpsxbios.h"
+
 Log_SetChannel(CPU::CodeCache);
 
 #ifdef WITH_RECOMPILER
@@ -169,100 +172,116 @@ void Shutdown()
 #endif
 }
 
+bool g_hle_bios = 0;
+
 template<PGXPMode pgxp_mode>
-static void ExecuteImpl()
+static ALWAYS_INLINE void ExecuteImplBlock()
 {
   CodeBlockKey next_block_key;
 
+  if (HasPendingInterrupt())
+  {
+    SafeReadInstruction(g_state.regs.pc, &g_state.next_instruction.bits);
+    DispatchInterrupt();
+  }
+
+  TimingEvents::UpdateCPUDowncount();
+
+  next_block_key = GetNextBlockKey();
+  while (g_state.pending_ticks < g_state.downcount)
+  {
+    CodeBlock* block = LookupBlock(next_block_key);
+    if (!block)
+    {
+      if (!HleDispatchCall(g_state.regs.pc))
+      {
+          InterpretUncachedBlock<pgxp_mode>();
+      }
+      continue;
+    }
+
+  reexecute_block:
+    Assert(!(HasPendingInterrupt()));
+
+    if (HleDispatchCall(g_state.regs.pc))
+    {
+        // pc will have changed.
+        continue;
+    }
+
+#if 0
+    const u32 tick = TimingEvents::GetGlobalTickCounter() + CPU::GetPendingTicks();
+    if (tick == 4188233674)
+      __debugbreak();
+#endif
+
+#if 0
+    LogCurrentState();
+#endif
+
+    if (g_settings.cpu_recompiler_icache)
+      CheckAndUpdateICacheTags(block->icache_line_count, block->uncached_fetch_ticks);
+
+    InterpretCachedBlock<pgxp_mode>(*block);
+
+    if (g_state.pending_ticks >= g_state.downcount)
+      break;
+    else if (!USE_BLOCK_LINKING)
+      continue;
+
+    next_block_key = GetNextBlockKey();
+    if (next_block_key.bits == block->key.bits)
+    {
+      // we can jump straight to it if there's no pending interrupts
+      // ensure it's not a self-modifying block
+      if (!block->invalidated || RevalidateBlock(block))
+        goto reexecute_block;
+    }
+    else if (!block->invalidated)
+    {
+      // Try to find an already-linked block.
+      // TODO: Don't need to dereference the block, just store a pointer to the code.
+      for (CodeBlock* linked_block : block->link_successors)
+      {
+        if (linked_block->key.bits == next_block_key.bits)
+        {
+          if (linked_block->invalidated && !RevalidateBlock(linked_block))
+          {
+            // CanExecuteBlock can result in a block flush, so stop iterating here.
+            break;
+          }
+
+          // Execute the linked block
+          block = linked_block;
+          goto reexecute_block;
+        }
+      }
+
+      // No acceptable blocks found in the successor list, try a new one.
+      CodeBlock* next_block = LookupBlock(next_block_key);
+      if (next_block)
+      {
+        // Link the previous block to this new block if we find a new block.
+        LinkBlock(block, next_block);
+        block = next_block;
+        goto reexecute_block;
+      }
+    }
+  }
+
+  TimingEvents::RunEvents();
+}
+
+template<PGXPMode pgxp_mode>
+static void ExecuteImplFrame()
+{
   g_using_interpreter = false;
   g_state.frame_done = false;
 
   while (!g_state.frame_done)
   {
-    if (HasPendingInterrupt())
-    {
-      SafeReadInstruction(g_state.regs.pc, &g_state.next_instruction.bits);
-      DispatchInterrupt();
-    }
-
-    TimingEvents::UpdateCPUDowncount();
-
-    next_block_key = GetNextBlockKey();
-    while (g_state.pending_ticks < g_state.downcount)
-    {
-      CodeBlock* block = LookupBlock(next_block_key);
-      if (!block)
-      {
-        InterpretUncachedBlock<pgxp_mode>();
-        continue;
-      }
-
-    reexecute_block:
-      Assert(!(HasPendingInterrupt()));
-
-#if 0
-      const u32 tick = TimingEvents::GetGlobalTickCounter() + CPU::GetPendingTicks();
-      if (tick == 4188233674)
-        __debugbreak();
-#endif
-
-#if 0
-      LogCurrentState();
-#endif
-
-      if (g_settings.cpu_recompiler_icache)
-        CheckAndUpdateICacheTags(block->icache_line_count, block->uncached_fetch_ticks);
-
-      InterpretCachedBlock<pgxp_mode>(*block);
-
-      if (g_state.pending_ticks >= g_state.downcount)
-        break;
-      else if (!USE_BLOCK_LINKING)
-        continue;
-
-      next_block_key = GetNextBlockKey();
-      if (next_block_key.bits == block->key.bits)
-      {
-        // we can jump straight to it if there's no pending interrupts
-        // ensure it's not a self-modifying block
-        if (!block->invalidated || RevalidateBlock(block))
-          goto reexecute_block;
-      }
-      else if (!block->invalidated)
-      {
-        // Try to find an already-linked block.
-        // TODO: Don't need to dereference the block, just store a pointer to the code.
-        for (CodeBlock* linked_block : block->link_successors)
-        {
-          if (linked_block->key.bits == next_block_key.bits)
-          {
-            if (linked_block->invalidated && !RevalidateBlock(linked_block))
-            {
-              // CanExecuteBlock can result in a block flush, so stop iterating here.
-              break;
-            }
-
-            // Execute the linked block
-            block = linked_block;
-            goto reexecute_block;
-          }
-        }
-
-        // No acceptable blocks found in the successor list, try a new one.
-        CodeBlock* next_block = LookupBlock(next_block_key);
-        if (next_block)
-        {
-          // Link the previous block to this new block if we find a new block.
-          LinkBlock(block, next_block);
-          block = next_block;
-          goto reexecute_block;
-        }
-      }
-    }
-
-    TimingEvents::RunEvents();
+    ExecuteImplBlock<pgxp_mode>();
   }
-
   // in case we switch to interpreter...
   g_state.regs.npc = g_state.regs.pc;
 }
@@ -272,14 +291,53 @@ void Execute()
   if (g_settings.gpu_pgxp_enable)
   {
     if (g_settings.gpu_pgxp_cpu)
-      ExecuteImpl<PGXPMode::CPU>();
+      ExecuteImplFrame<PGXPMode::CPU>();
     else
-      ExecuteImpl<PGXPMode::Memory>();
+      ExecuteImplFrame<PGXPMode::Memory>();
   }
   else
   {
-    ExecuteImpl<PGXPMode::Disabled>();
+    ExecuteImplFrame<PGXPMode::Disabled>();
   }
+}
+
+void HleExecuteRecursive(u32 startPC, u32 exitPC)
+{
+  // during recursive execution of HleEvents the assumption (and generally the requirement by Kernel) is
+  // that all interrupts are disabled. There might be some possibility for a kernel level interrupt, but
+  // we shouldn't need to care about these for game emulation. Usually such things are for debugging and
+  // trapping behavior within an interrupt handler and, on PS1 especially, this was a very dodgy process
+  // that on the real hardware tended to crash half as much as it worked anyway.
+
+  g_state.regs.pc = startPC;
+
+  while (g_state.regs.pc != exitPC)
+  {
+    if (HleDispatchCall(g_state.regs.pc))
+    {
+      TimingEvents::RunEvents();
+      continue;
+    }
+
+    // just use uncached block interpreter, because the cached interpreter loop is over-optimized to the
+    // extent that adding an exitPC check is more work and perf-hit than it's worth.
+
+    if (g_settings.gpu_pgxp_enable)
+    {
+      if (g_settings.gpu_pgxp_cpu)
+        InterpretUncachedBlock<PGXPMode::CPU>();
+      else
+        InterpretUncachedBlock<PGXPMode::Memory>();
+    }
+    else
+    {
+      InterpretUncachedBlock<PGXPMode::Disabled>();
+    }
+
+    TimingEvents::RunEvents();
+  }
+ 
+  g_state.regs.npc = g_state.regs.pc;
 }
 
 #ifdef WITH_RECOMPILER
