@@ -1040,6 +1040,20 @@ ALWAYS_INLINE static TickCount DoMemoryControl2Access(u32 offset, u32& value)
   }
 }
 
+void HleWriteMEMCTRL2(u32 val)
+{
+    int cycles = DoMemoryControl2Access<MemoryAccessType::Write, MemoryAccessSize::Word>(0, val);
+    DebugAssert(cycles >= 0);
+}
+
+u32 HleReadMEMCTRL2()
+{
+    u32 result;
+    int cycles = DoMemoryControl2Access<MemoryAccessType::Read, MemoryAccessSize::Word>(0, result);
+    DebugAssert(cycles >= 0);
+    return result;
+}
+
 template<MemoryAccessType type, MemoryAccessSize size>
 ALWAYS_INLINE static TickCount DoPadAccess(u32 offset, u32& value)
 {
