@@ -44,3 +44,5 @@ add_subdirectory(psxhlebios)
 target_include_directories(icystdlib  PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/icystdlib/icy-app-glue")
 target_include_directories(libpsdisc  PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/icystdlib/icy-app-glue")
 target_include_directories(psxhlebios PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/icystdlib/icy-app-glue")
+
+target_compile_definitions(psxhlebios PRIVATE "HLE_ENABLE_MCD=0")

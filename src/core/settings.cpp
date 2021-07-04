@@ -172,7 +172,8 @@ void Settings::Load(SettingsInterface& si)
                        si.GetStringValue("CPU", "FastmemMode", GetCPUFastmemModeName(DEFAULT_CPU_FASTMEM_MODE)).c_str())
                        .value_or(DEFAULT_CPU_FASTMEM_MODE);
 
-  bios_use_hle = si.GetBoolValue("BIOS", "UseHLE", false);
+  hle_bios_enable = si.GetBoolValue("HLE", "Enable", false);
+  hle_bios_load_rom = si.GetBoolValue("HLE", "LoadBIOS", false);
 
   gpu_renderer = ParseRendererName(si.GetStringValue("GPU", "Renderer", GetRendererName(DEFAULT_GPU_RENDERER)).c_str())
                    .value_or(DEFAULT_GPU_RENDERER);

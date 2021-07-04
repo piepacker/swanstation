@@ -81,7 +81,8 @@ struct Settings
   bool cpu_recompiler_icache = false;
   CPUFastmemMode cpu_fastmem_mode = CPUFastmemMode::Disabled;
 
-  bool bios_use_hle = false;
+  bool hle_bios_enable = false;         // enables HLE of BIOS functions and interrupt handlers
+  bool hle_bios_load_rom = false;       // Loads and boots BIOS ROM, sometimes useful for troubleshooting HLE behavior
 
   float emulation_speed = 1.0f;
   float fast_forward_speed = 0.0f;

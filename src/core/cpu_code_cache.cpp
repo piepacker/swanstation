@@ -172,8 +172,6 @@ void Shutdown()
 #endif
 }
 
-bool g_hle_bios = 0;
-
 template<PGXPMode pgxp_mode>
 static ALWAYS_INLINE void ExecuteImplBlock()
 {
@@ -193,7 +191,7 @@ static ALWAYS_INLINE void ExecuteImplBlock()
     CodeBlock* block = LookupBlock(next_block_key);
     if (!block)
     {
-      if (!HleDispatchCall(g_state.regs.pc))
+      if (!(g_settings.hle_bios_enable && HleDispatchCall(g_state.regs.pc)))
       {
           InterpretUncachedBlock<pgxp_mode>();
       }
@@ -203,7 +201,7 @@ static ALWAYS_INLINE void ExecuteImplBlock()
   reexecute_block:
     Assert(!(HasPendingInterrupt()));
 
-    if (HleDispatchCall(g_state.regs.pc))
+    if (g_settings.hle_bios_enable && HleDispatchCall(g_state.regs.pc))
     {
         // pc will have changed.
         continue;

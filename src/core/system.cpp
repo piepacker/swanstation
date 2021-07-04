@@ -801,14 +801,25 @@ bool Boot(const SystemBootParameters& params)
 
   Log_InfoPrintf("Console Region: %s", Settings::GetConsoleRegionDisplayName(s_region));
 
-  // Load BIOS image.
-  std::optional<BIOS::Image> bios_image = g_host_interface->GetBIOSImage(s_region);
-  if (!bios_image)
+  BIOS::Hash bios_hash {};
+  if (!g_settings.hle_bios_enable || g_settings.hle_bios_load_rom)
   {
-    g_host_interface->ReportFormattedError(g_host_interface->TranslateString("System", "Failed to load %s BIOS."),
-                                           Settings::GetConsoleRegionName(s_region));
-    Shutdown();
-    return false;
+    // Load BIOS image.
+    std::optional<BIOS::Image> bios_image = g_host_interface->GetBIOSImage(s_region);
+    if (!bios_image)
+    {
+      g_host_interface->ReportFormattedError(g_host_interface->TranslateString("System", "Failed to load %s BIOS."),
+                                            Settings::GetConsoleRegionName(s_region));
+      Shutdown();
+      return false;
+    }
+
+    Bus::SetBIOS(*bios_image);
+    bios_hash = BIOS::GetHash(*bios_image);
+
+    // Enable tty by patching bios.
+    if (g_settings.bios_patch_tty_enable)
+      BIOS::PatchBIOSEnableTTY(Bus::g_bios, Bus::BIOS_SIZE, bios_hash);
   }
 
   // Notify change of disc.
@@ -837,16 +848,10 @@ bool Boot(const SystemBootParameters& params)
     return false;
   }
 
-  Bus::SetBIOS(*bios_image);
   UpdateControllers();
   UpdateMemoryCards();
   UpdateMultitaps();
   Reset();
-
-  // Enable tty by patching bios.
-  const BIOS::Hash bios_hash = BIOS::GetHash(*bios_image);
-  if (g_settings.bios_patch_tty_enable)
-    BIOS::PatchBIOSEnableTTY(Bus::g_bios, Bus::BIOS_SIZE, bios_hash);
 
   // Load EXE late after BIOS.
   if (exe_boot && !LoadEXE(params.filename.c_str()))
