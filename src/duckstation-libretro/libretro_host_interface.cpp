@@ -95,6 +95,10 @@ void LibretroHostInterface::InitLogging()
     Log::RegisterCallback(LibretroLogCallback, nullptr);
     s_libretro_log_callback_registered = true;
   }
+
+  // this is a windows/android specific concept, of logging to an attached debugger.
+  // on unix systems this doesn't do anything, though arguably it should enable logging to stdout.
+  Log::SetDebugOutputParams(g_settings.log_to_debug);
 }
 
 bool LibretroHostInterface::Initialize()
