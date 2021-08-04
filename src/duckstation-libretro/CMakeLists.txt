@@ -29,7 +29,7 @@ if (MSVC)
 elseif(APPLE)
   target_link_libraries(swanstation_libretro PRIVATE core common glad scmversion frontend-common vulkan-loader "-framework Cocoa")
 else()
-  target_link_libraries(swanstation_libretro PRIVATE core common glad scmversion frontend-common vulkan-loader)
+  target_link_libraries(swanstation_libretro PRIVATE core common glad scmversion frontend-common vulkan-loader stdc++fs)
 endif()
 
 # no lib prefix

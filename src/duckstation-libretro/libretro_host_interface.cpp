@@ -592,7 +592,7 @@ void LibretroHostInterface::OnSystemDestroyed()
   HostInterface::OnSystemDestroyed();
 }
 
-static std::array<retro_core_option_definition, 64> s_option_definitions = {{
+static std::array<retro_core_option_definition, 66> s_option_definitions = {{
   {"duckstation_Console.Region",
    "Console Region",
    "Determines which region/hardware to emulate. Auto-Detect will use the region of the disc inserted.",
@@ -646,7 +646,7 @@ static std::array<retro_core_option_definition, 64> s_option_definitions = {{
   {"duckstation_CPU.ExecutionMode",
    "CPU Execution Mode",
    "Which mode to use for CPU emulation. Recompiler provides the best performance.",
-   {{"Interpreter", "Interpreter"}, {"CachedIntepreter", "Cached Interpreter"}, {"Recompiler", "Recompiler"}},
+   {{"Interpreter", "Interpreter"}, {"CachedInterpreter", "Cached Interpreter"}, {"Recompiler", "Recompiler"}},
    "Recompiler"},
   {"duckstation_CPU.Overclock",
    "CPU Overclocking",
@@ -1084,6 +1084,16 @@ static std::array<retro_core_option_definition, 64> s_option_definitions = {{
     {"9", "9 Frames"},
     {"10", "10 Frames"}},
    "0"},
+  {"duckstation_HLE.Enable",
+   "Enable HLE bios",
+   "Enable HLE bios",
+   {{"true", "Enabled"}, {"false", "Disabled"}},
+   "false"},
+  {"duckstation_HLE.LoadBIOS",
+   "Load HLE bios for test purpose",
+   "Load HLE bios for test purpose",
+   {{"true", "Enabled"}, {"false", "Disabled"}},
+   "false"},
   {},
 }};
 
