@@ -27,7 +27,7 @@ if (MSVC)
   set(CMAKE_SHARED_LINKER_FLAGS "${CMAKE_SHARED_LINKER_FLAGS} /DELAYLOAD:OpenGL32.dll")
   target_link_libraries(swanstation_libretro PRIVATE core common glad scmversion frontend-common vulkan-loader libretro-common Delayimp.lib)
 else()
-  target_link_libraries(swanstation_libretro PRIVATE core common glad scmversion frontend-common vulkan-loader libretro-common)
+  target_link_libraries(swanstation_libretro PRIVATE core common glad scmversion frontend-common vulkan-loader libretro-common stdc++fs)
 endif()
 
 
