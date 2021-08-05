@@ -4,7 +4,7 @@
 	shallow = true
 [submodule "dep/icystdlib"]
 	path = dep/icystdlib
-	url = http://github.com/jstine35/icystdlib
+	url = http://github.com/piepacker/icystdlib
 [submodule "dep/psxhlebios"]
 	path = dep/psxhlebios
 	url = http://github.com/piepacker/psxhlebios
