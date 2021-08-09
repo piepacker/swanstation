@@ -15,8 +15,6 @@
 #include "timing_event.h"
 #include <cstdio>
 
-#include "libpsxbios.h"
-
 Log_SetChannel(CPU::Core);
 
 namespace CPU {
@@ -141,14 +139,7 @@ void Reset()
 
   GTE::Reset();
 
-  if (!g_settings.hle_bios_enable || g_settings.hle_bios_load_rom)
-    SetPC(RESET_VECTOR);
-  else
-  {
-    // bootstrap HLE by loading cdrom executable.
-    psxBiosLoadExecCdrom();
-    SetPC(RESET_VECTOR);
-  }
+  SetPC(RESET_VECTOR);
 
   if (g_settings.gpu_pgxp_enable)
     PGXP::Initialize();

@@ -45,6 +45,7 @@
 #include <thread>
 
 #include "psxhle-filesystem.h"
+#include "libpsxbios.h"
 
 extern void psxBiosInit_StdLib();
 extern void psxBiosInitFull();
@@ -852,6 +853,13 @@ bool Boot(const SystemBootParameters& params)
   UpdateMemoryCards();
   UpdateMultitaps();
   Reset();
+
+  if (g_settings.hle_bios_enable && !g_settings.hle_bios_load_rom) {
+      // bootstrap HLE by loading cdrom executable.
+      // Must be done after Reset() because memory will be wiped-out
+      psxBiosInit();
+      psxBiosLoadExecCdrom();
+  }
 
   // Load EXE late after BIOS.
   if (exe_boot && !LoadEXE(params.filename.c_str()))
