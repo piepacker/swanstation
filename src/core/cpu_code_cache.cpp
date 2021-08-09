@@ -961,6 +961,7 @@ void AddBlockToPageMap(CodeBlock* block)
 
   const u32 start_page = block->GetStartPageIndex();
   const u32 end_page = block->GetEndPageIndex();
+  Assert(end_page <= (m_ram_block_map.size() - 1));
   for (u32 page = start_page; page <= end_page; page++)
   {
     m_ram_block_map[page].push_back(block);
