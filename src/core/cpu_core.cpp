@@ -15,8 +15,6 @@
 #include "timing_event.h"
 #include <cstdio>
 
-#include "libpsxbios.h"
-
 Log_SetChannel(CPU::Core);
 
 namespace CPU {
