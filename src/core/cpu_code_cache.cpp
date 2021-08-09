@@ -203,8 +203,8 @@ static ALWAYS_INLINE void ExecuteImplBlock()
 
     if (g_settings.hle_bios_enable && HleDispatchCall(g_state.regs.pc))
     {
-        // pc will have changed.
-        continue;
+        // PC will have changed and maybe we have pending IRQ
+        return;
     }
 
 #if 0
