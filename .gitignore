@@ -65,3 +65,6 @@ __pycache__
 
 # other repos
 /dep/mac
+
+# Vim tmp
+.*.sw*
