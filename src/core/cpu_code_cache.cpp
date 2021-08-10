@@ -191,11 +191,17 @@ static ALWAYS_INLINE void ExecuteImplBlock()
     CodeBlock* block = LookupBlock(next_block_key);
     if (!block)
     {
-      if (!(g_settings.hle_bios_enable && HleDispatchCall(g_state.regs.pc)))
-      {
-          InterpretUncachedBlock<pgxp_mode>();
-      }
-      continue;
+        if (g_settings.hle_bios_enable) {
+            if (HleDispatchCall(g_state.regs.pc)) {
+                // PC will have changed and maybe we have pending IRQ
+                return;
+            } else {
+                InterpretUncachedBlock<pgxp_mode>();
+            }
+        } else {
+            InterpretUncachedBlock<pgxp_mode>();
+        }
+        continue;
     }
 
   reexecute_block:
