@@ -8,6 +8,9 @@
 #include "settings.h"
 #include "system.h"
 #include "timing_event.h"
+
+#include "libpsxbios.h"
+
 Log_SetChannel(CPU::CodeCache);
 
 #ifdef WITH_RECOMPILER
@@ -289,16 +292,13 @@ void Shutdown()
 #endif
 }
 
+bool g_hle_bios = 0;
+
 template<PGXPMode pgxp_mode>
-static void ExecuteImpl()
+static ALWAYS_INLINE void ExecuteImplBlock()
 {
   CodeBlockKey next_block_key;
 
-  g_using_interpreter = false;
-  g_state.frame_done = false;
-
-  while (!g_state.frame_done)
-  {
     if (HasPendingInterrupt())
     {
       SafeReadInstruction(g_state.regs.pc, &g_state.next_instruction.bits);
@@ -312,14 +312,26 @@ static void ExecuteImpl()
     {
       CodeBlock* block = LookupBlock(next_block_key);
       if (!block)
+    {
+      if (!HleDispatchCall(g_state.regs.pc))
       {
         InterpretUncachedBlock<pgxp_mode>();
-        next_block_key = GetNextBlockKey();
+      }
         continue;
       }
 
     reexecute_block:
       Assert(!(HasPendingInterrupt()));
+
+    if (HleDispatchCall(g_state.regs.pc))
+    {
+      CodeBlock* block = LookupBlock(next_block_key);
+      if (!block)
+      {
+        InterpretUncachedBlock<pgxp_mode>();
+        next_block_key = GetNextBlockKey();
+        continue;
+    }
 
 #if 0
       const u32 tick = TimingEvents::GetGlobalTickCounter() + CPU::GetPendingTicks();
@@ -385,6 +397,16 @@ static void ExecuteImpl()
     TimingEvents::RunEvents();
   }
 
+template<PGXPMode pgxp_mode>
+static void ExecuteImplFrame()
+{
+  g_using_interpreter = false;
+  g_state.frame_done = false;
+
+  while (!g_state.frame_done)
+  {
+    ExecuteImplBlock<pgxp_mode>();
+  }
   // in case we switch to interpreter...
   g_state.regs.npc = g_state.regs.pc;
 }
@@ -394,14 +416,53 @@ void Execute()
   if (g_settings.gpu_pgxp_enable)
   {
     if (g_settings.gpu_pgxp_cpu)
-      ExecuteImpl<PGXPMode::CPU>();
+      ExecuteImplFrame<PGXPMode::CPU>();
     else
-      ExecuteImpl<PGXPMode::Memory>();
+      ExecuteImplFrame<PGXPMode::Memory>();
   }
   else
   {
-    ExecuteImpl<PGXPMode::Disabled>();
+    ExecuteImplFrame<PGXPMode::Disabled>();
   }
+}
+
+void HleExecuteRecursive(u32 startPC, u32 exitPC)
+{
+  // during recursive execution of HleEvents the assumption (and generally the requirement by Kernel) is
+  // that all interrupts are disabled. There might be some possibility for a kernel level interrupt, but
+  // we shouldn't need to care about these for game emulation. Usually such things are for debugging and
+  // trapping behavior within an interrupt handler and, on PS1 especially, this was a very dodgy process
+  // that on the real hardware tended to crash half as much as it worked anyway.
+
+  g_state.regs.pc = startPC;
+
+  while (g_state.regs.pc != exitPC)
+  {
+    if (HleDispatchCall(g_state.regs.pc))
+    {
+      TimingEvents::RunEvents();
+      continue;
+    }
+
+    // just use uncached block interpreter, because the cached interpreter loop is over-optimized to the
+    // extent that adding an exitPC check is more work and perf-hit than it's worth.
+
+    if (g_settings.gpu_pgxp_enable)
+    {
+      if (g_settings.gpu_pgxp_cpu)
+        InterpretUncachedBlock<PGXPMode::CPU>();
+    else
+        InterpretUncachedBlock<PGXPMode::Memory>();
+  }
+  else
+  {
+      InterpretUncachedBlock<PGXPMode::Disabled>();
+    }
+
+    TimingEvents::RunEvents();
+  }
+ 
+  g_state.regs.npc = g_state.regs.pc;
 }
 
 #ifdef WITH_RECOMPILER
