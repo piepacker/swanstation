@@ -311,24 +311,22 @@ static ALWAYS_INLINE void ExecuteImplBlock()
       CodeBlock* block = LookupBlock(next_block_key);
       if (!block)
     {
-      if (!(g_settings.hle_bios_enable && HleDispatchCall(g_state.regs.pc)))
-      {
+        if (g_settings.hle_bios_enable && HleDispatchCall(g_state.regs.pc)) {
+            // PC will have changed and maybe we have pending IRQ
+            return;
+        }
         InterpretUncachedBlock<pgxp_mode>();
-      }
+        next_block_key = GetNextBlockKey();
         continue;
-      }
+    }
 
     reexecute_block:
       Assert(!(HasPendingInterrupt()));
 
     if (g_settings.hle_bios_enable && HleDispatchCall(g_state.regs.pc))
     {
-      CodeBlock* block = LookupBlock(next_block_key);
-      if (!block)
-      {
-        InterpretUncachedBlock<pgxp_mode>();
-        next_block_key = GetNextBlockKey();
-        continue;
+        // PC will have changed and maybe we have pending IRQ
+        return;
     }
 
 #if 0
