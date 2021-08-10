@@ -17,10 +17,11 @@
 
 Log_SetChannel(CPU::Core);
 
-namespace CPU {
+// Piepacker: Don't move it into the CPU namespace
+// otherwise GCC won't export the function
+extern void CPU::SetPC(u32 new_pc);
 
-// piepacker
-void SetPC(u32 new_pc);
+namespace CPU {
 
 static void UpdateLoadDelay();
 static void Branch(u32 target);
