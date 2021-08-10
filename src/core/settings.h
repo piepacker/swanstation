@@ -82,6 +82,8 @@ struct Settings
   bool cpu_recompiler_icache = false;
   CPUFastmemMode cpu_fastmem_mode = CPUFastmemMode::Disabled;
 
+  bool bios_use_hle = false;
+
   float emulation_speed = 1.0f;
   float fast_forward_speed = 0.0f;
   float turbo_speed = 0.0f;
