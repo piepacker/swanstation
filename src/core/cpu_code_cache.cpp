@@ -431,6 +431,7 @@ void HleExecuteRecursive(u32 startPC, u32 exitPC)
   // that on the real hardware tended to crash half as much as it worked anyway.
 
   g_state.regs.pc = startPC;
+  g_state.regs.ra = exitPC;
 
   while (g_state.regs.pc != exitPC)
   {
