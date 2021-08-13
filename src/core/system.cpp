@@ -846,6 +846,9 @@ bool Boot(const SystemBootParameters& params)
       // Must be done after Reset() because memory will be wiped-out
       psxBiosInit();
       psxBiosLoadExecCdrom();
+  } else {
+      // Help debug
+      psxBiosInitOnlyLib();
   }
 
   // Load EXE late after BIOS.
