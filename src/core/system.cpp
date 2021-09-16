@@ -841,16 +841,6 @@ bool Boot(const SystemBootParameters& params)
   UpdateMultitaps();
   Reset();
 
-  if (g_settings.hle_bios_enable && !g_settings.hle_bios_load_rom) {
-      // bootstrap HLE by loading cdrom executable.
-      // Must be done after Reset() because memory will be wiped-out
-      psxBiosInit();
-      psxBiosLoadExecCdrom();
-  } else {
-      // Help debug
-      psxBiosInitOnlyLib();
-  }
-
   // Load EXE late after BIOS.
   if (exe_boot && !LoadEXE(params.filename.c_str()))
   {
@@ -1180,6 +1170,16 @@ void Reset()
   ResetPerformanceCounters();
 
   g_gpu->ResetGraphicsAPIState();
+
+  if (g_settings.hle_bios_enable && !g_settings.hle_bios_load_rom) {
+      // bootstrap HLE by loading cdrom executable.
+      // Must be done after Reset() because memory will be wiped-out
+      psxBiosInit();
+      psxBiosLoadExecCdrom();
+  } else {
+      // Help debug
+      psxBiosInitOnlyLib();
+  }
 }
 
 bool LoadState(ByteStream* state, bool update_display)
