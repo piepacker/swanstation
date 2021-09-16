@@ -12,7 +12,8 @@ class StateWrapper;
 namespace CPU {
 
 // piepacker
-extern void SetPC(u32 new_pc);
+extern void SetPC_(u32 new_pc);
+void SetPC(u32 new_pc);
 
 enum : VirtualMemoryAddress
 {

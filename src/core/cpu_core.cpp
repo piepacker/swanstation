@@ -17,9 +17,7 @@
 
 Log_SetChannel(CPU::Core);
 
-// Piepacker: Don't move it into the CPU namespace
-// otherwise GCC won't export the function
-extern void CPU::SetPC(u32 new_pc);
+extern void CPU::SetPC_(u32 new_pc);
 
 namespace CPU {
 
@@ -205,6 +203,12 @@ ALWAYS_INLINE_RELEASE void SetPC(u32 new_pc)
   DebugAssert(Common::IsAlignedPow2(new_pc, 4));
   g_state.regs.npc = new_pc;
   FlushPipeline();
+}
+
+// Albeit SetPC was marked extern, the compiler got a hard time to export it due to ALWAYS_INLINE_RELEASE
+void SetPC_(u32 new_pc)
+{
+    SetPC(new_pc);
 }
 
 ALWAYS_INLINE_RELEASE void Branch(u32 target)
