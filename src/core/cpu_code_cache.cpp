@@ -313,6 +313,7 @@ static ALWAYS_INLINE void ExecuteImplBlock()
     {
         if (g_settings.hle_bios_enable && HleDispatchCall(g_state.regs.pc)) {
             // PC will have changed and maybe we have pending IRQ
+            TimingEvents::RunEvents();
             return;
         }
         InterpretUncachedBlock<pgxp_mode>();
@@ -326,6 +327,7 @@ static ALWAYS_INLINE void ExecuteImplBlock()
     if (g_settings.hle_bios_enable && HleDispatchCall(g_state.regs.pc))
     {
         // PC will have changed and maybe we have pending IRQ
+        TimingEvents::RunEvents();
         return;
     }
 
