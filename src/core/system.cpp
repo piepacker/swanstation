@@ -1326,6 +1326,11 @@ bool DoLoadState(ByteStream* state, bool force_software_renderer, bool update_di
     s_state = State::Running;
 
   g_host_interface->GetAudioStream()->EmptyBuffers();
+
+  // Update hle setting accordingly
+  if (g_settings.hle_bios_enable)
+      HleHookAfterLoadState(header.game_code);
+
   return true;
 }
 
