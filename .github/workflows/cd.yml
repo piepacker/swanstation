@@ -82,7 +82,7 @@ jobs:
           submodules: true
 
       - run: cmake -DCMAKE_BUILD_TYPE=Release -DBUILD_LIBRETRO_CORE=ON .
-      - run: cmake --build . --parallel 2
+      - run: cmake --build . --parallel 2 --config Release
 
       - name: ZIP Release
         uses: papeloto/action-zip@v1
