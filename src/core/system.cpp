@@ -1248,6 +1248,7 @@ bool DoLoadState(ByteStream* state, bool force_software_renderer, bool update_di
                                                             "existing image '%s', this may result in instability."),
             media_filename.c_str(), error.GetCodeAndMessage().GetCharArray(), old_media->GetFileName().c_str());
           media = std::move(old_media);
+          media_filename = media->GetFileName();
         }
         else
         {
