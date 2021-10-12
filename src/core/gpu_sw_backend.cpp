@@ -850,7 +850,7 @@ void GPU_SW_Backend::DrawTriangle(const GPUBackendDrawPolygonCommand* cmd,
           continue;
 
         DrawSpan<TShaderParams, TUprenderShift>(
-          cmd, yi, GetPolyXFP_Int(lc), GetPolyXFP_Int(rc), ig, idl);
+          cmd, y, GetPolyXFP_Int(lc), GetPolyXFP_Int(rc), ig, idl);
       }
     }
     else
@@ -865,7 +865,7 @@ void GPU_SW_Backend::DrawTriangle(const GPUBackendDrawPolygonCommand* cmd,
         if (y >= static_cast<s32>(m_drawing_area.top) * upscale)
         {
           DrawSpan<TShaderParams, TUprenderShift>(
-            cmd, yi, GetPolyXFP_Int(lc), GetPolyXFP_Int(rc), ig, idl);
+            cmd, y, GetPolyXFP_Int(lc), GetPolyXFP_Int(rc), ig, idl);
         }
 
         yi++;
