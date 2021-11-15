@@ -258,6 +258,29 @@ bool IsExitBlockInstruction(const Instruction& instruction)
       }
     }
 
+    case InstructionOp::cop0:
+    {
+        // IRQ are handled on block boundary, therefore opcodes that updates IRQ behavior
+        // must trigger a split of instructions blocks. Those registers are barely written
+        // so perf impact will be 0.
+        //
+        // Jackie Chan uses the following pattern to handle IRQ in the IRQ handler
+        // * Re-enable IRQ with a SR write
+        // * Few opcodes <= expect the CPU to jump in IRQ handler again
+        // * Disable IRQ with a SR write
+        if (instruction.cop.CommonOp() == CopCommonInstruction::mtcn) {
+            Cop0Reg reg = static_cast<Cop0Reg>(instruction.r.rd.GetValue());
+            switch(reg) {
+                case Cop0Reg::SR:
+                case Cop0Reg::CAUSE:
+                    return true;
+                default:
+                    return false;
+            }
+        } else
+            return false;
+    }
+
     default:
       return false;
   }

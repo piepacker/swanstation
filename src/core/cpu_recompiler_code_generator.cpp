@@ -2711,6 +2711,9 @@ bool CodeGenerator::Compile_cop0(const CodeBlockInstruction& cbi)
             EmitStoreCPUStructField(offsetof(State, downcount), Value::FromConstantU32(0));
             EmitBindLabel(&no_interrupt);
             m_register_cache.UninhibitAllocation();
+
+            // Flush current PC as we will exit (actually it is the end of the block) the block early
+            WriteNewPC(CalculatePC(), true);
           }
           else if (reg == Cop0Reg::DCIC && g_settings.cpu_recompiler_memory_exceptions)
           {
