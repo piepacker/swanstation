@@ -1910,6 +1910,13 @@ static void ExecuteImpl()
       g_state.interrupt_delay = false;
       g_state.pending_ticks++;
 
+      if (g_settings.hle_bios_enable && HleDispatchCall(g_state.regs.pc)) {
+          // PC will have changed and maybe we have pending IRQ
+          g_state.regs.npc = g_state.regs.pc;
+          FetchInstruction();
+          break;
+      }
+
       // now executing the instruction we previously fetched
       g_state.current_instruction.bits = g_state.next_instruction.bits;
       g_state.current_instruction_pc = g_state.regs.pc;
