@@ -318,12 +318,6 @@ std::unique_ptr<GameSettings::Entry> GetSettingsForGame(const std::string& game_
     return gs;
   }
 
-  if (game_code == "SLUS-00684")
-  {
-    gs->AddTrait(GameSettings::Trait::ForceInterpreter);
-    return gs;
-  }
-
   if (game_code == "SLPS-02459")
   {
     gs->AddTrait(GameSettings::Trait::DisableAnalogModeForcing);
