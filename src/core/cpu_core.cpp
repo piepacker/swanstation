@@ -15,6 +15,8 @@
 #include "timing_event.h"
 #include <cstdio>
 
+#include "libpsxbios.h"
+
 Log_SetChannel(CPU::Core);
 
 extern void CPU::SetPC_(u32 new_pc);
