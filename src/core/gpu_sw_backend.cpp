@@ -111,7 +111,7 @@ void GPU_SW_Backend::Reset(bool clear_vram)
 void GPU_SW_Backend::DrawPolygon(const GPUBackendDrawPolygonCommand* cmd)
 {
   const GPURenderCommand rc{cmd->rc.bits};
-  const bool dithering_enable = rc.IsDitheringEnabled() && cmd->draw_mode.dither_enable;
+  const bool dithering_enable = rc.IsDitheringEnabled() && cmd->draw_mode.dither_enable && !g_settings.gpu_true_color;
 
   auto DrawFunction = GetDrawTriangleFunction(0 
     | (!!rc.shading_enable       )  * TShaderParam_ShadingEnable
@@ -134,13 +134,13 @@ void GPU_SW_Backend::DrawRectangle(const GPUBackendDrawRectangleCommand* cmd)
 {
   const GPURenderCommand rc{cmd->rc.bits};
 
-  auto DrawFunction = GetDrawRectangleFunction(0 
+  auto DrawFunction = GetDrawRectangleFunction(0
     | (!!rc.texture_enable       )  * TRectShader_TextureEnable
     | (!!rc.raw_texture_enable   )  * TRectShader_RawTextureEnable
     | (!!rc.transparency_enable  )  * TRectShader_TransparencyEnable
     | (!!cmd->params.GetMaskAND())  * TRectShader_MaskAndEnable
     | (!!cmd->params.GetMaskOR ())  * TRectShader_MaskOrEnable,
-  
+
     m_uprender_shift
   );
 
@@ -149,10 +149,11 @@ void GPU_SW_Backend::DrawRectangle(const GPUBackendDrawRectangleCommand* cmd)
 
 void GPU_SW_Backend::DrawLine(const GPUBackendDrawLineCommand* cmd)
 {
-  auto DrawFunction = GetDrawLineFunction(0 
+  const bool dithering_enable = cmd->IsDitheringEnabled() && !g_settings.gpu_true_color;
+  auto DrawFunction = GetDrawLineFunction(0
     | (!!cmd->rc.shading_enable       )  * TLineShader_ShadingEnable
     | (!!cmd->rc.transparency_enable  )  * TLineShader_TransparencyEnable
-    | (cmd->IsDitheringEnabled()      )  * TLineShader_DitheringEnable
+    | (dithering_enable               )  * TLineShader_DitheringEnable
     | (!!cmd->params.GetMaskAND()     )  * TLineShader_MaskAndEnable
     | (!!cmd->params.GetMaskOR ()     )  * TLineShader_MaskOrEnable,
 
