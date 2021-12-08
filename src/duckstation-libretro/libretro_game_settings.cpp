@@ -372,11 +372,11 @@ std::unique_ptr<GameSettings::Entry> GetSettingsForGame(const std::string& game_
         gs->display_active_start_offset = -44;
         return gs;
     }
-    if (game_code == "SCPS-10042") { // Minna no Golf (Japan)
+    if (game_code == "SCPS-10042" || game_code == "SCPS-91126") { // Minna no Golf (Japan)
         gs->multitap_mode = MultitapMode::Port1Only;
         return gs;
     }
-    if (game_code == "SCPS-10051") { // XI [sai] (Japan) (En,Ja)
+    if (game_code == "SCPS-10051" || game_code == "SCPS-91166" || game_code == "SCPS-91303") { // XI [sai] (Japan) (En,Ja)
         gs->multitap_mode = MultitapMode::Port1Only;
         return gs;
     }
@@ -400,7 +400,7 @@ std::unique_ptr<GameSettings::Entry> GetSettingsForGame(const std::string& game_
         gs->AddTrait(GameSettings::Trait::ForcePGXPCPUMode);
         return gs;
     }
-    if (game_code == "SCPS-10118") { // Crash Bandicoot Racing (Japan)
+    if (game_code == "SCPS-10118" || game_code == "SCPS-91328") { // Crash Bandicoot Racing (Japan)
         gs->multitap_mode = MultitapMode::Port1Only;
         return gs;
     }
@@ -412,11 +412,11 @@ std::unique_ptr<GameSettings::Entry> GetSettingsForGame(const std::string& game_
         gs->multitap_mode = MultitapMode::Port1Only;
         return gs;
     }
-    if (game_code == "SCPS-10140") { // Crash Bandicoot Carnival (Japan)
+    if (game_code == "SCPS-10140" || game_code == "SCPS-91319") { // Crash Bandicoot Carnival (Japan)
         gs->multitap_mode = MultitapMode::Port1Only;
         return gs;
     }
-    if (game_code == "SCPS-45034") { // SD Gundam - GCentury (Japan, Asia)
+    if (game_code == "SCPS-45034" || game_code == "SLPS-00785") { // SD Gundam - GCentury (Japan, Asia)
         gs->multitap_mode = MultitapMode::Port1Only;
         return gs;
     }
@@ -453,7 +453,7 @@ std::unique_ptr<GameSettings::Entry> GetSettingsForGame(const std::string& game_
         gs->multitap_mode = MultitapMode::Port1Only;
         return gs;
     }
-    if (game_code == "SCPS-45507") { // Tales of Eternia
+    if (game_code == "SCPS-45507" || game_code == "SCPS-45508" || game_code == "SCPS-45509") { // Tales of Eternia
         gs->multitap_mode = MultitapMode::Port1Only;
         return gs;
     }
@@ -514,7 +514,7 @@ std::unique_ptr<GameSettings::Entry> GetSettingsForGame(const std::string& game_
         gs->AddTrait(GameSettings::Trait::ForcePGXPCPUMode);
         return gs;
     }
-    if (game_code == "SCUS-94234") { // NFL GameDay 99 (USA)
+    if (game_code == "SCUS-94234" || game_code == "SCUS-94274") { // NFL GameDay 99 (USA)
         gs->multitap_mode = MultitapMode::Port1Only;
         return gs;
     }
@@ -538,7 +538,7 @@ std::unique_ptr<GameSettings::Entry> GetSettingsForGame(const std::string& game_
         gs->AddTrait(GameSettings::Trait::ForceRecompilerICache);
         return gs;
     }
-    if (game_code == "SCUS-94264") { // NCAA Final Four 99 (USA)
+    if (game_code == "SCUS-94264" || game_code == "SCUS-94361") { // NCAA Final Four 99 (USA)
         gs->multitap_mode = MultitapMode::Port1Only;
         return gs;
     }
@@ -2570,7 +2570,7 @@ std::unique_ptr<GameSettings::Entry> GetSettingsForGame(const std::string& game_
         gs->multitap_mode = MultitapMode::Port1Only;
         return gs;
     }
-    if (game_code == "SLPM-86056") { // Hyper Olympic in Nagano (Japan)
+    if (game_code == "SLPM-86056" || game_code == "SLPM-86132") { // Hyper Olympic in Nagano (Japan)
         gs->multitap_mode = MultitapMode::Port1Only;
         return gs;
     }
@@ -2606,7 +2606,7 @@ std::unique_ptr<GameSettings::Entry> GetSettingsForGame(const std::string& game_
         gs->multitap_mode = MultitapMode::Port1Only;
         return gs;
     }
-    if (game_code == "SLPM-86170") { // Soulmaster (Japan)
+    if (game_code == "SLPM-86170" || game_code == "SLPS-01090") { // Soulmaster (Japan)
         gs->multitap_mode = MultitapMode::Port1Only;
         return gs;
     }
@@ -2634,7 +2634,7 @@ std::unique_ptr<GameSettings::Entry> GetSettingsForGame(const std::string& game_
         gs->multitap_mode = MultitapMode::Port1Only;
         return gs;
     }
-    if (game_code == "SLPM-86269") { // Little Lovers - She So Game
+    if (game_code == "SLPM-86269" || game_code == "SLPM-86270") { // Little Lovers - She So Game
         gs->multitap_mode = MultitapMode::Port1Only;
         return gs;
     }
@@ -2734,7 +2734,7 @@ std::unique_ptr<GameSettings::Entry> GetSettingsForGame(const std::string& game_
         gs->multitap_mode = MultitapMode::Port1Only;
         return gs;
     }
-    if (game_code == "SLPM-86617") { // Champion Wrestler - Jikkyou Live (Japan)
+    if (game_code == "SLPM-86617" || game_code == "SLPS-00237") { // Champion Wrestler - Jikkyou Live (Japan)
         gs->multitap_mode = MultitapMode::Port1Only;
         return gs;
     }
@@ -2742,7 +2742,7 @@ std::unique_ptr<GameSettings::Entry> GetSettingsForGame(const std::string& game_
         gs->multitap_mode = MultitapMode::Port1Only;
         return gs;
     }
-    if (game_code == "SLPM-86621") { // Kero Kero King (Japan)
+    if (game_code == "SLPM-86621" || game_code == "SLPS-91451") { // Kero Kero King (Japan)
         gs->multitap_mode = MultitapMode::Port1Only;
         return gs;
     }
@@ -2798,7 +2798,7 @@ std::unique_ptr<GameSettings::Entry> GetSettingsForGame(const std::string& game_
         gs->AddTrait(GameSettings::Trait::ForceRecompilerICache);
         return gs;
     }
-    if (game_code == "SLPM-86750") { // Shiritsu Justice Gakuen - Nekketsu Seishun Nikki 2 (Japan)
+    if (game_code == "SLPM-86750" || game_code == "SLPS-02120") { // Shiritsu Justice Gakuen - Nekketsu Seishun Nikki 2 (Japan)
         gs->multitap_mode = MultitapMode::Port1Only;
         gs->AddTrait(GameSettings::Trait::ForceInterlacing);
         return gs;
@@ -2823,7 +2823,7 @@ std::unique_ptr<GameSettings::Entry> GetSettingsForGame(const std::string& game_
         gs->multitap_mode = MultitapMode::Port1Only;
         return gs;
     }
-    if (game_code == "SLPM-86814") { // Capcom Generation - Dai-4-shuu Kokou no Eiyuu (Japan)
+    if (game_code == "SLPM-86814" || game_code == "SLPS-01701") { // Capcom Generation - Dai-4-shuu Kokou no Eiyuu (Japan)
         gs->multitap_mode = MultitapMode::Port1Only;
         return gs;
     }
@@ -2851,7 +2851,7 @@ std::unique_ptr<GameSettings::Entry> GetSettingsForGame(const std::string& game_
         gs->multitap_mode = MultitapMode::Port1Only;
         return gs;
     }
-    if (game_code == "SLPM-86844") { // Bomberman (Japan)
+    if (game_code == "SLPM-86844" || game_code == "SLPS-01717") { // Bomberman (Japan)
         gs->multitap_mode = MultitapMode::Port1Only;
         return gs;
     }
@@ -2891,7 +2891,7 @@ std::unique_ptr<GameSettings::Entry> GetSettingsForGame(const std::string& game_
         gs->multitap_mode = MultitapMode::Port1Only;
         return gs;
     }
-    if (game_code == "SLPM-86950") { // Kinniku Banzuke Vol. 3 - Saikyou no Challenger Tanjou! (Japan)
+    if (game_code == "SLPM-86950" || game_code == "SLPM-86690") { // Kinniku Banzuke Vol. 3 - Saikyou no Challenger Tanjou! (Japan)
         gs->multitap_mode = MultitapMode::Port1Only;
         return gs;
     }
@@ -2915,7 +2915,7 @@ std::unique_ptr<GameSettings::Entry> GetSettingsForGame(const std::string& game_
         gs->multitap_mode = MultitapMode::Port1Only;
         return gs;
     }
-    if (game_code == "SLPM-87032") { // Momotarou Dentetsu V (Japan) (Rev 2)
+    if (game_code == "SLPM-87032" || game_code == "SLPM-87347") { // Momotarou Dentetsu V (Japan) (Rev 2)
         gs->multitap_mode = MultitapMode::Port1Only;
         return gs;
     }
@@ -2923,7 +2923,7 @@ std::unique_ptr<GameSettings::Entry> GetSettingsForGame(const std::string& game_
         gs->multitap_mode = MultitapMode::Port1Only;
         return gs;
     }
-    if (game_code == "SLPM-87080") { // Bomberman Land (Japan) (Rev 2)
+    if (game_code == "SLPM-87080" || game_code == "SLPM-87364") { // Bomberman Land (Japan) (Rev 2)
         gs->multitap_mode = MultitapMode::Port1Only;
         return gs;
     }
@@ -2931,11 +2931,11 @@ std::unique_ptr<GameSettings::Entry> GetSettingsForGame(const std::string& game_
         gs->AddTrait(GameSettings::Trait::ForceInterlacing);
         return gs;
     }
-    if (game_code == "SLPM-87097") { // Quiz Darake no Jinsei Game - Un to Atama de Daifugou! (Japan)
+    if (game_code == "SLPM-87097" || game_code == "SLPS-02282") { // Quiz Darake no Jinsei Game - Un to Atama de Daifugou! (Japan)
         gs->multitap_mode = MultitapMode::Port1Only;
         return gs;
     }
-    if (game_code == "SLPM-87098") { // Game of Life, The - DX Jinsei Game III (Japan)
+    if (game_code == "SLPM-87098" || game_code == "SLPS-02469") { // Game of Life, The - DX Jinsei Game III (Japan)
         gs->multitap_mode = MultitapMode::Port1Only;
         return gs;
     }
@@ -2979,7 +2979,7 @@ std::unique_ptr<GameSettings::Entry> GetSettingsForGame(const std::string& game_
         gs->multitap_mode = MultitapMode::Port1Only;
         return gs;
     }
-    if (game_code == "SLPM-87241") { // Harukanaru Toki no Naka de - Banjou Yuugi (Japan) (Premium Box)
+    if (game_code == "SLPM-87241" || game_code == "SLPM-87361") { // Harukanaru Toki no Naka de - Banjou Yuugi (Japan) (Premium Box)
         gs->multitap_mode = MultitapMode::Port1Only;
         return gs;
     }
@@ -2999,7 +2999,7 @@ std::unique_ptr<GameSettings::Entry> GetSettingsForGame(const std::string& game_
         gs->multitap_mode = MultitapMode::Port1Only;
         return gs;
     }
-    if (game_code == "SLPM-87316") { // Oshigoto-shiki Jinsei Game - Mezase Shokugyou King (Japan)
+    if (game_code == "SLPM-87316" || game_code == "SLPS-03056") { // Oshigoto-shiki Jinsei Game - Mezase Shokugyou King (Japan)
         gs->multitap_mode = MultitapMode::Port1Only;
         return gs;
     }
@@ -3063,7 +3063,7 @@ std::unique_ptr<GameSettings::Entry> GetSettingsForGame(const std::string& game_
         gs->multitap_mode = MultitapMode::Port1Only;
         return gs;
     }
-    if (game_code == "SLPS-00155") { // Game of Life, The - DX Jinsei Game (Japan)
+    if (game_code == "SLPS-00155" || game_code == "SLPS-91025") { // Game of Life, The - DX Jinsei Game (Japan)
         gs->multitap_mode = MultitapMode::Port1Only;
         return gs;
     }
@@ -3133,7 +3133,7 @@ std::unique_ptr<GameSettings::Entry> GetSettingsForGame(const std::string& game_
         gs->AddTrait(GameSettings::Trait::DisableUpscaling);
         return gs;
     }
-    if (game_code == "SLPS-00321") { // Tetris X (Japan)
+    if (game_code == "SLPS-00321" || game_code == "SLPS-91036") { // Tetris X (Japan)
         gs->multitap_mode = MultitapMode::Port1Only;
         return gs;
     }
@@ -3166,7 +3166,7 @@ std::unique_ptr<GameSettings::Entry> GetSettingsForGame(const std::string& game_
         gs->AddTrait(GameSettings::Trait::ForceRecompilerICache);
         return gs;
     }
-    if (game_code == "SLPS-00450") { // Smash Court (Japan)
+    if (game_code == "SLPS-00450" || game_code == "SLPS-91053" || game_code == "SLPS-91407") { // Smash Court (Japan)
         gs->multitap_mode = MultitapMode::Port1Only;
         return gs;
     }
@@ -3218,11 +3218,11 @@ std::unique_ptr<GameSettings::Entry> GetSettingsForGame(const std::string& game_
         gs->multitap_mode = MultitapMode::Port1Only;
         return gs;
     }
-    if (game_code == "SLPS-00623") { // DX Okuman Chouja Game - The Money Battle (Japan)
+    if (game_code == "SLPS-00623" || game_code == "SLPS-91046") { // DX Okuman Chouja Game - The Money Battle (Japan)
         gs->multitap_mode = MultitapMode::Port1Only;
         return gs;
     }
-    if (game_code == "SLPS-00626") { // Goo-Cho de Park - Theme Park Monogatari (Japan)
+    if (game_code == "SLPS-00626" || game_code == "SLPS-91066") { // Goo-Cho de Park - Theme Park Monogatari (Japan)
         gs->multitap_mode = MultitapMode::Port1Only;
         return gs;
     }
@@ -3290,7 +3290,7 @@ std::unique_ptr<GameSettings::Entry> GetSettingsForGame(const std::string& game_
         gs->multitap_mode = MultitapMode::Port1Only;
         return gs;
     }
-    if (game_code == "SLPS-00741") { // Monopoly (Japan)
+    if (game_code == "SLPS-00741" || game_code == "SLPS-01682") { // Monopoly (Japan)
         gs->multitap_mode = MultitapMode::Port1Only;
         return gs;
     }
@@ -3302,7 +3302,7 @@ std::unique_ptr<GameSettings::Entry> GetSettingsForGame(const std::string& game_
         gs->multitap_mode = MultitapMode::Port1Only;
         return gs;
     }
-    if (game_code == "SLPS-00832") { // Iwatobi Penguin Rocky x Hopper (Japan)
+    if (game_code == "SLPS-00832" || game_code == "SLPS-91115") { // Iwatobi Penguin Rocky x Hopper (Japan)
         gs->multitap_mode = MultitapMode::Port1Only;
         return gs;
     }
@@ -3466,7 +3466,7 @@ std::unique_ptr<GameSettings::Entry> GetSettingsForGame(const std::string& game_
         gs->multitap_mode = MultitapMode::Port1Only;
         return gs;
     }
-    if (game_code == "SLPS-01268") { // Great Rugby Jikkyou '98 - World Cup e no Michi (Japan)
+    if (game_code == "SLPS-01268" || game_code == "SLPS-02057" || game_code == "SLPS-91417") { // Great Rugby Jikkyou '98 - World Cup e no Michi (Japan)
         gs->multitap_mode = MultitapMode::Port1Only;
         return gs;
     }
@@ -3510,7 +3510,7 @@ std::unique_ptr<GameSettings::Entry> GetSettingsForGame(const std::string& game_
         gs->multitap_mode = MultitapMode::Port1Only;
         return gs;
     }
-    if (game_code == "SLPS-01389") { // World League Soccer (Japan)
+    if (game_code == "SLPS-01389" || game_code == "SLPS-02687") { // World League Soccer (Japan)
         gs->multitap_mode = MultitapMode::Port1Only;
         return gs;
     }
@@ -3530,7 +3530,7 @@ std::unique_ptr<GameSettings::Entry> GetSettingsForGame(const std::string& game_
         gs->multitap_mode = MultitapMode::Port1Only;
         return gs;
     }
-    if (game_code == "SLPS-01440") { // Trump Shiyou yo! (Japan)
+    if (game_code == "SLPS-01440" || game_code == "SLPS-02225") { // Trump Shiyou yo! (Japan)
         gs->multitap_mode = MultitapMode::Port1Only;
         return gs;
     }
@@ -3585,7 +3585,7 @@ std::unique_ptr<GameSettings::Entry> GetSettingsForGame(const std::string& game_
         gs->multitap_mode = MultitapMode::Port1Only;
         return gs;
     }
-    if (game_code == "SLPS-01586") { // DX Okuman Chouja Game II - The Money Battle (Japan)
+    if (game_code == "SLPS-01586" || game_code == "SLPS-02566") { // DX Okuman Chouja Game II - The Money Battle (Japan)
         gs->multitap_mode = MultitapMode::Port1Only;
         return gs;
     }
@@ -3601,7 +3601,7 @@ std::unique_ptr<GameSettings::Entry> GetSettingsForGame(const std::string& game_
         gs->multitap_mode = MultitapMode::Port1Only;
         return gs;
     }
-    if (game_code == "SLPS-01667") { // Nihon Pro Golf Kyoukai Kanshuu - Double Eagle (Japan)
+    if (game_code == "SLPS-01667" || game_code == "SLPS-02796") { // Nihon Pro Golf Kyoukai Kanshuu - Double Eagle (Japan)
         gs->multitap_mode = MultitapMode::Port1Only;
         return gs;
     }
@@ -3609,7 +3609,7 @@ std::unique_ptr<GameSettings::Entry> GetSettingsForGame(const std::string& game_
         gs->multitap_mode = MultitapMode::Port1Only;
         return gs;
     }
-    if (game_code == "SLPS-01695") { // Waku Waku Volley (Japan)
+    if (game_code == "SLPS-01695" || game_code == "SLPS-02346" || game_code == "SLPS-02356" || game_code == "SLPS-02359" || game_code == "SLPS-02373" || game_code == "SLPS-02378") { // Waku Waku Volley (Japan)
         gs->multitap_mode = MultitapMode::Port1Only;
         return gs;
     }
@@ -3641,7 +3641,7 @@ std::unique_ptr<GameSettings::Entry> GetSettingsForGame(const std::string& game_
         gs->multitap_mode = MultitapMode::Port1Only;
         return gs;
     }
-    if (game_code == "SLPS-01802") { // America Oudan Ultra Quiz (Japan) (Fukkokuban)
+    if (game_code == "SLPS-01802" || game_code == "SLPS-91484") { // America Oudan Ultra Quiz (Japan) (Fukkokuban)
         gs->multitap_mode = MultitapMode::Port1Only;
         return gs;
     }
@@ -3689,12 +3689,8 @@ std::unique_ptr<GameSettings::Entry> GetSettingsForGame(const std::string& game_
         gs->multitap_mode = MultitapMode::Port1Only;
         return gs;
     }
-    if (game_code == "SLPS-02105") { // DX Shachou Game (Japan)
+    if (game_code == "SLPS-02105" || game_code == "SLPS-03071") { // DX Shachou Game (Japan)
         gs->multitap_mode = MultitapMode::Port1Only;
-        return gs;
-    }
-    if (game_code == "SLPS-02120") { // SLPS 02120 (Shiritsu Justice Gakuen: Nekketsu Seishun Nikki 2 (Japan))
-        gs->AddTrait(GameSettings::Trait::ForceInterlacing);
         return gs;
     }
     if (game_code == "SLPS-02124") { // SLPS-02124 (Grandia (Japan) (Disc 1))
@@ -3786,7 +3782,7 @@ std::unique_ptr<GameSettings::Entry> GetSettingsForGame(const std::string& game_
         gs->multitap_mode = MultitapMode::Port1Only;
         return gs;
     }
-    if (game_code == "SLPS-02516") { // V-Rally - Championship Edition 2 (Japan)
+    if (game_code == "SLPS-02516" || game_code == "SLPS-91467") { // V-Rally - Championship Edition 2 (Japan)
         gs->multitap_mode = MultitapMode::Port1Only;
         return gs;
     }
@@ -3834,7 +3830,7 @@ std::unique_ptr<GameSettings::Entry> GetSettingsForGame(const std::string& game_
         gs->multitap_mode = MultitapMode::Port1Only;
         return gs;
     }
-    if (game_code == "SLPS-02751") { // Athena no Kateiban - Family Games (Japan)
+    if (game_code == "SLPS-02751" || game_code == "SLPS-00263") { // Athena no Kateiban - Family Games (Japan)
         gs->multitap_mode = MultitapMode::Port1Only;
         return gs;
     }
@@ -3866,7 +3862,7 @@ std::unique_ptr<GameSettings::Entry> GetSettingsForGame(const std::string& game_
         gs->AddTrait(GameSettings::Trait::ForceRecompilerLUTFastmem);
         return gs;
     }
-    if (game_code == "SLPS-02851") { // Denkousekka Micro Runner - Maniac Hakase no Hisaku (Japan)
+    if (game_code == "SLPS-02851" || game_code == "SLPS-91429") { // Denkousekka Micro Runner - Maniac Hakase no Hisaku (Japan)
         gs->multitap_mode = MultitapMode::Port1Only;
         return gs;
     }
@@ -3890,15 +3886,15 @@ std::unique_ptr<GameSettings::Entry> GetSettingsForGame(const std::string& game_
         gs->multitap_mode = MultitapMode::Port1Only;
         return gs;
     }
-    if (game_code == "SLPS-02900") { // SD Gundam - GGeneration-F (Japan) (Disc 1)
+    if (game_code == "SLPS-02900" || game_code == "SLPS-02912") { // SD Gundam - GGeneration-F (Japan) (Disc 1)
         gs->multitap_mode = MultitapMode::Port1Only;
         return gs;
     }
-    if (game_code == "SLPS-02901") { // SD Gundam - GGeneration-F (Japan) (Disc 2)
+    if (game_code == "SLPS-02901" || game_code == "SLPS-02913") { // SD Gundam - GGeneration-F (Japan) (Disc 2)
         gs->multitap_mode = MultitapMode::Port1Only;
         return gs;
     }
-    if (game_code == "SLPS-02902") { // SD Gundam - GGeneration-F (Japan) (Disc 3)
+    if (game_code == "SLPS-02902" || game_code == "SLPS-02914") { // SD Gundam - GGeneration-F (Japan) (Disc 3)
         gs->multitap_mode = MultitapMode::Port1Only;
         return gs;
     }
@@ -3914,7 +3910,7 @@ std::unique_ptr<GameSettings::Entry> GetSettingsForGame(const std::string& game_
         gs->multitap_mode = MultitapMode::Port1Only;
         return gs;
     }
-    if (game_code == "SLPS-02934") { // Zen Nihon Pro Wres - Ouja no Tamashii (Japan) (Spike Library)
+    if (game_code == "SLPS-02934" || game_code == "SLPS-91428") { // Zen Nihon Pro Wres - Ouja no Tamashii (Japan) (Spike Library)
         gs->multitap_mode = MultitapMode::Port1Only;
         return gs;
     }
@@ -3954,15 +3950,15 @@ std::unique_ptr<GameSettings::Entry> GetSettingsForGame(const std::string& game_
         gs->multitap_mode = MultitapMode::Port1Only;
         return gs;
     }
-    if (game_code == "SLPS-03050") { // Tales of Eternia (Japan) (Disc 1)
+    if (game_code == "SLPS-03050" || game_code == "SLPS-91247") { // Tales of Eternia (Japan) (Disc 1)
         gs->multitap_mode = MultitapMode::Port1Only;
         return gs;
     }
-    if (game_code == "SLPS-03051") { // Tales of Eternia (Japan) (Disc 2)
+    if (game_code == "SLPS-03051" || game_code == "SLPS-91248") { // Tales of Eternia (Japan) (Disc 2)
         gs->multitap_mode = MultitapMode::Port1Only;
         return gs;
     }
-    if (game_code == "SLPS-03052") { // Tales of Eternia (Japan) (Disc 3)
+    if (game_code == "SLPS-03052" || game_code == "SLPS-91249") { // Tales of Eternia (Japan) (Disc 3)
         gs->multitap_mode = MultitapMode::Port1Only;
         return gs;
     }
@@ -3978,7 +3974,7 @@ std::unique_ptr<GameSettings::Entry> GetSettingsForGame(const std::string& game_
         gs->multitap_mode = MultitapMode::Port1Only;
         return gs;
     }
-    if (game_code == "SLPS-03122") { // Exciting Pro Wres 2 (Japan)
+    if (game_code == "SLPS-03122" || game_code == "SLPS-91497") { // Exciting Pro Wres 2 (Japan)
         gs->multitap_mode = MultitapMode::Port1Only;
         return gs;
     }
@@ -4618,7 +4614,7 @@ std::unique_ptr<GameSettings::Entry> GetSettingsForGame(const std::string& game_
         gs->AddTrait(GameSettings::Trait::ForceRecompilerICache);
         return gs;
     }
-    if (game_code == "SLUS-00889") { // Pong - The Next Level (USA)
+    if (game_code == "SLUS-00889" || game_code == "SLUS-80889") { // Pong - The Next Level (USA)
         gs->multitap_mode = MultitapMode::Port1Only;
         return gs;
     }
