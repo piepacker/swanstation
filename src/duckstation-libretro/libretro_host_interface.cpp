@@ -42,6 +42,7 @@ retro_input_state_t g_retro_input_state_callback;
 static retro_log_callback s_libretro_log_callback = {};
 static bool s_libretro_log_callback_valid = false;
 static bool s_libretro_log_callback_registered = false;
+static std::array<ControllerType, NUM_CONTROLLER_AND_CARD_PORTS> s_controller_types{};
 
 static void LibretroLogCallback(void* pUserParam, const char* channelName, const char* functionName, LOGLEVEL level,
                                 const char* message)
@@ -1151,11 +1152,31 @@ void LibretroHostInterface::LoadSettings(SettingsInterface& si)
   // Ensure we don't use the standalone memcard directory in shared mode.
   for (u32 i = 0; i < NUM_CONTROLLER_AND_CARD_PORTS; i++)
     g_settings.memory_card_paths[i] = GetSharedMemoryCardPath(i);
+
+  // Set controllers
+  g_settings.controller_types = s_controller_types;
 }
 
 std::vector<std::string> LibretroHostInterface::GetSettingStringList(const char* section, const char* key)
 {
   return {};
+}
+
+void LibretroHostInterface::retro_set_controller_port_device(unsigned port, unsigned device)
+{
+    if (port >= s_controller_types.size())
+        return;
+
+    const auto& code = System::GetRunningCode();
+    if (isAnalogOnlyGame(code) || isAnalogPreferedGame(code)) {
+        auto device_ = (device == RETRO_DEVICE_ANALOG) ? ControllerType::AnalogController : ControllerType::DigitalController;
+        s_controller_types[port] = device_;
+        UpdateSettings();
+        Log_InfoPrintf("New controller setting (%s) for port %d",
+                g_settings.controller_types[port] == ControllerType::AnalogController ? "analog" : "digital", port);
+    } else {
+        Log_ErrorPrintf("retro_set_controller_port_device not an analog game (%s)", code.c_str());
+    }
 }
 
 void LibretroHostInterface::UpdateSettings()

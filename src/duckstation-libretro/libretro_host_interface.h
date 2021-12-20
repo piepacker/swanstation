@@ -65,6 +65,7 @@ public:
   size_t retro_get_memory_size(unsigned id);
   void retro_cheat_reset();
   void retro_cheat_set(unsigned index, bool enabled, const char* code);
+  void retro_set_controller_port_device(unsigned port, unsigned device);
 
 protected:
   bool AcquireHostDisplay() override;
