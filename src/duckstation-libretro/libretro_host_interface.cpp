@@ -1305,6 +1305,15 @@ void LibretroHostInterface::UpdateControllersDigitalController(u32 index)
       controller->SetButtonState(it.first, state != 0);
     }
   }
+
+  // Convert Analog stick to Dpad
+  const int16_t trigger = 0x3000;
+  const int16_t state_x = g_retro_input_state_callback(index, RETRO_DEVICE_ANALOG, RETRO_DEVICE_INDEX_ANALOG_LEFT, RETRO_DEVICE_ID_ANALOG_X);
+  const int16_t state_y = g_retro_input_state_callback(index, RETRO_DEVICE_ANALOG, RETRO_DEVICE_INDEX_ANALOG_LEFT, RETRO_DEVICE_ID_ANALOG_Y);
+  if (state_x < -trigger) controller->SetButtonState(DigitalController::Button::Left, true);
+  if (state_x >  trigger) controller->SetButtonState(DigitalController::Button::Right, true);
+  if (state_y < -trigger) controller->SetButtonState(DigitalController::Button::Up, true);
+  if (state_y >  trigger) controller->SetButtonState(DigitalController::Button::Down, true);
 }
 
 void LibretroHostInterface::UpdateControllersAnalogController(u32 index)
