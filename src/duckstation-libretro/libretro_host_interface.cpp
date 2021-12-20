@@ -1176,6 +1176,7 @@ void LibretroHostInterface::retro_set_controller_port_device(unsigned port, unsi
                 g_settings.controller_types[port] == ControllerType::AnalogController ? "analog" : "digital", port);
     } else {
         Log_ErrorPrintf("retro_set_controller_port_device not an analog game (%s)", code.c_str());
+        s_controller_types[port] = ControllerType::DigitalController;
     }
 }
 
