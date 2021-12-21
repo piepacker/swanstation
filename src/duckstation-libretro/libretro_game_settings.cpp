@@ -1723,7 +1723,7 @@ std::unique_ptr<GameSettings::Entry> GetSettingsForGame(const std::string& game_
         return gs;
     }
     if (game_code == "SLES-02537") { // Bishi Bashi Special (Europe)
-        gs->multitap_mode = MultitapMode::Port1Only;
+        gs->multitap_mode = MultitapMode::Port2Only;
         return gs;
     }
     if (game_code == "SLES-02550") { // International Superstar Soccer (Europe) (En,De)
