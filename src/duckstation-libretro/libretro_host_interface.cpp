@@ -1168,14 +1168,19 @@ void LibretroHostInterface::retro_set_controller_port_device(unsigned port, unsi
         return;
 
     const auto& code = System::GetRunningCode();
-    if (isAnalogOnlyGame(code) || isAnalogPreferedGame(code)) {
+    if (isAnalogOnlyGame(code)) {
+        if (device != RETRO_DEVICE_ANALOG)
+            Log_ErrorPrintf("retro_set_controller_port_device is an analog only game (%s)", code.c_str());
+        s_controller_types[port] = ControllerType::AnalogController;
+    } else if (isAnalogPreferedGame(code)) {
         auto device_ = (device == RETRO_DEVICE_ANALOG) ? ControllerType::AnalogController : ControllerType::DigitalController;
         s_controller_types[port] = device_;
         UpdateSettings();
         Log_InfoPrintf("New controller setting (%s) for port %d",
                 g_settings.controller_types[port] == ControllerType::AnalogController ? "analog" : "digital", port);
     } else {
-        Log_ErrorPrintf("retro_set_controller_port_device not an analog game (%s)", code.c_str());
+        if (device != RETRO_DEVICE_JOYPAD)
+            Log_ErrorPrintf("retro_set_controller_port_device not an analog game (%s)", code.c_str());
         s_controller_types[port] = ControllerType::DigitalController;
     }
 }
