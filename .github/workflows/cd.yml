@@ -21,7 +21,7 @@ jobs:
       - run: cmake --build . --parallel 2 && strip -s swanstation_libretro.so
 
       - name: ZIP Release
-        uses: papeloto/action-zip@v1
+        uses: vimtor/action-zip@v1
         with:
           files: swanstation_libretro.so
           dest: swanstation_libretro.so.zip
@@ -53,7 +53,7 @@ jobs:
       - run: cmake --build . --parallel 2
 
       - name: ZIP Release
-        uses: papeloto/action-zip@v1
+        uses: vimtor/action-zip@v1
         with:
           files: swanstation_libretro.dylib
           dest: swanstation_libretro.dylib.zip
@@ -85,7 +85,7 @@ jobs:
       - run: cmake --build . --parallel 2 --config Release
 
       - name: ZIP Release
-        uses: papeloto/action-zip@v1
+        uses: vimtor/action-zip@v1
         with:
           files: swanstation_libretro.dll
           dest: swanstation_libretro.dll.zip
