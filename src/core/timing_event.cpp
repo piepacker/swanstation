@@ -9,11 +9,23 @@ Log_SetChannel(TimingEvents);
 
 namespace TimingEvents {
 
+static std::vector<std::shared_ptr<TimingEvent>> s_created_events;
 static TimingEvent* s_active_events_head;
 static TimingEvent* s_active_events_tail;
 static TimingEvent* s_current_event = nullptr;
 static u32 s_active_event_count = 0;
 static u32 s_global_tick_counter = 0;
+
+static void RemoveCreatedEvent()
+{
+    // Used event shall have a count of 2 (1 for the smart_ptr using the object and 1 for the copy
+    // in s_created_events). If the count is 1, it means the emulator doesn't use the event anymore
+    // (typically memory card reallocation)
+    s_created_events.erase(std::remove_if(s_created_events.begin(), s_created_events.end(),
+                [](std::shared_ptr<TimingEvent>& event) {
+                    return event.unique();
+                }), s_created_events.end());
+}
 
 u32 GetGlobalTickCounter()
 {
@@ -22,6 +34,7 @@ u32 GetGlobalTickCounter()
 
 void Initialize()
 {
+  s_created_events.clear();
   Reset();
 }
 
@@ -32,16 +45,19 @@ void Reset()
 
 void Shutdown()
 {
+  RemoveCreatedEvent();
   Assert(s_active_event_count == 0);
 }
 
-std::unique_ptr<TimingEvent> CreateTimingEvent(std::string name, TickCount period, TickCount interval,
+std::shared_ptr<TimingEvent> CreateTimingEvent(std::string name, TickCount period, TickCount interval,
                                                TimingEventCallback callback, void* callback_param, bool activate)
 {
-  std::unique_ptr<TimingEvent> event =
-    std::make_unique<TimingEvent>(std::move(name), period, interval, callback, callback_param);
+  std::shared_ptr<TimingEvent> event =
+    std::make_shared<TimingEvent>(std::move(name), period, interval, callback, callback_param);
   if (activate)
     event->Activate();
+
+  s_created_events.push_back(event);
 
   return event;
 }
@@ -225,36 +241,26 @@ static void RemoveActiveEvent(TimingEvent* event)
 
 static void SortEvents()
 {
-  std::vector<TimingEvent*> events;
-  events.reserve(s_active_event_count);
+    // Clear the linked list info
+    s_active_events_head = nullptr;
+    s_active_events_tail = nullptr;
+    s_active_event_count = 0;
 
-  TimingEvent* next = s_active_events_head;
-  while (next)
-  {
-    TimingEvent* current = next;
-    events.push_back(current);
-    next = current->next;
-    current->prev = nullptr;
-    current->next = nullptr;
-  }
-
-  s_active_events_head = nullptr;
-  s_active_events_tail = nullptr;
-  s_active_event_count = 0;
-
-  for (TimingEvent* event : events)
-    AddActiveEvent(event);
+    // Rebuild the active event list
+    for (auto& event : s_created_events) {
+        if (event->m_active)
+            AddActiveEvent(event.get());
+    }
 }
 
-static TimingEvent* FindActiveEvent(const char* name)
+static TimingEvent* FindCreatedEvent(const char* name)
 {
-  for (TimingEvent* event = s_active_events_head; event; event = event->next)
-  {
-    if (event->GetName().compare(name) == 0)
-      return event;
-  }
+    for (auto& event: s_created_events) {
+        if (event->GetName().compare(name) == 0)
+            return event.get();
+    }
 
-  return nullptr;
+    return nullptr;
 }
 
 void RunEvents()
@@ -303,68 +309,81 @@ void RunEvents()
 
 bool DoState(StateWrapper& sw)
 {
-  sw.Do(&s_global_tick_counter);
+    sw.Do(&s_global_tick_counter);
 
-  if (sw.IsReading())
-  {
-    // Load timestamps for the clock events.
-    // Any oneshot events should be recreated by the load state method, so we can fix up their times here.
-    u32 event_count = 0;
-    sw.Do(&event_count);
+    RemoveCreatedEvent();
 
-    for (u32 i = 0; i < event_count; i++)
+    if (sw.IsReading())
     {
-      std::string event_name;
-      TickCount downcount, time_since_last_run, period, interval;
-      sw.Do(&event_name);
-      sw.Do(&downcount);
-      sw.Do(&time_since_last_run);
-      sw.Do(&period);
-      sw.Do(&interval);
-      if (sw.HasError())
-        return false;
+        // Deactivate all events, the load state would re-enable them as required
+        for (auto& event : s_created_events) {
+            event->prev = nullptr;
+            event->next = nullptr;
+            event->m_active = false;
+        }
 
-      TimingEvent* event = FindActiveEvent(event_name.c_str());
-      if (!event)
-      {
-        Log_WarningPrintf("Save state has event '%s', but couldn't find this event when loading.", event_name.c_str());
-        continue;
-      }
+        // Load timestamps for the clock events.
+        // Any oneshot events should be recreated by the load state method, so we can fix up their times here.
+        u32 event_count = 0;
+        sw.Do(&event_count);
 
-      // Using reschedule is safe here since we call sort afterwards.
-      event->m_downcount = downcount;
-      event->m_time_since_last_run = time_since_last_run;
-      event->m_period = period;
-      event->m_interval = interval;
+        for (u32 i = 0; i < event_count; i++)
+        {
+            std::string event_name;
+            TickCount downcount, time_since_last_run, period, interval;
+            sw.Do(&event_name);
+            sw.Do(&downcount);
+            sw.Do(&time_since_last_run);
+            sw.Do(&period);
+            sw.Do(&interval);
+            // Older save state only saved the active events. So keep true by default
+            bool active = true;
+            if (sw.GetVersion() >= 55) {
+                sw.Do(&active);
+            }
+            if (sw.HasError())
+                return false;
+
+            TimingEvent* event = FindCreatedEvent(event_name.c_str());
+            if (!event)
+            {
+                Log_WarningPrintf("Save state has event '%s', but couldn't find this event when loading.", event_name.c_str());
+                continue;
+            }
+
+            // Using reschedule is safe here since we call sort afterwards.
+            event->m_downcount = downcount;
+            event->m_time_since_last_run = time_since_last_run;
+            event->m_period = period;
+            event->m_interval = interval;
+            event->m_active = active;
+        }
+
+        if (sw.GetVersion() < 43)
+        {
+            u32 last_event_run_time = 0;
+            sw.Do(&last_event_run_time);
+        }
+
+        SortEvents();
+        Log_DevPrintf("Loaded %u (active:%u) events from save state.", event_count, s_active_event_count);
+    }
+    else
+    {
+        u32 event_count = s_created_events.size();
+        sw.Do(&event_count);
+        for (auto& event: s_created_events) {
+            sw.Do(&event->m_name);
+            sw.Do(&event->m_downcount);
+            sw.Do(&event->m_time_since_last_run);
+            sw.Do(&event->m_period);
+            sw.Do(&event->m_interval);
+            sw.Do(&event->m_active);
+        }
+        Log_DevPrintf("Wrote %u events to save state.", event_count);
     }
 
-    if (sw.GetVersion() < 43)
-    {
-      u32 last_event_run_time = 0;
-      sw.Do(&last_event_run_time);
-    }
-
-    Log_DevPrintf("Loaded %u events from save state.", event_count);
-    SortEvents();
-  }
-  else
-  {
-
-    sw.Do(&s_active_event_count);
-
-    for (TimingEvent* event = s_active_events_head; event; event = event->next)
-    {
-      sw.Do(&event->m_name);
-      sw.Do(&event->m_downcount);
-      sw.Do(&event->m_time_since_last_run);
-      sw.Do(&event->m_period);
-      sw.Do(&event->m_interval);
-    }
-
-    Log_DevPrintf("Wrote %u events to save state.", s_active_event_count);
-  }
-
-  return !sw.HasError();
+    return !sw.HasError();
 }
 
 } // namespace TimingEvents

@@ -329,9 +329,9 @@ private:
   template<bool STEREO, bool SAMPLE_RATE>
   void ResampleXAADPCM(const s16* frames_in, u32 num_frames_in);
 
-  std::unique_ptr<TimingEvent> m_command_event;
-  std::unique_ptr<TimingEvent> m_command_second_response_event;
-  std::unique_ptr<TimingEvent> m_drive_event;
+  std::shared_ptr<TimingEvent> m_command_event;
+  std::shared_ptr<TimingEvent> m_command_second_response_event;
+  std::shared_ptr<TimingEvent> m_drive_event;
 
   Command m_command = Command::None;
   Command m_command_second_response = Command::None;

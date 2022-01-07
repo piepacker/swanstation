@@ -82,7 +82,7 @@ private:
   bool SaveIfChanged(bool display_osd_message);
   void QueueFileSave();
 
-  std::unique_ptr<TimingEvent> m_save_event;
+  std::shared_ptr<TimingEvent> m_save_event;
 
   State m_state = State::Idle;
   FLAG m_FLAG = {};

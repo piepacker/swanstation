@@ -121,7 +121,7 @@ private:
 
   std::array<Multitap, NUM_MULTITAPS> m_multitaps;
 
-  std::unique_ptr<TimingEvent> m_transfer_event;
+  std::shared_ptr<TimingEvent> m_transfer_event;
   State m_state = State::Idle;
 
   JOY_CTRL m_JOY_CTRL = {};

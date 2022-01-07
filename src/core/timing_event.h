@@ -84,7 +84,7 @@ void Reset();
 void Shutdown();
 
 /// Creates a new event.
-std::unique_ptr<TimingEvent> CreateTimingEvent(std::string name, TickCount period, TickCount interval,
+std::shared_ptr<TimingEvent> CreateTimingEvent(std::string name, TickCount period, TickCount interval,
                                                TimingEventCallback callback, void* callback_param, bool activate);
 
 /// Serialization.

@@ -143,7 +143,7 @@ private:
   u16 m_current_q_scale = 0;
 
   std::array<u32, 256> m_block_rgb{};
-  std::unique_ptr<TimingEvent> m_block_copy_out_event;
+  std::shared_ptr<TimingEvent> m_block_copy_out_event;
 
   u32 m_total_blocks_decoded = 0;
 };

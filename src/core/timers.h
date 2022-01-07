@@ -93,7 +93,7 @@ private:
   TickCount GetTicksUntilNextInterrupt() const;
   void UpdateSysClkEvent();
 
-  std::unique_ptr<TimingEvent> m_sysclk_event;
+  std::shared_ptr<TimingEvent> m_sysclk_event;
 
   std::array<CounterState, NUM_TIMERS> m_states{};
   TickCount m_syclk_ticks_carry = 0; // 0 unless overclocking is enabled

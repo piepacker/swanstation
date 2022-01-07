@@ -373,8 +373,8 @@ private:
   void UpdateTransferEvent();
   void UpdateDMARequest();
 
-  std::unique_ptr<TimingEvent> m_tick_event;
-  std::unique_ptr<TimingEvent> m_transfer_event;
+  std::shared_ptr<TimingEvent> m_tick_event;
+  std::shared_ptr<TimingEvent> m_transfer_event;
   std::unique_ptr<Common::WAVWriter> m_dump_writer;
   AudioStream* m_audio_stream = nullptr;
   TickCount m_ticks_carry = 0;

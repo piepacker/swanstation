@@ -84,7 +84,7 @@ private:
   TickCount m_halt_ticks = 100;
 
   std::vector<u32> m_transfer_buffer;
-  std::unique_ptr<TimingEvent> m_unhalt_event;
+  std::shared_ptr<TimingEvent> m_unhalt_event;
   TickCount m_halt_ticks_remaining = 0;
 
   struct ChannelState

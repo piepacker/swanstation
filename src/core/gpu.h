@@ -320,8 +320,8 @@ protected:
 
   HostDisplay* m_host_display = nullptr;
 
-  std::unique_ptr<TimingEvent> m_crtc_tick_event;
-  std::unique_ptr<TimingEvent> m_command_tick_event;
+  std::shared_ptr<TimingEvent> m_crtc_tick_event;
+  std::shared_ptr<TimingEvent> m_command_tick_event;
 
   // Pointer to VRAM, used for reads/writes. In the hardware backends, this is the shadow buffer.
   //u16* m_vram_ptr = nullptr;
