@@ -5075,6 +5075,9 @@ bool isAnalogOnlyGame(const std::string& game_code) {
 
 bool isAnalogPreferedGame (const std::string& game_code) {
     static const std::unordered_set<std::string> codes({
+        // Pong
+        "SLUS-00889",
+        "SLUS-80889",
         // medal of honor
         "SLES-02470",
         "SLES-02471",
