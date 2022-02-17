@@ -5075,6 +5075,19 @@ bool isAnalogOnlyGame(const std::string& game_code) {
 
 bool isAnalogPreferedGame (const std::string& game_code) {
     static const std::unordered_set<std::string> codes({
+        // Breakout (USA)
+        "SLUS-01170",
+        // Ridge racer
+        "SLUS-00797",
+        "SLUS-90049",
+        "SCES-01706",
+        "SCED-01832",
+        "SCPS-45354",
+        "SCPS-45355",
+        "SCPS-45356",
+        "SCPS-45357",
+        "SLPS-01800",
+        "SLPS-01801",
         // Pong
         "SLUS-00889",
         "SLUS-80889",
