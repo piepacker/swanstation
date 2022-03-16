@@ -430,6 +430,10 @@ bool LibretroHostInterface::retro_load_game(const struct retro_game_info* game)
       P_THIS->m_disk_control_info.image_paths.push_back(image_path);
       P_THIS->m_disk_control_info.image_labels.push_back(std::string(image_label));
     }
+
+    std::string serial = System::GetGameCodeForPath(System::GetMediaFileName().c_str(), false);
+    retro_variable retro_serial = { "serial", serial.c_str()};
+    g_retro_environment_callback(RETRO_ENVIRONMENT_SET_MISC_INFO_PP, &retro_serial);
   }
 
   return true;

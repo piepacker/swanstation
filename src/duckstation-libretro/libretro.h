@@ -1287,6 +1287,11 @@ enum retro_mod
                                             * based systems).
                                             */
 
+#define RETRO_ENVIRONMENT_SET_MISC_INFO_PP              0x80000001UL
+                                            /* const struct retro_variable
+                                             * Can be used to notify the frontend with misc info, such as
+                                             * the serial of the loaded game
+                                             */
 /* VFS functionality */
 
 /* File paths:
