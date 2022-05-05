@@ -4778,7 +4778,7 @@ std::unique_ptr<GameSettings::Entry> GetSettingsForGame(const std::string& game_
         return gs;
     }
     if (game_code == "SLUS-01129") { // FoxKids.com - Micro Maniacs Racing (USA)
-        gs->multitap_mode = MultitapMode::Port1Only;
+        gs->multitap_mode = MultitapMode::BothPorts;
         return gs;
     }
     if (game_code == "SLUS-01130") { // Peter Jacobsen's Golden Tee Golf (USA)
