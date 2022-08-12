@@ -1,11 +1,759 @@
 #include <unordered_set>
 #include "libretro_game_settings.h"
 
+static bool SetDisableUpscaling(const std::string& game_code, GameSettings::Entry* gs)
+{
+    // Disable Upscaling on various games. Mostly 2D game, some game with mixed 3D/2D
+    // some 3D game as false result.
+    // Note: Jam uses the SW renderer so it might have less hack to make upscaling better
+    static const std::unordered_set<std::string> codes({
+            // Adventures of Little Ralph
+            "SLPM-80433",
+            "SLPS-01853",
+            // Alundra
+            "SLES-01135",
+            "SLED-01308",
+            "SLES-01198",
+            "SLES-01256",
+            "SLES-01257",
+            "SCPS-10035",
+            "SLES-01258",
+            "SLUS-00553",
+            // Arc The Lad
+            "SCPS-10008",
+            "SCPS-10040",
+            "SCPS-10041",
+            "SLUS-01255",
+            "SLUS-01224",
+            "SLUS-01252",
+            "SLUS-01253",
+            "SLUS-01254",
+            "SLUS-01256",
+            "SCPS-10026",
+            "SCPS-91071",
+            "SCPS-91310",
+            "PAPX-90099",
+            "PCPX-96176",
+            "SCPS-10106",
+            "SCPS-91228",
+            "SCPS-91316",
+            "SCPS-10107",
+            "SCPS-91229",
+            "SCPS-91317",
+            "SCPS-45438",
+            "SCPS-45439",
+            "SCPS-91302",
+            // Asuka 120% Special BURNING Fest.
+            // Asuka 120% Excellent BURNING Fest.
+            // Asuka 120% Final BURNING Fest.
+            "SLPS-00849",
+            "SLPS-02074",
+            "SLPS-00231",
+            "SLPM-87152",
+            // Batman Forever the arcade game
+            "SLES-00525",
+            "SLPS-00698",
+            "SLUS-00387",
+            // Beatmania
+            "SLPM-86938",
+            "SLPM-87012",
+            "SCPS-45370",
+            "SCPS-45419",
+            "SLPM-86266",
+            "SLPM-86322",
+            "SLPM-86692",
+            "SLPM-86596",
+            "SLPM-86830",
+            "SLPM-86597",
+            // Bishi Bashi Special
+            "SLES-02537",
+            "SLPM-86123",
+            "SLPM-86267",
+            "SLPM-86925",
+            "SLPM-87207",
+            "SLPM-86539",
+            "SLPM-87208",
+            "SLPM-86825",
+            "SLPM-87206",
+            // Blazing Dragons
+            "SLES-00247",
+            "SLES-00305",
+            "SLES-00306",
+            "SLUS-00100",
+            // Blood Omen: Legacy of Kain
+            "SLES-00075",
+            "SLES-00522",
+            "SLES-00523",
+            "SLUS-00027",
+            // Broken Sword 1
+            // Broken Sword 2
+            "SCES-00414",
+            "SCES-00346",
+            "SCES-00468",
+            "SLUS-00484",
+            "SCES-00801",
+            "SCES-00802",
+            "SCES-00798",
+            "SLUS-00812",
+            // Bubble Bobble featuring Rainbow Islands
+            "SLUS-00370",
+            "SLES-00448",
+            // Bubble Symphony
+            "SLES-00458",
+            // Bust-A-Move
+            // Bust-A-Move 4
+            "SLPS-01237",
+            "PAPX-90028",
+            "SLPS-01232",
+            "SLPS-01233",
+            "SLPM-86219",
+            "SLPM-80410",
+            // Capcom Generations 1-4 (sold individually in Japan and as a collection in Europe)
+            "SLPM-86748",
+            "SLPS-01535",
+            "SLPM-86778",
+            "SLPS-01585",
+            "SLPS-01649",
+            "SLPM-86814",
+            "SLPS-01701",
+            "SLPS-01725",
+            "SLPM-86838",
+            "SLPM-86811",
+            "SLES-01881",
+            "SLES-11881",
+            "SLES-21881",
+            "SLES-31881",
+            "SLES-02098",
+            "SLES-12098",
+            "SLES-22098",
+            // Capcom vs SNK
+            "SLES-03889",
+            "SLPM-87053",
+            "SLPM-80632",
+            "SLUS-01476",
+            // Castlevania Chronicles
+            "SLES-03532",
+            "SLUS-01384",
+            // Castlevania: Symphony of the Night
+            "SCPS-45196",
+            "SLES-00524",
+            "SLUS-00067",
+            // Chronotrigger
+            "SCPS-45446",
+            "SLPM-87374",
+            "SLPS-02430",
+            "SLPS-91446",
+            "SLUS-01363",
+            // Civilization II
+            "SLES-01794",
+            "SLES-01795",
+            "SLES-01796",
+            "SLES-01797",
+            "SLPS-01735",
+            "SLES-01798",
+            "SLUS-00792",
+            // Cleopatra Fortune
+            "SLES-03935",
+            "SLPS-03187",
+            "SLUS-01491",
+            // Command & Conquer
+            // Command & Conquer: Red Alert
+            "SLED-00652",
+            "SLES-00530",
+            "SLES-10530",
+            "SLES-00531",
+            "SLES-10531",
+            "SLUS-00379",
+            "SLUS-00410",
+            "SLED-01270",
+            "SLES-01007",
+            "SLES-11007",
+            "SLES-01345",
+            "SLES-11345",
+            "SLED-01067",
+            "SLES-01006",
+            "SLES-11006",
+            "SLES-01344",
+            "SLES-11344",
+            "SLED-01255",
+            "SLES-00949",
+            "SLES-10949",
+            "SLUS-00431",
+            "SLUS-00485",
+            "SLES-01343",
+            "SLES-11343",
+            "SLUS-00665",
+            "SLUS-00667",
+            "SLED-00695",
+            "SLES-00532",
+            "SLES-10532",
+            "SLPM-80222",
+            "SLPS-00976",
+            "SLPS-00977",
+            // Dark Stalkers
+            // Dark Stalkers 3
+            "SLES-00251",
+            "SLUS-00036",
+            "SLES-01719",
+            "SLUS-00745",
+            // Discworld
+            // DiscWorld 2
+            // Discworld Noir
+            "SLPS-00251",
+            "SLPS-02656",
+            "SLED-01109",
+            "SLES-00793",
+            "SCUS-94605",
+            "SLES-00794",
+            "SLES-00795",
+            "SLES-01549",
+            "SLED-02604",
+            "SLES-02063",
+            "SLES-02064",
+            "SCES-00012",
+            "SLES-00193",
+            "SCUS-94600",
+            // Dune 2000
+            "SLES-02247",
+            "SLES-02248",
+            "SLES-02249",
+            "SLUS-00973",
+            // Earthworm Jim 2
+            "SLES-00343",
+            // Final Fantasy Anthologies
+            "SCES-03840",
+            "SCES-13840",
+            "SLUS-00879",
+            "SLUS-00900",
+            // Front Mission 1st
+            "SLPM-87317",
+            "SLPM-87330",
+            "SLPM-87331",
+            "SLPM-87332",
+            // Gex
+            "SLED-01954",
+            "SLES-01299",
+            "SLES-01908",
+            "SLUS-00598",
+            // Gradius Deluxe pack
+            // Gradius Gaiden
+            "SLPS-00303",
+            "SLPM-86042",
+            "SLPM-86103",
+            "SLPM-87323",
+            // Grand Theft Auto
+            // Grand Theft Auto 2
+            // Grand Theft Auto: London 1969
+            "SLPM-87007",
+            "SLPS-01554",
+            "SLES-00032",
+            "SLUS-00106",
+            "SLES-03389",
+            "SLES-01714",
+            "SLUS-00846",
+            "SLES-01404",
+            "SLES-02453",
+            "SLUS-00789",
+            "SLES-02458",
+            "SLED-01295",
+            // Gundam: The Battle Master
+            "SLPS-00883",
+            "SLPM-80098",
+            // Gundam Battle Assault
+            // Gundam Battle Assault 2
+            "SLES-03650",
+            "SLPM-86746",
+            "SLUS-01226",
+            "SLES-03934",
+            "SLUS-01418",
+            // Guilty Gear
+            "SLES-02494",
+            "SLPS-01357",
+            "SLPM-80302",
+            "SLPS-02273",
+            "SLUS-00772",
+            // Gunners Heaven (Japanese version of Rapid Reload)
+            "HASH-C88519EB2DAA7FAD",
+            // Hat Trick Hero (FIXME)
+            // Hebereke's Popoitto
+            "SLPS-00044",
+            "SLPS-02051",
+            "SLPS-03299",
+            "SLES-00156",
+            // Hello Kitty's Cube Frenzy
+            "SLUS-00778",
+            // In the Hunt
+            "SLES-00342",
+            "SLUS-00172",
+            "SLPS-00086",
+            "SLPS-02790",
+            // International Karate+
+            "SLES-04040",
+            // International Superstar Soccer Deluxe
+            "SLES-00511",
+            // Jojo's Bizarre Adventure
+            "SLES-02599",
+            "SLUS-01060",
+            // Legend of Mana
+            "SLUS-01013",
+            "SCPS-45416",
+            "SLPM-87394",
+            "SLPS-02170",
+            "SLPS-02771",
+            "SLPS-91456",
+            // Lemmings and Oh No More Lemmings
+            "SCES-00009",
+            "SIPS-60002",
+            "SCUS-94601",
+            "SLES-01461",
+            "SLUS-00760",
+            // Lomax
+            "SCUS-94906",
+            "SLES-00451",
+            "SLED-00516",
+            "SLPS-00987",
+            // Lucky Luke
+            "SLES-00943",
+            "SLPS-01674",
+            "SLUS-00719",
+            "SLES-03530",
+            // Lunar Silverstar Story
+            "SLPM-80250",
+            "SCPS-45249",
+            "SLPS-01397",
+            "SLPS-91129",
+            "SCPS-45250",
+            "SLPS-01398",
+            "SLPS-91130",
+            "SLUS-90055",
+            "SLUS-00628",
+            "SLUS-00899",
+            "SLUS-00921",
+            // Marvel Super Heroes
+            "SLES-00932",
+            "SLED-00499",
+            "SLPS-00763",
+            "SLUS-00257",
+            "SLES-01792",
+            "SLUS-00793",
+            "SLPS-01915",
+            "SLPM-80376",
+            "SLPM-80382",
+            // Marvel vs. Capcom
+            "SLES-02305",
+            "SLUS-01059",
+            "SLPS-02368",
+            "SLPS-02356",
+            "SLPS-02359",
+            "SLPS-02373",
+            "SLPS-02378",
+            "SLPM-80508",
+            // Mega Man X4
+            // Mega Man X5
+            // Mega Man X6
+            "SLUS-00561",
+            "SLES-03557",
+            "SLUS-01334",
+            "SLES-03778",
+            "SLUS-01395",
+            // Metal Slug
+            // Metal Slug X
+            "SCPS-45097",
+            "SLPM-86315",
+            "SLPS-00950",
+            "SLPS-91516",
+            "SCPS-45490",
+            "SLES-03575",
+            "SLUS-01212",
+            "SLPM-86456",
+            "SLPS-03449",
+            // Mickey Mania (FIXME)
+            // Midway presents Arcade Classics: Atari Collection 1 (Asteroids, Battlezone, Centipede, Missile Command, Super Break Out, Tempest)
+            // Midway presents Arcade Classics: Atari Collection 2 (Millipede, Gauntlet, PaperBoy, RoadBlasters, Marble Madness, Crystal Castles)
+            "SLES-00466",
+            "SLUS-00399",
+            "SLES-00712",
+            "SLUS-00449",
+            // Midway presents Arcade Classics: Midway Collection 1 (Spyhunter, Root Beer Tapper, Blaster, Burgertime, Moon Patrol, Joust 2, Splat!)
+            "SLES-00739",
+            "SLUS-00450",
+            // Mortal Kombat 2
+            // Mortal Kombat 3
+            // Mortal Kombat Mythologies: Sub-Zero
+            // Mortal Kombat Trilogy
+            "SLUS-01126",
+            "SCES-00060",
+            "SIPS-60006",
+            "SCUS-94201",
+            "SLPS-00444",
+            "SLES-01020",
+            "SLUS-00476",
+            "SLES-00528",
+            "SLES-02509",
+            "SLPS-00791",
+            "SLUS-00330",
+            // Mr. Driller
+            "SCPS-45259",
+            "SCES-02771",
+            "SLPS-02600",
+            "SLUS-01111",
+            "SLPS-03336",
+            // Namco Museum 1 (Rally X, New Rally X, Galaga, Bosconian, Toypop, Pole Position, PacMan)
+            // Namco Museum 2 (Xevious, Gaplus, Super Pacman, Mappy, Grobda, Dragon Blaster)
+            // Namco Museum 3 (Galaxian, Ms Pacman, Phozon, Dig Dug, Pole Position II, Tower of Druaga)
+            // Namco Museum 4 (PacLand, The Genji and the Heke clans, The Return of Ishtar, Assault, Ordyne)
+            // Namco Museum 5 (Dragon Spirit, PacMania, Metro Racer, Baraduke, Legend of the Valkyrie)
+            // Namco Museum Encore (Rolling Thunder, Dragon Saber, Rompers, Wonder Momo, Sky Kid, Motos, King & Balloon)
+            "SLPS-01050",
+            "SLPS-00765",
+            "SLPS-91163",
+            "SCES-00243",
+            "SLPS-00107",
+            "SLPS-91158",
+            "SLUS-00215",
+            "SCES-00267",
+            "SLPS-00210",
+            "SLPS-91159",
+            "SLPS-00209",
+            "SLUS-00216",
+            "SCES-00268",
+            "SLPS-00390",
+            "SLPS-91160",
+            "SLUS-00398",
+            "SCES-00701",
+            "SLPS-00540",
+            "SLPS-91161",
+            "SLUS-00416",
+            "SCES-00702",
+            "SLPS-00705",
+            "SLPS-91162",
+            "SLUS-00417",
+            // Namco Soccer Prime Goal
+            "SCES-00266",
+            // NBA Jam Tournament Edition
+            "SLES-00068",
+            "SLPS-00199",
+            // Nekketsu-Oyako (aka Hot Blooded Family)
+            "HASH-9DE8F45C59392B2D",
+            // Nightstriker
+            "SLPS-00050",
+            // Oddworld: Abe's Exodus
+            // Oddworld: Abe's Oddysee
+            "SLES-01480",
+            "SLES-11480",
+            "SLES-01503",
+            "SLES-11503",
+            "SLES-01504",
+            "SLES-11504",
+            "SLES-01505",
+            "SLES-11505",
+            "SLUS-00710",
+            "SLUS-00731",
+            "SLED-01608",
+            "SLED-01655",
+            "SLES-00664",
+            "SLED-00725",
+            "SLES-00839",
+            "SLES-00840",
+            "SLES-00841",
+            "SLUS-00190",
+            "SLUS-90004",
+            // Pang Collection
+            "SLES-00043",
+            "SLPS-00360",
+            // Parodius Deluxe Pack
+            "SLPM-86031",
+            "SLPM-87329",
+            "SLPS-00002",
+            // Pocket Fighter
+            "SLES-01378",
+            "SLPS-01360",
+            "SLUS-00653",
+            "SLPS-91191",
+            // Point Blank
+            // Point Blank 2
+            // Point Blank 3
+            "SCED-00287",
+            "SCES-00886",
+            "SLUS-00481",
+            "SCES-02180",
+            "SLUS-00796",
+            "SCES-03383",
+            "SLUS-01354",
+            "SLUS-00072",
+            // Pu-Li-Ru-La
+            "SLPS-00928",
+            // R-Types
+            "SLES-01355",
+            "SLPS-01236",
+            "SLPS-03310",
+            "SLUS-00753",
+            // Raiden Project
+            "SLPS-00013",
+            "SLPS-91002",
+            "SLPS-91144",
+            "SLES-00051",
+            "SCUS-94402",
+            // Rampage Through Time
+            // Rampage World Tour
+            "SLES-02849",
+            "SLUS-01065",
+            "SLES-01011",
+            "SLUS-00549",
+            // Rapid Reload
+            "SCES-00004",
+            // Rayman
+            "SLUS-00005",
+            "HASH-55CC6B14355437D0",
+            "SLES-00049",
+            // Rhapsody A Musical Adventure
+            "SLUS-01073",
+            // Road Rash
+            "SLES-00158",
+            "SLPS-00243",
+            "SLUS-00035",
+            // Saga Frontier 1
+            // Saga Frontier 2
+            "SCPS-45102",
+            "SLPM-87375",
+            "SLPS-00898",
+            "SLPS-91482",
+            "SCUS-94230",
+            "SLES-02112",
+            "SLES-02113",
+            "SLES-02118",
+            "SLUS-00933",
+            "SCPS-45400",
+            "SLPS-01990",
+            "SLPS-02767",
+            "SLPS-91483",
+            "SCPS-45300",
+            "SCPS-45301",
+            "SLPM-87376",
+            "SLPS-02766",
+            // Salamander Deluxe Pack
+            "SLPM-86037",
+            // Silhouette Mirage
+            "SLUS-00728",
+            "SLPS-01449",
+            // Slam 'n' Jam 96
+            "SLUS-00022",
+            "SLPS-00426",
+            // Star Ocean The Second Story
+            "SLPM-80274",
+            "SCES-02159",
+            "SCES-12159",
+            "SCES-02160",
+            "SCES-12160",
+            "SCES-02161",
+            "SCES-12161",
+            "SLPM-86105",
+            "SLPM-87357",
+            "SLPM-86106",
+            "SLPM-87358",
+            "HASH-7205A4306DAF4212",
+            "HASH-C5AAC253067B029B",
+            // Street Fighter Alpha
+            // Street Fighter Alpha 2
+            // Street Fighter Alpha 3
+            "SLES-00199",
+            "SLUS-00197",
+            "SLES-00496",
+            "SLUS-00258",
+            "SLES-01863",
+            "SLUS-00821",
+            // Street Fighter Collection 1 (Super Street Fighter II, Super Street Fighter II, Street Fighter Alpha 2 Gold)
+            // Street Fighter Collection 2 (Street Fighter II, Street Fighter II Champion Edition, Street Fighter II Hyper Fighting)
+            "SLES-00998",
+            "SLES-10998",
+            "SLPM-80154",
+            "SLPS-00800",
+            "SLPS-00801",
+            "SLUS-00423",
+            "SLUS-00584",
+            "SLES-01721",
+            "SLUS-00746",
+            // Street Fighter The Movie
+            "SLPS-00080",
+            "SLPS-00081",
+            // Strider (included with Strider 2)
+            "SLES-12867",
+            "SLUS-01142",
+            "SLES-02867",
+            "SLUS-01163",
+            "SLPM-80537",
+            "SLPS-02620",
+            "SLPS-02621",
+            "SLPM-87401",
+            // Strike Force Hydra
+            "SLES-04046",
+            // Strikers 1945
+            // Strikers 1945 II
+            "SLPS-00407",
+            "SLUS-01337",
+            "SLES-03510",
+            "SLPS-01637",
+            "SLKA-02001",
+            "SLPM-86631",
+            // Suikoden 1
+            // Suikoden 2
+            "SCPS-45369",
+            "SLPM-87100",
+            "SLPM-87099",
+            "SLPS-00097",
+            "SLPM-86017",
+            "SCPS-45319",
+            "SLPM-86168",
+            "SLPM-86116",
+            "SLPM-86389",
+            "SCPS-45184",
+            "SLES-00527",
+            "SLUS-00292",
+            "SLPM-86991",
+            "SLPM-86308",
+            "SLPS-01305",
+            "SLPS-00521",
+            "SLES-02442",
+            "SLED-02742",
+            "SLES-02443",
+            "SLES-02444",
+            "SLES-02446",
+            "SLES-02445",
+            "SLUS-00958",
+            "SLPM-86743",
+            "SLPM-86188",
+            // Super Drop Zone
+            "SLES-04045",
+            // Super Puzzle Fighter II Turbo
+            "SLES-00605",
+            "SLUS-00418",
+            // Super Robot Taisen
+            "SLPS-02406",
+            "SLPS-02530",
+            "SLPS-00196",
+            "SLPS-91014",
+            "SLPS-00550",
+            "SLPS-00787",
+            "SLPS-91084",
+            "SLPS-02070",
+            "SLPS-02071",
+            "SLPS-02636",
+            "SLPS-91408",
+            "SLPS-02528",
+            "SLPS-03576",
+            "SLPS-03148",
+            "SLPS-03577",
+            "SLPS-91506",
+            "SLPS-03147",
+            "SLPS-02529",
+            "SLPS-01727",
+            "SLPS-91216",
+            "SLPS-01924",
+            "SLPS-91217",
+            "SLPS-01657",
+            "SLPS-01658",
+            // Tails of Destiny
+            "SLPS-01100",
+            "SLPM-80133",
+            "SLPM-80179",
+            "SLPS-91111",
+            "SLUS-00626",
+            "SLUS-01355",
+            "SLUS-01367",
+            "SLUS-01368",
+            // Ultimate Mortal Kombat 3
+            // Umihara Kawasae Shun
+            "SLPS-00643",
+            "SLPS-02549",
+            // Valkyrie Profile
+            "SLPM-86379",
+            "SLPM-86375",
+            "SLPM-86371",
+            "SLPM-86375",
+            "SLPM-86380",
+            "SLPM-86375",
+            "SLPM-86372",
+            "SLPM-86375",
+            "SLPM-87355",
+            "SLPM-87373",
+            "SLUS-01156",
+            "SLUS-01179",
+            // Vandal Hearts 1
+            // Vandal Hearts 2
+            "SCPS-45183",
+            "SLES-00204",
+            "SLUS-00447",
+            "SLPM-86007",
+            "SLPM-86067",
+            "SLPM-87278",
+            "SLES-02469",
+            "SLES-02497",
+            "SLES-02496",
+            "SLUS-00940",
+            "SCPS-45415",
+            "SLPM-86251",
+            "SLPM-86504",
+            "SLPM-87279",
+            // Warcraft 2
+            "SLES-00878",
+            "SLPS-01098",
+            "SLUS-00480",
+            // Wild Arms
+            "SCPS-45027",
+            "SCES-00321",
+            "SCES-01171",
+            "SCES-01172",
+            "SCES-01173",
+            "SCPS-10028",
+            "PCPX-96034",
+            "SCPS-91038",
+            "SCPS-91306",
+            "SCES-01174",
+            "SCUS-94608",
+            // Wolf Fang
+            "SLPM-87270",
+            "SLPS-00254",
+            // Worms
+            // Worms Armageddon
+            "SLES-00119",
+            "SLPS-00547",
+            "SLUS-00336",
+            "SLES-02217",
+            "SLES-02332",
+            "SLES-02331",
+            "SLUS-00888",
+            "SLES-00483",
+            "SLES-03804",
+            "SLUS-01448",
+            // WWF Wrestlemania
+            "SLES-00103",
+            "SLPS-00223",
+            "SLUS-00013",
+            // X-Men vs. Street Fighter
+            "SLES-01247",
+            "SLUS-00627",
+            "SLPS-01284",
+            // X-Men Children of the Atom
+            "SLES-00198",
+            "SLUS-00044",
+    });
+
+    auto it = codes.find(game_code);
+    if (it == codes.end())
+        return false;
+
+    gs->AddTrait(GameSettings::Trait::DisableUpscaling);
+    return true;
+}
+
 std::unique_ptr<GameSettings::Entry> GetSettingsForGame(const std::string& game_code)
 {
     std::unique_ptr<GameSettings::Entry> gs = std::make_unique<GameSettings::Entry>();
     // Note: if performance of string cmp is too horrible, we can precompute hash to speed up
     // process
+
+    bool upscaling_set = SetDisableUpscaling(game_code, gs.get());
+
     if (game_code == "HPS-105") { // Wai Wai Trump Taisen [Controller Set]
         gs->multitap_mode = MultitapMode::Port1Only;
         return gs;
@@ -5052,6 +5800,9 @@ std::unique_ptr<GameSettings::Entry> GetSettingsForGame(const std::string& game_
         gs->AddTrait(GameSettings::Trait::ForceRecompilerLUTFastmem);
         return gs;
     }
+
+    if (upscaling_set)
+        return gs;
 
     return {};
 }
