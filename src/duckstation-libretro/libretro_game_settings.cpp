@@ -4367,7 +4367,7 @@ std::unique_ptr<GameSettings::Entry> GetSettingsForGame(const std::string& game_
         return gs;
     }
     if (game_code == "SLPS-01719") { // FIFA World Cup 98 - France 98 Soushuuhen (Japan)
-        gs->multitap_mode = MultitapMode::Port1Only;
+        gs->multitap_mode = MultitapMode::Port2Only;
         return gs;
     }
     if (game_code == "SLPS-01730") { // 100 Man Yen Quiz Hunter (Japan)
