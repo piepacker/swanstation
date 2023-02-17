@@ -5583,7 +5583,7 @@ std::unique_ptr<GameSettings::Entry> GetSettingsForGame(const std::string& game_
         return gs;
     }
     if (game_code == "SLUS-01189") { // Bomberman - Party Edition (USA)
-        gs->multitap_mode = MultitapMode::Port1Only;
+        gs->multitap_mode = MultitapMode::Port2Only;
         return gs;
     }
     if (game_code == "SLUS-01195") { // Hogs of War (USA)
