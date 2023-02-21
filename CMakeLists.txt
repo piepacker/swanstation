@@ -195,7 +195,7 @@ if(MSVC)
     string(REPLACE "/W3" "/W4" ${config} "${${config}}")
 
     # Enable intrinsic functions, disable minimal rebuild, UTF-8 source, set __cplusplus version.
-    set(${config} "${${config}} /Oi /Gm- /utf-8 /Zc:__cplusplus")
+    set(${config} "${${config}} /Oi /Gm- /utf-8")
   endforeach()
 
   # RelWithDebInfo is set to Ob1 instead of Ob2.   
