@@ -2,9 +2,9 @@ name: CI
 
 on:
   push:
-    branches: [piepacker]
+    branches: [piepacker2]
   pull_request:
-    branches: [piepacker]
+    branches: [piepacker2]
 
 defaults:
   run:
